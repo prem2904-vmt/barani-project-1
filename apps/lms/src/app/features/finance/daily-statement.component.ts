@@ -20,10 +20,11 @@ import { SG_NARROW_MQ, SG_PHONE_MQ, sgMedia } from '../../shared/settings-grid/s
 import { bandFilter } from '../../shared/utils/band-search';
 import { labToday } from '../../shared/utils/lab-clock';
 import { plural } from '../../shared/utils/plural';
-import { parseRupees } from './expenses/day-closing.component';
+import { ActivatedRoute } from '@angular/router';
+import { DayClosing, expectedCash } from '../../shared/models/expense.model';
 import {
   Closure, DayRow, ModeTotal, canCloseDay, closedWords, closureTotals, closureWord, dayHaystack, dayRows, dayShort, modeRows,
-  money, money2, noteRequired, shiftsOf, timeOf, varianceKind, varianceOf, varianceRow,
+  money, money2, noteRequired, parseRupees, shiftsOf, timeOf, varianceKind, varianceOf, varianceRow,
 } from './daily-statement.logic';
 
 interface DailyStatement {
@@ -41,9 +42,19 @@ interface DailyStatement {
   cashTopUps?: number;
   expectedCash: number;
   closure?: Closure | null;
+  /** Whole day only: where the opening came from (previous_closure | none | closure | entered) and the day it carried from. */
+  openingSource?: string | null;
+  openingFrom?: string | null;
+  /** Whole day only: the ONE day-close (shared with Expenses → Day closing) — figures, who closed it, reopen, source. */
+  dayClose?: DayClosing | null;
 }
 
 /**
+ * THE day-close (owner 2026-11-21: one day-close per branch per day): Finance → Daily statement and Expenses → Day
+ * closing open this same screen and the same record (day_closures, written by the server's DayClosing). The whole day
+ * reads the shared day-close view (`dayClose`: collections, cash expenses + top-ups, staff expenses, who closed it,
+ * reopen); a named shift keeps its own statement.
+ *
  * Finance → Daily statement, the Day closing screen. Test Master's frame: the band (back, lab logo + name, search
  * pill with the shift pick, Close day as the ONE primary), the DAYS side card on the LEFT (today "Open" on top,
  * then the closures newest first) and the day's main card on the right: ONE compact figures strip, then COLLECTED
@@ -132,6 +143,13 @@ interface DailyStatement {
                 </span>
               }
               <span class="pf-card__spacer"></span>
+              @if (canReopen()) {
+                <button type="button" class="pf-btn pf-btn--secondary press pf-cl__reopen" data-testid="closing-reopen"
+                        [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Reopening…" (click)="reopenDay()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.9-1"/></svg>
+                  Reopen day
+                </button>
+              }
               <span class="pf-cl__scope">{{ scopeWords() }}</span>
               <pf-back-to-today [show]="!isToday()" (reset)="setDate(todayStr)" />
               <pf-date class="pf-cl__date" label="Business day" [max]="todayStr" [value]="dateStr()" (valueChange)="setDate($event)"></pf-date>
@@ -140,7 +158,7 @@ interface DailyStatement {
             <div class="pf-cl__body">
               @if (stmt(); as s) {
                 <div class="pf-cl__strip" role="group" aria-label="Day figures">
-                  <div class="pf-cl__cell"><span class="pf-cl__k">Opening cash</span><span class="pf-cl__v pf-num">{{ money2(openingShown()) }}</span><span class="pf-cl__sub">Carried from the last closing</span></div>
+                  <div class="pf-cl__cell"><span class="pf-cl__k">Opening cash</span><span class="pf-cl__v pf-num">{{ money2(openingShown()) }}</span><span class="pf-cl__sub">{{ openingWords() }}</span></div>
                   <div class="pf-cl__cell"><span class="pf-cl__k">Collected</span><span class="pf-cl__v pf-num">{{ money2(collected()) }}</span><span class="pf-cl__sub">All modes, {{ plural(paymentCount(), 'payment') }}</span></div>
                   <div class="pf-cl__cell"><span class="pf-cl__k">Refunds</span><span class="pf-cl__v pf-num">{{ money2(refunded()) }}</span><span class="pf-cl__sub">Paid back to patients</span></div>
                   <div class="pf-cl__cell"><span class="pf-cl__k">Expected cash</span><span class="pf-cl__v pf-num" data-testid="closing-expected">{{ money2(expected()) }}</span><span class="pf-cl__sub">{{ expectedHint() }}</span></div>
@@ -164,10 +182,37 @@ interface DailyStatement {
                       }
                     </ul>
                     <div class="pf-cl__net"><span>{{ isToday() ? 'Net collected today' : 'Net collected' }}</span><span class="pf-num">{{ money2(collected() - refunded()) }}</span></div>
+
+                    @if (figures(); as f) {
+                      <h3 class="pf-cl__h pf-cl__h--gap">Expenses</h3>
+                      <ul class="pf-cl__rows" aria-label="Expenses" data-testid="closing-expenses">
+                        @for (p of f.expenses.byPerson; track p.userId) {
+                          <li class="pf-cl__row"><span class="pf-cl__rname">{{ p.name || 'Staff' }}</span><span class="pf-cl__rmeta">{{ plural(p.count, 'entry', 'entries') }}{{ p.cashIn ? ' · in ' + money(p.cashIn) : '' }}</span><span class="pf-cl__rval pf-num">{{ money2(p.expenses) }}</span></li>
+                        }
+                        <li class="pf-cl__row"><span class="pf-cl__rname">Cash expenses</span><span class="pf-cl__rmeta">{{ plural(f.expenses.count, 'entry', 'entries') }} · all modes {{ money(f.expenses.expenses) }}</span><span class="pf-cl__rval pf-num">− {{ money2(f.expenses.cashExpenses) }}</span></li>
+                        <li class="pf-cl__row"><span class="pf-cl__rname">Cash in (top-ups)</span><span class="pf-cl__rmeta"></span><span class="pf-cl__rval pf-num">+ {{ money2(f.expenses.cashTopUps) }}</span></li>
+                      </ul>
+                      <h3 class="pf-cl__h pf-cl__h--gap">The day</h3>
+                      <ul class="pf-cl__rows" aria-label="The day">
+                        <li class="pf-cl__row"><span class="pf-cl__rname">Billed</span><span class="pf-cl__rmeta">{{ plural(f.billed.bills, 'bill') }}</span><span class="pf-cl__rval pf-num">{{ money2(f.billed.grossBilled) }}</span></li>
+                        <li class="pf-cl__row"><span class="pf-cl__rname">Discounts given</span><span class="pf-cl__rmeta"></span><span class="pf-cl__rval pf-num">{{ money2(f.billed.discount) }}</span></li>
+                        <li class="pf-cl__row"><span class="pf-cl__rname">Orders · tests</span><span class="pf-cl__rmeta">{{ plural(f.activity.patients, 'patient') }}</span><span class="pf-cl__rval pf-num">{{ f.activity.orders }} · {{ f.activity.tests }}</span></li>
+                      </ul>
+                    }
                   </div>
 
                   <div class="pf-cl__col pf-cl__col--count">
                     <h3 class="pf-cl__h">Count the cash</h3>
+                    @if (needsOpening()) {
+                      <div class="pf-cl__field">
+                        <label class="pf-cl__lbl" for="pf-cl-open">Opening cash <span class="pf-cl__req">(first closing of this cash box: the float it started with)</span></label>
+                        <div class="pf-cl__money" [class.pf-cl__money--err]="openingText().trim() !== '' && openingEntered() === null">
+                          <span class="pf-cl__rs" aria-hidden="true">₹</span>
+                          <input id="pf-cl-open" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00"
+                                 [value]="openingText()" (input)="openingText.set($any($event.target).value)" data-testid="closing-opening" />
+                        </div>
+                      </div>
+                    }
                     <div class="pf-cl__field">
                       <label class="pf-cl__lbl" for="pf-cl-count">Cash in the drawer now</label>
                       <div class="pf-cl__money" [class.pf-cl__money--err]="countedText().trim() !== '' && counted() === null" [class.pf-cl__money--off]="closed()">
@@ -184,6 +229,9 @@ interface DailyStatement {
                     <dl class="pf-cl__sum" aria-label="Cash summary" aria-live="polite" data-testid="closing-summary">
                       <div><dt>Expected in the drawer</dt><dd class="pf-num">{{ money2(expected()) }}</dd></div>
                       <div><dt>You counted</dt><dd class="pf-num">{{ countedNow() === null ? '—' : money2(countedNow()) }}</dd></div>
+                      @if (bookClosed()) {
+                        <div class="pf-cl__sumrow--end" data-kind="none"><dt>No cash count, closed in the expense book</dt></div>
+                      }
                       @if (varianceNow() !== null) {
                         <div class="pf-cl__sumrow--end" [attr.data-kind]="vr().kind">
                           <dt>{{ vr().label }}</dt>
@@ -294,6 +342,15 @@ interface DailyStatement {
     .pf-cl__net { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 18px; font-size: 14px; color: var(--text-secondary); }
     .pf-cl__net .pf-num { font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
+    .pf-cl__h--gap { padding-top: 16px !important; }
+    .pf-cl__rows { list-style: none; margin: 0; padding: 0; }
+    .pf-cl__row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 18px; border-bottom: 1px solid var(--pf-line); font-size: 13.5px; }
+    .pf-cl__row:last-child { border-bottom: 0; }
+    .pf-cl__rname { flex: 0 1 auto; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-cl__rmeta { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+    .pf-cl__rval { flex: none; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-cl__reopen { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; font-size: 13px; }
+    @media (pointer: coarse) { .pf-cl__reopen { min-height: 44px; } }
     .pf-cl__field { display: flex; flex-direction: column; gap: 6px; }
     .pf-cl__lbl { font-size: 13px; color: var(--text-secondary); }
     .pf-cl__req { color: var(--text-tertiary); }
@@ -341,7 +398,7 @@ interface DailyStatement {
       .pf-cl__cell:nth-child(-n + 2) { border-bottom: 1px solid var(--pf-line); }
       .pf-cl__v { font-size: 18px; }
       .pf-cl__col { padding: 14px; }
-      .pf-cl__col--modes .pf-cl__h, .pf-cl__mode, .pf-cl__net { padding-left: 14px; padding-right: 14px; }
+      .pf-cl__col--modes .pf-cl__h, .pf-cl__mode, .pf-cl__net, .pf-cl__row { padding-left: 14px; padding-right: 14px; }
       .pf-cl__shift { min-width: 0; }
     }
   `],
@@ -351,6 +408,7 @@ export class DailyStatementComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialogs = inject(DialogService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute, { optional: true });
   protected readonly theme = inject(ThemeService);
 
   readonly narrow = sgMedia(SG_NARROW_MQ);
@@ -369,6 +427,8 @@ export class DailyStatementComponent implements OnInit {
   readonly shiftName = signal<string>('');
   readonly note = signal<string>('');
   readonly countedText = signal<string>('');
+  /** A fresh cash box's first close: the float it started with (whole day, no earlier closing). */
+  readonly openingText = signal<string>('');
   readonly saving = signal(false);
 
   private readonly _stmt = signal<DailyStatement | null>(null);
@@ -380,23 +440,43 @@ export class DailyStatementComponent implements OnInit {
   private readonly todayTotal = signal<number | null>(null);
 
   readonly counted = computed(() => parseRupees(this.countedText()));
-  readonly closed = computed(() => !!this._stmt()?.closure);
+  readonly openingEntered = computed(() => parseRupees(this.openingText()));
+  /** The one day-close view (whole day; null for a shift or an older server). */
+  readonly dayClose = computed(() => (this.stmtShift().trim() ? null : this._stmt()?.dayClose ?? null));
+  readonly figures = computed(() => this.dayClose()?.figures ?? null);
+  /** Closed: a closure row (either screen) or a legacy expense-book close (no count). */
+  readonly closed = computed(() => !!this._stmt()?.closure || !!this.dayClose()?.isClosed);
+  readonly bookClosed = computed(() => !this._stmt()?.closure && this.dayClose()?.source === 'expense_book' && !!this.dayClose()?.isClosed);
+  readonly canReopen = computed(() => !!this.dayClose()?.canReopen && this.closed());
   readonly isToday = computed(() => this.dateStr() === this.todayStr);
+  /** Whole day, open, no earlier closing: ask for the opening float (the server applies it only then). */
+  readonly needsOpening = computed(() => !this.closed() && !this.stmtShift().trim() && this._stmt()?.openingSource === 'none');
 
+  /** The statement's expected cash, re-derived with an entered opening float. */
+  private readonly liveExpected = computed(() => {
+    const s = this._stmt();
+    if (!s) return 0;
+    if (!this.needsOpening() || this.openingEntered() === null) return s.expectedCash;
+    return expectedCash(this.openingEntered()!, s.cashCollected, s.cashRefunded, s.cashExpenses ?? 0, s.cashTopUps ?? 0);
+  });
   /** What the drawer should hold: the closure's snapshot once closed, else the statement's own figure. */
-  readonly expected = computed(() => this._stmt()?.closure?.expectedCash ?? this._stmt()?.expectedCash ?? 0);
-  readonly countedNow = computed<number | null>(() => (this.closed() ? this._stmt()!.closure!.countedCash : this.counted()));
-  readonly varianceNow = computed<number | null>(() => (this.closed() ? this._stmt()!.closure!.variance : varianceOf(this.counted(), this.expected())));
+  readonly expected = computed(() => this._stmt()?.closure?.expectedCash ?? this.liveExpected());
+  readonly countedNow = computed<number | null>(() => (this.closed() ? this._stmt()?.closure?.countedCash ?? null : this.counted()));
+  readonly varianceNow = computed<number | null>(() => (this.closed() ? this._stmt()?.closure?.variance ?? null : varianceOf(this.counted(), this.expected())));
   /** Counted − expected, null until a count is typed. */
-  readonly variance = computed(() => varianceOf(this.counted(), this._stmt()?.expectedCash ?? 0));
+  readonly variance = computed(() => varianceOf(this.counted(), this.liveExpected()));
   readonly vr = computed(() => varianceRow(this.varianceNow()));
   readonly noteNeeded = computed(() => !this.closed() && noteRequired(this.varianceNow()));
-  readonly countedShown = computed(() => (this.closed() ? String(this._stmt()!.closure!.countedCash) : this.countedText()));
-  readonly noteShown = computed(() => (this.closed() ? (this._stmt()!.closure!.note ?? '') : this.note()));
+  readonly countedShown = computed(() => {
+    if (!this.closed()) return this.countedText();
+    const c = this._stmt()?.closure?.countedCash;
+    return c === null || c === undefined ? '' : String(c);
+  });
+  readonly noteShown = computed(() => (this.closed() ? (this._stmt()?.closure?.note ?? this.dayClose()?.note ?? '') : this.note()));
 
   readonly canClose = computed(() => canCloseDay({
     loaded: !!this._stmt(), closed: this.closed(), counted: this.counted(), variance: this.variance(), note: this.note(), saving: this.saving(),
-  }));
+  }) && (!this.needsOpening() || this.openingText().trim() === '' || this.openingEntered() !== null));
   readonly closeLabel = computed(() => (this.stmtShift().trim() ? 'Close shift' : 'Close day'));
   readonly closeHint = computed(() => {
     if (this.canClose()) return this.closeLabel();
@@ -415,7 +495,14 @@ export class DailyStatementComponent implements OnInit {
   readonly collected = computed(() => this.snapshot()?.collected ?? this._stmt()?.totalCollected ?? 0);
   readonly refunded = computed(() => this.snapshot()?.refunded ?? this._stmt()?.totalRefunded ?? 0);
   readonly paymentCount = computed(() => this.payments().reduce((n, p) => n + (p.count ?? 0), 0));
-  readonly openingShown = computed(() => this._stmt()?.closure?.openingBalance ?? this._stmt()?.openingBalance ?? 0);
+  readonly openingShown = computed(() => this._stmt()?.closure?.openingBalance
+    ?? (this.needsOpening() && this.openingEntered() !== null ? this.openingEntered()! : this._stmt()?.openingBalance ?? 0));
+  readonly openingWords = computed(() => {
+    const s = this._stmt();
+    if (this.needsOpening()) return 'First closing: enter the float';
+    if (s?.openingSource === 'previous_closure' && s.openingFrom) return `From ${dayShort(s.openingFrom)} closing`;
+    return 'Carried from the last closing';
+  });
   readonly expectedHint = computed(() => {
     const s = this._stmt();
     return (s?.cashExpenses ?? 0) > 0 || (s?.cashTopUps ?? 0) > 0 ? 'Opening + cash in − cash out, incl. expenses' : 'Opening + cash in − cash refunds';
@@ -443,8 +530,12 @@ export class DailyStatementComponent implements OnInit {
   });
   readonly helpLine = computed(() => {
     const c = this._stmt()?.closure;
+    const dc = this.dayClose();
     const unit = this.stmtShift().trim() ? 'shift' : 'day';
-    if (c) return `Closed${timeOf(c.closedAt) ? ' at ' + timeOf(c.closedAt) : ''}. The counted cash, ${money2(c.countedCash)}, carried forward as the next opening cash.`;
+    const by = dc?.closedByName ? ` by ${dc.closedByName}` : '';
+    const later = this.closed() && dc && !dc.canReopen && dc.lastClosed && dc.lastClosed > dc.date ? ' A later day is closed: reopen that first to change this one.' : '';
+    if (this.bookClosed()) return `Closed${by} in the expense book${dc?.closedAt ? ' at ' + timeOf(dc.closedAt) : ''}, before the cash was counted here. Its expenses are locked.${later}`;
+    if (c) return `Closed${by}${timeOf(c.closedAt) ? ' at ' + timeOf(c.closedAt) : ''}. The counted cash, ${money2(c.countedCash)}, carried forward as the next opening cash.${unit === 'day' ? " The day's expenses are locked." : ''}${later}`;
     const n = this.counted();
     return `${this.closeLabel()}${this.theme.isNewDesign() ? ' (top right)' : ''} locks ${unit === 'day' ? "today's" : "this shift's"} totals and carries ${n === null ? 'the counted cash' : money2(n)} forward as ${unit === 'day' ? "tomorrow's" : 'the next'} opening cash.`;
   });
@@ -455,6 +546,13 @@ export class DailyStatementComponent implements OnInit {
   readonly closureWord = closureWord;
 
   ngOnInit() {
+    // Expenses → Day closing (and its day-book Close / Reopen) open THIS screen on a given day: ?date=yyyy-MM-dd.
+    const q = this.route?.snapshot?.queryParamMap?.get('date');
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q <= this.todayStr) {
+      this.dateStr.set(q);
+      this.stmtShift.set('');
+      this.shiftName.set('');
+    }
     this.load();
     this.loadClosures();
   }
@@ -496,6 +594,7 @@ export class DailyStatementComponent implements OnInit {
   load() {
     this._stmt.set(null);
     this.countedText.set('');
+    this.openingText.set('');
     this.note.set('');
     const shift = this.stmtShift().trim();
     const date = this.dateStr();
@@ -521,12 +620,12 @@ export class DailyStatementComponent implements OnInit {
     const s = this._stmt();
     const counted = this.counted();
     if (!s || counted === null || this.saving() || !this.canClose()) return;
-    const v = varianceOf(counted, s.expectedCash)!;
+    const v = varianceOf(counted, this.expected())!;
     const vr = varianceRow(v);
     const unit = this.stmtShift().trim() ? 'shift' : 'day';
     const ok = await this.dialogs.confirm({
       title: `${this.closeLabel()} for ${dayShort(this.dateStr())}?`,
-      message: `Expected ${money2(s.expectedCash)}, you counted ${money2(counted)}${v === 0 ? ': balanced' : `: ${vr.label.toLowerCase()} ${vr.amount}`}. `
+      message: `Expected ${money2(this.expected())}, you counted ${money2(counted)}${v === 0 ? ': balanced' : `: ${vr.label.toLowerCase()} ${vr.amount}`}. `
         + `This locks the ${unit}'s totals and carries ${money2(counted)} forward as the next opening cash.`,
       confirmLabel: this.closeLabel(),
     });
@@ -536,19 +635,46 @@ export class DailyStatementComponent implements OnInit {
       const c = await firstValueFrom(this.api.post<Closure>('/api/finance/close', {
         date: this.dateStr(),
         shift: this.stmtShift().trim() || null,
-        openingBalance: s.openingBalance,
+        openingBalance: this.needsOpening() && this.openingEntered() !== null ? this.openingEntered() : s.openingBalance,
         countedCash: counted,
         note: this.note().trim() || null
       }));
       this._stmt.set({ ...s, closure: c });
       this.countedText.set('');
       this.note.set('');
+      // Re-read the one day-close (who closed it, reopen, the frozen figures).
+      if (s.dayClose) this.load();
       this.loadClosures();
       this.toasts.success(c.shift ? 'Shift closed' : 'Day closed');
     } catch (e) {
       const err = ApiError.from(e);
       this.toasts.error(err.message);
       if (err.code === 'already_closed') this.load();
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** Reopen the branch's latest closed day (the cashier / organisation admin; the server checks): its expenses unlock
+   *  and the counted cash is cleared — the same reopen Expenses → Day closing had. */
+  async reopenDay() {
+    const s = this._stmt();
+    if (!s || this.saving() || !this.canReopen()) return;
+    const date = this.dateStr();
+    const ok = await this.dialogs.confirm({
+      title: `Reopen ${dayShort(date)}?`,
+      message: "The day's expenses can be changed again and the counted cash is cleared. Close it again once it is corrected.",
+      confirmLabel: 'Reopen day', tone: 'danger',
+    });
+    if (!ok) return;
+    this.saving.set(true);
+    try {
+      const next = await firstValueFrom(this.api.post<DailyStatement>(`/api/finance/closures/${date}/reopen`, {}));
+      if (date === this.dateStr()) this._stmt.set(next);
+      this.loadClosures();
+      this.toasts.success('Day reopened');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.saving.set(false);
     }

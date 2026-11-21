@@ -7,19 +7,33 @@ import { cashVariance } from '../../shared/models/expense.model';
 
 export interface ModeTotal { mode: string; count: number; total: number; }
 
-/** A closure as `/api/finance/closures` and the statement carry it. */
+/** A closure as `/api/finance/closures` and the statement carry it. A legacy close made in the expense book alone
+ *  (`source: 'expense_book'`, before the one day-close) has no count: expected / counted / variance are null. */
 export interface Closure {
   id: string;
   date: string;
   shift?: string | null;
   openingBalance: number;
-  expectedCash: number;
-  countedCash: number;
-  variance: number;
+  expectedCash: number | null;
+  countedCash: number | null;
+  variance: number | null;
   totalsJson?: string | null;
   note?: string | null;
   closedBy?: string | null;
   closedAt: string;
+  /** Who closed it (the server's name lookup), when known. */
+  closedByName?: string | null;
+  /** day_close (the one day-close) · daily_statement (older, payment split only) · expense_book (legacy, no count). */
+  source?: 'day_close' | 'daily_statement' | 'expense_book' | null;
+}
+
+/** "1,234.50" / "₹ 1,234.5" / "" → a paisa-exact number (null = blank / not money). */
+export function parseRupees(text: string): number | null {
+  const t = (text ?? '').replace(/[,₹\s]/g, '');
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || Math.round(n * 100) / 100 !== n) return null;
+  return n;
 }
 
 export type VarianceKind = 'none' | 'balanced' | 'short' | 'over';
@@ -56,8 +70,10 @@ export function varianceRow(variance: number | null): { label: string; amount: s
   return { label: 'Short or over', amount: '—', kind };
 }
 
-/** The Days list's word under a closed day: "Balanced" / "Short ₹20" / "Over ₹100". */
-export function closureWord(variance: number): string {
+/** The Days list's word under a closed day: "Balanced" / "Short ₹20" / "Over ₹100" ("No count" for a legacy
+ *  expense-book close, which never counted the drawer). */
+export function closureWord(variance: number | null | undefined): string {
+  if (variance === null || variance === undefined) return 'No count';
   const k = varianceKind(variance);
   return k === 'short' ? `Short ${money(Math.abs(variance))}` : k === 'over' ? `Over ${money(variance)}` : 'Balanced';
 }
@@ -138,7 +154,7 @@ export function dayRows(closures: readonly Closure[], today: string, shift: stri
 
 /** The pill search over the Days list: date, weekday words, shift, . */
 export function dayHaystack(r: DayRow, dayWords: string): unknown[] {
-  return [r.date, dayWords, r.shift, r.open ? 'open today' : 'closed', r.closure ? closureWord(r.closure.variance) : ''];
+  return [r.date, dayWords, r.shift, r.open ? 'open today' : 'closed', r.closure ? closureWord(r.closure.variance) : '', r.closure?.closedByName];
 }
 
 /** The shifts the closures know, sorted — for the shift pick. */
@@ -161,9 +177,11 @@ export function dayShort(ymd: string): string {
   return Number.isFinite(t) ? dayFmt.format(t) : ymd;
 }
 
-/** The word under a closed day: "Closed by Kavya, 9:12 PM" (the name only when it is the signed-in person's). */
-export function closedWords(c: Pick<Closure, 'closedBy' | 'closedAt'>, me: { id?: string; name?: string } | null): string {
+/** The word under a closed day: "Closed by Kavya, 9:12 PM" (the server's name; else the name only when it is the
+ *  signed-in person's). */
+export function closedWords(c: Pick<Closure, 'closedBy' | 'closedAt' | 'closedByName'>, me: { id?: string; name?: string } | null): string {
   const at = timeOf(c.closedAt);
-  const by = me?.id && c.closedBy && c.closedBy === me.id && me.name ? ` by ${me.name}` : '';
+  const name = c.closedByName?.trim() || (me?.id && c.closedBy && c.closedBy === me.id ? me.name : '');
+  const by = name ? ` by ${name}` : '';
   return `Closed${by}${at ? (by ? ', ' : ' ') + at : ''}`;
 }

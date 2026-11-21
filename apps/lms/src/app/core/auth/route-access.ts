@@ -173,7 +173,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/dashboard':          { perms: ['view_tat_dashboard', 'view_dashboard'], module: 'reports' },
   '/insights':           { perms: ANALYTICS_PERMS, module: 'reports' },
   '/finance':            { perms: FINANCE_PERMS },
-  '/finance/daily':      { perms: FINANCE_PERMS },
+  // THE day-close (owner 2026-11-21): the cashier (expense_admin) reaches it from Expenses → Day closing too.
+  '/finance/daily':      { perms: [...FINANCE_PERMS, 'expense_admin'] },
   // Credit accounts: money actions (top up, payment, statement); the setup is in Settings › Billing and taxes.
   '/finance/credit-accounts': { perms: ['manage_tenant'] },
   // (/finance/expenses is a plain redirect to /expenses — no entry of its own.)

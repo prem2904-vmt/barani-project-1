@@ -35,8 +35,8 @@ import { WorkListComponent } from '../../../shared/components/work-list/work-lis
 import { WORK_LIST_MQ, WorkListItem, columnSortOptions, sortItems } from '../../../shared/components/work-list/work-list';
 import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
 import { mediaSignal } from '../../../shared/utils/media-query';
-import { DayClosingComponent } from './day-closing.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { Router } from '@angular/router';
 import { dayLabel, inr, dayStatusWords } from './expense-format';
 import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
 import { dateCol, moneyCol, numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
@@ -73,7 +73,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
   selector: 'pf-expense-tracker',
   standalone: true,
   imports: [BackToTodayComponent, WorkListComponent, SortChipComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
-    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
+    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-xt pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -126,8 +126,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           <div class="pf-xt__tabrow"><ng-container *ngTemplateOutlet="tabSwitch"></ng-container></div>
         }
         @if (tab() === 'closing') {
-          <pf-day-closing [date]="closingDate()" [today]="today" [narrow]="narrow()"
-                          (dateChange)="closingDate.set($event)" (changed)="load()"></pf-day-closing>
+          <!-- Never shown: Day closing is the ONE day-close screen (/finance/daily) — setTab navigates there. -->
         } @else {
         <div class="pf-xt__panels" [class.pf-xt__panels--narrow]="narrow()">
           @if (narrow()) {
@@ -567,6 +566,7 @@ export class ExpenseTrackerComponent {
   private readonly dialogs = inject(DialogService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router, { optional: true });
   protected readonly theme = inject(ThemeService);
 
   readonly today = labToday();
@@ -583,7 +583,8 @@ export class ExpenseTrackerComponent {
   readonly tab = computed<ExpenseTab>(() => {
     const p = this.tabPick();
     const list = this.tabs();
-    return p && list.includes(p) ? p : (list[0] ?? 'all');
+    // 'closing' is never a tab of its own any more: it opens the one day-close screen (a restored view state too).
+    return p && p !== 'closing' && list.includes(p) ? p : (list.find(t => t !== 'closing') ?? 'all');
   });
   readonly expenseTabOptions = computed<SegmentedOption<ExpenseTab>[]>(() =>
     this.tabs().map(t => ({ value: t, label: this.tabLabel[t] }))
@@ -799,16 +800,19 @@ export class ExpenseTrackerComponent {
   dayShort(ymd: string) { return dayLabel(ymd, false); }
 
   setTab(t: ExpenseTab) {
+    if (t === 'closing') { this.openClosing(this.closingDate()); return; }
     if (t === this.tab()) return;
     this.sheetOpen.set(false);
-    if (t !== 'closing') this.book.set(null);   // never flash the other scope's rows
+    this.book.set(null);   // never flash the other scope's rows
     this.tabPick.set(t);
   }
 
-  /** Open Day closing on a given IST day (the day book's Close / Reopen). */
+  /** Open Day closing on a given IST day (the tab, and the day book's Close / Reopen): THE day-close screen —
+   *  the same one Finance → Daily statement opens, on the same record (owner 2026-11-21: one day-close). */
   openClosing(date: string) {
     this.closingDate.set(date);
-    this.setTab('closing');
+    this.sheetOpen.set(false);
+    void this.router?.navigate(['/finance/daily'], { queryParams: { date } })?.catch(() => undefined);
   }
 
   filter(): ExpenseFilter {
