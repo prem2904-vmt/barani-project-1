@@ -129,16 +129,76 @@ async function shots(page: Page, name: string) {
     await page.screenshot({ path: `${out}/lt-${name}--${dark ? 'dark' : 'light'}.png` });
   }
   await theme(page, false);
-  if (process.env['LT_PROBE'] === '1') {
-    await page.waitForTimeout(1100);
-    // Dev aid: the big opaque surfaces on screen (the panels the glass must reach), by class.
-    const found = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(e => {
-      const r = e.getBoundingClientRect(); if (r.width < 220 || r.height < 120) return false;
-      const c = getComputedStyle(e); const bg = c.backgroundColor;
-      return bg !== 'rgba(0, 0, 0, 0)' && parseFloat(c.borderTopLeftRadius) >= 12 && !e.closest('pf-hero-band, .pf-chrome');
-    }).map(e => `${e.tagName.toLowerCase()}.${String(e.className).split(' ').slice(0, 4).join('.')} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} ${getComputedStyle(e).backgroundColor}`));
-    fs.appendFileSync(path.join(out, 'probe.txt'), `## ${name}\n${found.join('\n')}\n`);
-  }
+  if (process.env['LT_PROBE'] === '1') await probe(page, name);
+  if (!SHOTS_ONLY && !NO_GLASS_CHECK.has(name)) await expectGlass(page, name);
+}
+/** Screens with no docked panel to check (an intake form, a loading form, the order sheet open over the page). */
+const NO_GLASS_CHECK = new Set(['lab-receive', 'patient-new', 'frontdesk-order']);
+
+/** Owner 2026-11-21 (light-glass2): in LIGHT every docked OUTER panel is glass — its own background and its ::before
+ *  layer are translucent (alpha <= 0.8) with a backdrop blur — and the empty body of a grid inside it paints nothing
+ *  (the glass shows through). Floats (modal dialogs, menus, dropdowns) and the band / bottom bar are not panels. */
+async function expectGlass(page: Page, tag: string) {
+  await theme(page, false);
+  await page.waitForTimeout(400);
+  const r = await page.evaluate(() => {
+    const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
+    const FLOAT = '[role="dialog"][aria-modal="true"], .pf-dh-root, .sm-panel, .pf-dd__panel, pf-hero-band, .pf-chrome, pf-journey-overlay';
+    const big = (e: Element) => { const b = e.getBoundingClientRect(); return b.width >= 200 && b.height >= 150 && parseFloat(getComputedStyle(e).borderTopLeftRadius) >= 10; };
+    const panels = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(e => {
+      if (!big(e) || e.closest(FLOAT)) return false;
+      for (let p = e.parentElement; p; p = p.parentElement) if (big(p)) return false;
+      return true;
+    });
+    const bad: string[] = [];
+    for (const e of panels) {
+      const c = getComputedStyle(e), b = getComputedStyle(e, '::before');
+      const name = String(e.className).split(' ').slice(0, 3).join('.');
+      const own = alpha(c.backgroundColor);
+      const glassBefore = b.content !== 'none' && alpha(b.backgroundColor) <= 0.8 && /blur/.test(b.backdropFilter || (b as unknown as Record<string, string>)['webkitBackdropFilter'] || '');
+      const glassSelf = own <= 0.8 && /blur/.test(c.backdropFilter || '');
+      if (own > 0.8 || !(glassBefore || glassSelf)) bad.push(`${name}: bg ${c.backgroundColor}, ::before ${b.content !== 'none' ? b.backgroundColor + ' ' + b.backdropFilter : 'none'}`);
+      // Empty grid body: the point under the last row paints nothing up to the panel.
+      const grid = e.querySelector<HTMLElement>('.ag-root-wrapper');
+      if (grid) {
+        const g = grid.getBoundingClientRect();
+        const rows = Array.from(grid.querySelectorAll<HTMLElement>('.ag-row')).map(x => x.getBoundingClientRect().bottom).filter(y => y > 0);
+        const last = rows.length ? Math.max(...rows) : g.top + 60;
+        if (g.bottom - last > 40) {
+          const x = g.left + g.width / 2, y = g.bottom - 20;
+          const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+          for (let el = hit && e.contains(hit) ? hit : null; el && el !== e; el = el.parentElement) {
+            if (el.closest('.ag-overlay')) break;   // the "no rows" message sits in the overlay, itself transparent
+            if (alpha(getComputedStyle(el).backgroundColor) > 0.05) { bad.push(`${name}: empty grid body painted by ${String(el.className).slice(0, 60)} (${getComputedStyle(el).backgroundColor})`); break; }
+          }
+        }
+      }
+    }
+    return { count: panels.length, bad };
+  });
+  // Phones may open on a short tab (Lab: the Intake strip) with no big panel; wider screens always have one.
+  if (!isPhone()) expect(r.count, `${tag}: a docked panel on screen`).toBeGreaterThan(0);
+  expect(r.bad, `${tag}: every docked panel is glass (light)`).toEqual([]);
+}
+/** Dev aid (LT_PROBE=1): every big rounded surface on screen — its own background, its ::before glass, whether a
+ *  bigger rounded surface holds it, and any role=dialog ancestor. Written to <shots>/<project>/probe.txt. */
+async function probe(page: Page, name: string) {
+  await theme(page, false);
+  await page.waitForTimeout(800);
+  const found = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(e => {
+    const r = e.getBoundingClientRect(); if (r.width < 200 || r.height < 150) return false;
+    const c = getComputedStyle(e);
+    return parseFloat(c.borderTopLeftRadius) >= 10 && !e.closest('pf-hero-band, .pf-chrome');
+  }).map(e => {
+    const c = getComputedStyle(e), b = getComputedStyle(e, '::before');
+    const r = e.getBoundingClientRect();
+    let p = e.parentElement; let holder = '';
+    while (p) { const pr = p.getBoundingClientRect(); if (parseFloat(getComputedStyle(p).borderTopLeftRadius) >= 10 && pr.width >= 200) { holder = String(p.className).split(' ').slice(0, 2).join('.'); break; } p = p.parentElement; }
+    const dlg = e.closest('[role="dialog"]');
+    return `${e.tagName.toLowerCase()}.${String(e.className).split(' ').slice(0, 4).join('.')} ${Math.round(r.width)}x${Math.round(r.height)} bg=${c.backgroundColor} before=${b.content !== 'none' ? b.backgroundColor + ' ' + b.backdropFilter : '-'}${holder ? ' IN ' + holder : ''}${dlg ? ' DLG ' + String(dlg.className).slice(0, 40) : ''}`;
+  }));
+  const out = path.join(OUT_BASE, projectName()); fs.mkdirSync(out, { recursive: true });
+  fs.appendFileSync(path.join(out, 'probe.txt'), `## ${name}\n${found.join('\n')}\n`);
 }
 const settle = async (page: Page, text?: string) => {
   if (text) await page.getByText(text).locator('visible=true').first().waitFor({ timeout: 45_000 }).catch(() => undefined);
@@ -385,6 +445,8 @@ test.describe('light theme — every screen, light + dark', () => {
     await openFirst();
     await theme(page, false); await page.waitForTimeout(600);
     await page.screenshot({ path: `${out}/lt-collect--light.png` });
+    if (process.env['LT_PROBE'] === '1') await probe(page, 'collect');
+    if (!SHOTS_ONLY) await expectGlass(page, 'collect');
     // Real motion for this check (the spec's freeze would hide a delayed transition): 400 ms after the switch.
     await page.evaluate(() => document.querySelectorAll('style[data-lt-freeze]').forEach(x => x.remove()));
     await theme(page, true); await page.waitForTimeout(400);
