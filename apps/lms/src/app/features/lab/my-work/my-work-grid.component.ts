@@ -134,6 +134,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
         [isFullWidthRow]="isDetail" [fullWidthCellRenderer]="detailRenderer" [fullWidthCellRendererParams]="detailParams()"
         [loading]="loading() && !rows().length" loadingLabel="Loading the queue…" [emptyTitle]="emptyTitle()"
+        [viewStateKey]="viewStateKey()" [viewStateSort]="false"
         (rowClicked)="onRow($event)" (gridReady)="onGridReady($event)" />
     }
 
@@ -385,6 +386,8 @@ export class MyWorkGridComponent implements AfterViewInit {
   readonly loading = input(false);
   readonly emptyTitle = input('');
   readonly phone = input(false);
+  /** Keep the column filters / scroll across in-app navigation (ViewStateService); sort persists per user already. */
+  readonly viewStateKey = input('');
 
   readonly web = webPointerSignal();
   private readonly sorts = inject(LabSortService);

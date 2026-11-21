@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type RowClickedEvent } from 'ag-grid-community';
@@ -324,4 +325,8 @@ export class PharmacyStockPage {
     if (!ok) return;
     this.api.expire(null).subscribe({ next: r => { this.toast.success(`${r.batches} ${r.batches === 1 ? 'batch' : 'batches'} written off`); this.load(); }, error: e => this.toast.error(errText(e)) });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.stock', { q: this.q, filter: this.filter });
 }

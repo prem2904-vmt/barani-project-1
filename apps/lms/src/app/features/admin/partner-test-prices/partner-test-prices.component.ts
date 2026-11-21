@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
@@ -65,7 +66,7 @@ interface PriceRow {
             <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
           </header>
           <div class="pf-sg-main__body">
-            <pf-data-grid [rowData]="visibleRows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef" [singleClickEdit]="true"
+            <pf-data-grid viewStateKey="admin.partner-prices.g1" [rowData]="visibleRows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef" [singleClickEdit]="true"
                           [suppressCellFocus]="false" [loading]="loading()" loadingLabel="Loading prices…"
                           [emptyTitle]="referralLabId() ? (q() ? 'No prices match your search.' : 'No prices yet — Add price.') : 'Pick a referral lab'"
                           [emptyBody]="referralLabId() ? '' : 'What it charges per test is the cost Analytics resolves the outsourcing margin from.'"
@@ -222,4 +223,8 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     });
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.partner-prices', { q: this.q });
 }

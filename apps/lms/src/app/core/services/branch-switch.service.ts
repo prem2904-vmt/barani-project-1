@@ -9,6 +9,7 @@ import { PatientProfileService } from './patient-profile.service';
 import { HttpActivityService } from './http-activity.service';
 import { ZoomTransitionService, prefersReducedMotion } from '../navigation/zoom-transition';
 import { MIN_BRANCH_MS } from '../../shared/utils/min-duration';
+import { ViewStateService } from '../../shared/services/view-state.service';
 
 /** The veil + content phases of one branch switch. */
 export type BranchSwitchPhase = 'idle' | 'out' | 'loading' | 'in';
@@ -60,6 +61,7 @@ export class BranchSwitchService {
   private readonly profile = inject(PatientProfileService);
   private readonly activity = inject(HttpActivityService);
   private readonly zoom = inject(ZoomTransitionService);
+  private readonly viewState = inject(ViewStateService);
 
   private readonly _phase = signal<BranchSwitchPhase>('idle');
   private readonly _target = signal<{ id: string; name: string } | null>(null);
@@ -104,6 +106,8 @@ export class BranchSwitchService {
     if (!this.auth.setActiveBranch(branchId, { reload: false })) { this.finish(); return false; }
     this.profile.close();
     this.drafts.clearAll();
+    // Screens come back on their defaults in the new branch (filters, tabs, dates).
+    this.viewState.clear();
     this.outsourcing.reset();
     this.labCfg.reset();
     this.labCfg.ensureLoaded();          // parallel with the workflow below

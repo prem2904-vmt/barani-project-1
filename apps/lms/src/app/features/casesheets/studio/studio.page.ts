@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
 import { NgTemplateOutlet } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
 import { Router, RouterLink } from '@angular/router';
@@ -58,7 +60,7 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 @Component({
   selector: 'app-studio-page',
   standalone: true,
-  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog, BuilderDrawerComponent, AgGridAngular, NgTemplateOutlet, SegmentedComponent],
+  imports: [GridViewStateDirective, HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog, BuilderDrawerComponent, AgGridAngular, NgTemplateOutlet, SegmentedComponent],
   // the "New case sheet with Cortex" chat (no case sheet open: Cortex may suggest a new one, which waits for approval)
   providers: [ChatStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -341,4 +343,9 @@ export class StudioPage {
       this.error.set(plainError(e));
     }
   }
+
+  // Screen view state (owner 2026-11-21): department, status / origin filters, tab and search come back as left.
+  private readonly _viewState = inject(ViewStateService).bind('casesheets.studio', {
+    dept: this.dept, status: this.statusFilter, origin: this.originFilter, view: this.view, query: this.query,
+  });
 }

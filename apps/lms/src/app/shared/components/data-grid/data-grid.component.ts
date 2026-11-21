@@ -9,6 +9,8 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { ThemeService } from '../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../../../features/admin/tests/tests/grid-theme';
 import { SkeletonTableComponent } from '../../primitives/skeleton-kit.component';
+import { ViewStateService } from '../../services/view-state.service';
+import { keepGridViewState } from '../../services/grid-view-state';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -59,6 +61,7 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly zone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly viewState = inject(ViewStateService);
 
   readonly rowData = input<T[] | null>([]);
   readonly columnDefs = input<ColDef<T>[]>([]);
@@ -86,6 +89,10 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   readonly fullWidthCellRendererParams = input<unknown>(undefined);
   /** Render every column (a short, fixed column list with template cells). */
   readonly suppressColumnVirtualisation = input(false, { transform: booleanAttribute });
+  /** Keep this grid's column filters, sort and scroll across in-app navigation (ViewStateService; empty = off). */
+  readonly viewStateKey = input('');
+  /** Include the sort in the kept state — off for grids whose sort already persists elsewhere (per-user sort). */
+  readonly viewStateSort = input(true, { transform: booleanAttribute });
 
   readonly rowClicked = output<RowClickedEvent<T>>();
   readonly cellClicked = output<CellClickedEvent<T>>();
@@ -97,7 +104,8 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   readonly showEmpty = computed(() => !!this.emptyTitle() && !(this.rowData()?.length));
   private api: GridApi<T> | null = null;
 
-  onReady(e: GridReadyEvent<T>): void { this.api = e.api; this.gridReady.emit(e); }
+  onReady(e: GridReadyEvent<T>): void { this.api = e.api; keepGridViewState(e.api, this.viewState, this.viewStateKey(), { sort: this.viewStateSort() }); this.gridReady.emit(e); }
+
   /** The grid API, for pages that start an edit or refresh cells. */
   gridApi(): GridApi<T> | null { return this.api; }
 

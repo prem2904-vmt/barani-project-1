@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
@@ -18,6 +18,7 @@ import { whenText } from '../data/when';
 import { CsStylesComponent } from '../styles/cs-styles.component';
 import { CsPatientStepComponent } from './patient-step.component';
 import { CASESHEETS_DATA_PROVIDERS } from '../data/casesheets-data.providers';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 
 /** A department (the form's `specialty`) and its case sheets, pinned first. */
 export interface Department {
@@ -259,6 +260,17 @@ export class FormsPage {
   };
 
   constructor() {
+    // Screen view state (owner 2026-11-21): the searches, "this department only" and the open department (lab
+    // Prepare only — a patient launch carries its own context) come back as left after in-app navigation.
+    const vs = inject(ViewStateService);
+    vs.bind('prepare', { query: this.query, draftQuery: this.draftQuery, thisDeptOnly: this.thisDeptOnly });
+    if (this.fromPrepare) {
+      const savedDept = vs.value<string | null>('prepare', 'dept');
+      if (savedDept && !this.route.snapshot?.queryParamMap?.get('dept')) {
+        void this.router.navigate([], { relativeTo: this.route, ...deptNavigation(savedDept, null), replaceUrl: true });
+      }
+      effect(() => { const d = this.deptParam(); untracked(() => vs.patch('prepare', { dept: d })); });
+    }
     effect(() => {
       if (this.compact() && this.chosenDept()) this.navBack.registerBackInterceptor(this.backHandler);
       else this.navBack.clearBackInterceptor(this.backHandler);

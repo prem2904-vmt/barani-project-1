@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
@@ -120,12 +121,12 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
               <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" [label]="view() === 'doctors' ? 'Loading doctors…' : 'Loading hospitals…'"></pf-skel-grid>
             }
             @if (view() === 'doctors') {
-              <pf-data-grid [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()" [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.referring.g1" [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()" [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loadingDoctorsShown() && gridDoctors().length === 0) {
                 <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ emptyDoctorsText() }}</p></div>
               }
             } @else {
-              <pf-data-grid [clickable]="true" [rowData]="gridHospitals()" [columnDefs]="hospitalColDefs()" [defaultColDef]="defaultColDef" [getRowId]="hospitalRowId" [getRowClass]="hospitalRowClass" [suppressCellFocus]="true" (cellClicked)="onHospitalCell($event)"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.referring.g2" [clickable]="true" [rowData]="gridHospitals()" [columnDefs]="hospitalColDefs()" [defaultColDef]="defaultColDef" [getRowId]="hospitalRowId" [getRowClass]="hospitalRowClass" [suppressCellFocus]="true" (cellClicked)="onHospitalCell($event)"></pf-data-grid>
               @if (!loadingHospitalsShown() && gridHospitals().length === 0) {
                 <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ hospitalSearch() ? 'No hospitals match.' : 'No hospitals yet. Use Add hospital to start.' }}</p></div>
               }
@@ -1075,4 +1076,8 @@ export class ReferringNetworkComponent implements OnInit {
       this.toasts.error(ApiError.from(err).message);
     }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.referring', { view: this.view, hospitalSearch: this.hospitalSearch, doctorSearch: this.doctorSearch, hospitalFilter: this.hospitalFilter, status: this.status });
 }

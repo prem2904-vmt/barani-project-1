@@ -1,3 +1,5 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { SheetEditorService } from '../../neuron/sheet-editor.service';
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { CommonModule, DatePipe } from "@angular/common";
@@ -119,7 +121,7 @@ const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
 @Component({
   selector: "pf-report-queue",
   standalone: true,
-  imports: [
+  imports: [BackToTodayComponent, 
     DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
@@ -1779,4 +1781,8 @@ export class ReportQueueComponent implements OnInit {
         },
       });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('reports', { filter: this._filter, datePreset: this.datePreset, dateFrom: this.dateFrom, dateTo: this.dateTo, doctor: this.doctor, via: this.via, query: this._query });
 }

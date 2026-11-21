@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
@@ -135,4 +136,8 @@ export class PharmacyH1RegisterPage {
       error: e => { this.exporting.set(false); this.toast.error(errText(e, 'Export failed.')); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.h1', { from: this.from, to: this.to, q: this.q, reg: this.reg });
 }

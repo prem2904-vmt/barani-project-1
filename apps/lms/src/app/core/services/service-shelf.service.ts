@@ -1,4 +1,5 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
+import { SessionScopeService } from '../auth/session-scope.service';
 import { NavigationEnd, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs/operators';
@@ -70,6 +71,11 @@ export class ServiceShelfService {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed())
       .subscribe(e => this.url.set(e.urlAfterRedirects || e.url));
+    // Screen view state (owner 2026-11-21): the step filter survives in-app navigation (root service) but never a
+    // sign-out, another account, or a branch switch.
+    inject(SessionScopeService).onChange(() => this._step.set(null));
+    let branch = this.auth.activeBranchId?.() ?? null;
+    effect(() => { const b = this.auth.activeBranchId?.() ?? null; if (b !== branch) { branch = b; untracked(() => this._step.set(null)); } });
   }
 
   /** The landing publishes what its two panels hold (before the service filter). */

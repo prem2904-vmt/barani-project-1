@@ -1,4 +1,5 @@
 import { AfterViewInit, DestroyRef, ChangeDetectionStrategy, Component, ElementRef, NgZone, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { NgTemplateOutlet } from '@angular/common';
 import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
@@ -178,7 +179,7 @@ type Tab = 'mine' | 'all';
               }
             } @else {
               <pf-data-grid class="pv-gridc" data-testid="pv-grid" [rowData]="gridRows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
-                [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
+                [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true" viewStateKey="pathologist.grid"
                 [loading]="loading() && rows().length === 0" loadingLabel="Loading the queue…"
                 (rowClicked)="onRow($event)" />
             }
@@ -1021,4 +1022,7 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+
+  // Screen view state (owner 2026-11-21): tab, search and department come back as left after in-app navigation.
+  private readonly _viewState = inject(ViewStateService).bind('pathologist', { tab: this._tab, query: this.query, dept: this.dept });
 }

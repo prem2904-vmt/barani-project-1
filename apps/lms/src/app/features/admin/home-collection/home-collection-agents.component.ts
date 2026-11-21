@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, input, signal, viewChild } from '@angular/core';
@@ -168,7 +169,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
               @if (listSkeleton()) {
                 <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="4" label="Loading agents…"></pf-skel-grid>
               }
-              <pf-data-grid [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.hc-agents.g1" [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!listSkeleton() && visibleAgents().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   <p class="pf-sg-empty__title">{{ agents().length === 0 ? 'No home-collection agents yet.' : 'No agents match "' + q() + '".' }}</p>
@@ -380,4 +381,8 @@ export class HomeCollectionAgentsComponent implements OnInit {
     if (!json) return [];
     try { return JSON.parse(json) as string[]; } catch { return []; }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.hc-agents', { q: this.q });
 }

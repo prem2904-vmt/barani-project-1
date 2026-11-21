@@ -27,6 +27,8 @@ import { webPointerSignal } from '../../shared/utils/pointer-mode';
 import { mediaSignal } from '../../shared/utils/media-query';
 import { plural } from '../../shared/utils/plural';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
+import { ViewStateService } from '../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../shared/services/grid-view-state';
 import {
   STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel,
 } from './inventory-view';
@@ -77,7 +79,7 @@ const ICON = {
 @Component({
   selector: 'pf-stores',
   standalone: true,
-  imports: [DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
+  imports: [GridViewStateDirective, DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
     BusyDirective, SkeletonTableComponent, HeroBandComponent, PfDateComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./inv-layout.scss'],
@@ -136,7 +138,7 @@ const ICON = {
                 } @else if (!items().length) {
                   <ng-container [ngTemplateOutlet]="noItems"></ng-container>
                 } @else {
-                  <ag-grid-angular class="inv-grid st-grid" [theme]="gridTheme()" [rowData]="stockRows()" [columnDefs]="stockCols()"
+                  <ag-grid-angular class="inv-grid st-grid" pfGridViewState="stores.stock" [theme]="gridTheme()" [rowData]="stockRows()" [columnDefs]="stockCols()"
                                    [getRowId]="rowId" [animateRows]="true" [suppressCellFocus]="true"
                                    [overlayNoRowsTemplate]="noMatchHtml"></ag-grid-angular>
                 }
@@ -627,8 +629,14 @@ export class StoresComponent implements OnInit, AfterViewInit {
     ];
   });
 
+  // Screen view state (owner 2026-11-21): the open tab, stock action, stock search and status pill come back as left.
+  private readonly _viewRestored = inject(ViewStateService).bind('stores', {
+    mode: this.mode, action: this.action, stockQuery: this.stockQuery, stockStatus: this.stockStatus,
+  });
+
   async ngOnInit() {
-    this.action.set(this.allowedActions()[0]?.key ?? 'receive');
+    const allowed = this.allowedActions();
+    if (!this._viewRestored || !allowed.some(a => a.key === this.action())) this.action.set(allowed[0]?.key ?? 'receive');
     await Promise.all([this.loadItems(), this.loadAlerts()]);
     this.stockHold.done();
   }

@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -10,6 +11,7 @@ import { ApiError } from '../../shared/models/api-response.model';
 import { BusyDirective } from '../../shared/directives/busy.directive';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
+import { BackToTodayComponent } from '../../shared/components/back-to-today/back-to-today.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../shared/primitives/select.component';
 import { SkeletonCardComponent, SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
@@ -52,7 +54,7 @@ interface DailyStatement {
 @Component({
   selector: 'pf-daily-statement',
   standalone: true,
-  imports: [NgTemplateOutlet, BusyDirective, HeroBandComponent, PfDateComponent, ScreenHeaderComponent, SelectComponent,
+  imports: [BackToTodayComponent, NgTemplateOutlet, BusyDirective, HeroBandComponent, PfDateComponent, ScreenHeaderComponent, SelectComponent,
     SkeletonCardComponent, SkeletonRowsComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../shared/settings-grid/settings-grid.scss'],
@@ -131,6 +133,7 @@ interface DailyStatement {
               }
               <span class="pf-card__spacer"></span>
               <span class="pf-cl__scope">{{ scopeWords() }}</span>
+              <pf-back-to-today [show]="!isToday()" (reset)="setDate(todayStr)" />
               <pf-date class="pf-cl__date" label="Business day" [max]="todayStr" [value]="dateStr()" (valueChange)="setDate($event)"></pf-date>
             </header>
 
@@ -550,4 +553,8 @@ export class DailyStatementComponent implements OnInit {
       this.saving.set(false);
     }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('finance.daily', { date: this.dateStr, stmtShift: this.stmtShift, shift: this.shiftName, closureQ: this.closureQ });
 }

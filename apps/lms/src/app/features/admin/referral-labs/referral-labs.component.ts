@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -141,7 +142,7 @@ const EMPTY: LabDraft = {
               @if (loadingShown()) {
                 <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="5" label="Loading referral labs…"></pf-skel-grid>
               }
-              <pf-data-grid [rowData]="visibleLabs()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.referral-labs.g1" [rowData]="visibleLabs()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleLabs().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   @if (labs().length === 0) {
@@ -406,4 +407,8 @@ export class ReferralLabsComponent implements OnInit {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.referral-labs', { q: this.q, status: this.status });
 }

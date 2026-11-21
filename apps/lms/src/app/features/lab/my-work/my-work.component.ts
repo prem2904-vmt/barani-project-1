@@ -60,6 +60,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { MyWorkGridComponent, MwGridContext } from './my-work-grid.component';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { MwFiltersComponent } from './mw-filters.component';
 import {
   MwRow, MwMode, MwTube, MwDoneTube, MwFilter, MwStatusKey, NO_MW_FILTER, countLabel, deptOptions, doneRowsOf, doneStatus, filterMwRows,
@@ -713,7 +714,7 @@ const COUNTERS: CounterSpec[] = [
       @if (theme.isNewDesign()) {
       <!-- New design (owner 2026-11-20): the work list is the Frontdesk / Results GRID — shared pf-data-grid, one
            primary row action at the row end + ⋯, the row tap = the old tile tap; phones get card rows. -->
-      <pf-mw-grid class="pf-mw-gridhost" [rows]="mwShownRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx"
+      <pf-mw-grid class="pf-mw-gridhost" [rows]="mwShownRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx" viewStateKey="lab.my-work.grid"
                   [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwFiltered() ? 'Nothing matches these filters.' : mwEmptyTitle()" [phone]="isPhone()" />
       @if (cardPeekId()) {
         <div class="pf-cardpeek" (click)="$event.stopPropagation()"
@@ -4345,4 +4346,11 @@ export class MyWorkComponent implements OnInit {
       });
     }
   }
+
+  // ── Screen view state (owner 2026-11-21): tab, head filters, window, culture head and the queue's "Show claimed"
+  //    come back exactly as left after in-app navigation; fresh on reload / sign-out / branch switch. ──
+  private readonly _viewState = inject(ViewStateService).bind('lab.my-work', {
+    tab: this._tab, mobileTab: this.mobileTab, counter: this._counter, completedWindow: this._completedWindow,
+    mwFilter: this.mwFilter, cultureFilter: this.cultureFilter, showClaimed: this.showClaimed,
+  });
 }

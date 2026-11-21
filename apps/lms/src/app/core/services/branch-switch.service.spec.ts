@@ -11,6 +11,7 @@ import { DraftShelfService } from './draft-shelf.service';
 import { PatientProfileService } from './patient-profile.service';
 import { HttpActivityService } from './http-activity.service';
 import { MIN_BRANCH_MS } from '../../shared/utils/min-duration';
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { BranchVeilComponent } from '../../shared/components/branch-veil/branch-veil.component';
 
 @Component({ template: '<p>work</p>' })
@@ -130,6 +131,22 @@ describe('BranchSwitchService — in-app re-scope with motion', () => {
     await vi.advanceTimersByTimeAsync(200);                  // only the idle probe's quiet window
     expect(await done).toBe(true);
     expect(svc.phase()).toBe('idle');
+  });
+
+  it('screen view state is cleared: the new branch opens every screen on its defaults', async () => {
+    const { svc, router, activity } = setup({ reduced: true });
+    const vs = TestBed.inject(ViewStateService);
+    await router.navigateByUrl('/frontdesk');
+    vs.patch('frontdesk', { workRange: 'yesterday' });
+    const spy = vi.spyOn(vs, 'clear');
+    activity.begin();
+    const done = svc.switchTo('slm');
+    await vi.advanceTimersByTimeAsync(0);
+    activity.end();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await done).toBe(true);
+    expect(spy).toHaveBeenCalledWith();
+    expect(vs.get('frontdesk')).toBeUndefined();
   });
 
   it('refuses a branch outside the user\'s set, the active one, or a second tap mid-switch', async () => {

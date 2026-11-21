@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { ZoomSourceDirective } from '../../core/navigation/zoom.directive';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -405,4 +406,8 @@ export class MessagesNdComponent extends MessagesPageComponent {
       });
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('messages', { filter: this.filter });
 }

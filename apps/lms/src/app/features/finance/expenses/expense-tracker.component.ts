@@ -1,4 +1,7 @@
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -62,7 +65,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
+  imports: [BackToTodayComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
     ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -189,11 +192,11 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                   }
                 </div>
               } @else if (view() === 'entries') {
-                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
+                <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.entries" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [rowClassRules]="entryRowRules" [animateRows]="true" [suppressCellFocus]="true"
                                  (cellClicked)="onEntryClicked($event)"></ag-grid-angular>
               } @else {
-                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
+                <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.days" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="dayRowId" [animateRows]="true" [suppressCellFocus]="true"
                                  (cellClicked)="onDayClicked($event)"></ag-grid-angular>
               }
@@ -254,6 +257,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           </span>
           <div class="pf-xt__dates" [attr.data-custom]="quick() === 'custom'">
             @if (quick() === 'custom') { <span class="pf-xt__custom">Custom range</span> }
+            <pf-back-to-today [show]="quick() === 'custom' && (to() ?? today) < today" (reset)="setQuick('today')" />
             <label class="pf-xt__dates-lbl" for="pf-xt-from">From</label>
             <pf-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-date>
             <label class="pf-xt__dates-lbl" for="pf-xt-to">To</label>
@@ -740,6 +744,11 @@ export class ExpenseTrackerComponent {
   });
 
   constructor() {
+    // Screen view state (owner 2026-11-21): tab, Day-closing day, search and every filter come back as left.
+    inject(ViewStateService).bind('expenses', {
+      tab: this.tabPick, closingDate: this.closingDate, q: this.q, quick: this.quick, from: this.from, to: this.to,
+      kind: this.kind, categoryId: this.categoryId, mode: this.mode, view: this.view,
+    });
     effect(() => {
       this.from(); this.to(); this.kind(); this.categoryId(); this.mode();
       if (this.tab() === 'closing') return;
