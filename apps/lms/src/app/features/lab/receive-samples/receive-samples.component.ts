@@ -350,7 +350,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         @if (theme.isNewDesign()) {
         <!-- New design: the ONE shared work list (owner 2026-11-21) — divider rows, status in words, Receive at the
              right edge; the sort is the Sort chip (the same choices), never a dropdown. -->
-        <div class="pf-rs-listhead pf-wl-head">
+        <div class="pf-rs-listhead pf-wl-head pf-wl-head--sticky">
           <span class="pf-rs-listhead__n">{{ intakeItems().length }} {{ labCfg.sampleFocused() ? 'samples' : 'orders' }}</span>
           <pf-sort-chip [options]="sortOptions" [value]="sortValue()" (pick)="pickSort($event)" />
         </div>

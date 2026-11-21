@@ -1,5 +1,6 @@
 import { WorkListComponent } from "../../../shared/components/work-list/work-list.component";
-import { WORK_LIST_MQ, WorkListItem } from "../../../shared/components/work-list/work-list";
+import { WORK_LIST_MQ, WorkListItem, columnSortOptions, sortItems } from "../../../shared/components/work-list/work-list";
+import { SortChipComponent } from "../../../shared/components/work-list/sort-chip.component";
 import { ViewStateService } from '../../../shared/services/view-state.service';
 import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { SheetEditorService } from '../../neuron/sheet-editor.service';
@@ -125,7 +126,7 @@ const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
 @Component({
   selector: "pf-report-queue",
   standalone: true,
-  imports: [BackToTodayComponent, WorkListComponent, StatusWordsComponent, 
+  imports: [BackToTodayComponent, WorkListComponent, SortChipComponent, StatusWordsComponent, 
     DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
@@ -936,7 +937,14 @@ export class ReportQueueComponent implements OnInit {
   readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
   /** Below 1024px the queue is the shared work list (owner 2026-11-21: a grid on mobile is horrible). */
   readonly listMode = mediaSignal(WORK_LIST_MQ, inject(DestroyRef));
-  readonly listItems = computed<WorkListItem<RqRow>[]>(() => this.gridRows().filter(r => r.kind !== "detail").map(row => {
+  /** The list's Sort chip: the grid headers' sorts (Token, Patient, Generated), both directions. */
+  readonly listSortOptions = columnSortOptions([{ id: "token", label: "Token" }, { id: "patient", label: "Patient" }, { id: "when", label: "Generated", first: "desc" }]);
+  readonly listSort = signal<string | null>(null);
+  readonly listItems = computed<WorkListItem<RqRow>[]>(() => sortItems(this.gridRows().filter(r => r.kind !== "detail"), this.listSort(), {
+    token: r => (r.kind === "report" ? r.r.order?.dailyNo : r.po.dailyNo) ?? null,
+    patient: r => (r.kind === "report" ? this.reportPatientName(r.r) : r.po.patientName),
+    when: r => { const at = r.kind === "report" ? r.r.createdAt : r.po.createdAt; return at ? Date.parse(at) : null; },
+  }).map(row => {
     if (row.kind === "report") {
       const st = this.rowStatus(row.r);
       return {

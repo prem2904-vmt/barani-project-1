@@ -32,7 +32,8 @@ import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
 import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
-import { WORK_LIST_MQ, WorkListItem } from '../../../shared/components/work-list/work-list';
+import { WORK_LIST_MQ, WorkListItem, columnSortOptions, sortItems } from '../../../shared/components/work-list/work-list';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
 import { mediaSignal } from '../../../shared/utils/media-query';
 import { DayClosingComponent } from './day-closing.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -69,7 +70,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [BackToTodayComponent, WorkListComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
+  imports: [BackToTodayComponent, WorkListComponent, SortChipComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
     ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -198,9 +199,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
               } @else if (view() === 'entries' && listMode()) {
                 <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — the entry, its facts in the grid's
                      column order, the amount on the right, Edit (or Bills) at the right edge. -->
+                <div class="pf-xt__listscroll pf-wl-scroll">
+                <div class="pf-xt__listhead pf-wl-head pf-wl-head--sticky">
+                  <pf-sort-chip [options]="entrySortOptions" [value]="entrySort()" (pick)="entrySort.set($event)" />
+                </div>
                 <pf-work-list class="pf-xt__list" data-testid="xt-list" label="Expenses" [items]="entryItems()" [loading]="loading()" emptyTitle="No expenses in this range"
                   (open)="openEntry($any($event.data), null)" (primary)="openEntry($any($event.data), $event.primary?.id ?? null)"
                   (action)="openEntry($any($event.item.data), $event.id)" />
+                </div>
               } @else if (view() === 'entries') {
                 <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.entries" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [rowClassRules]="entryRowRules" [animateRows]="true" [suppressCellFocus]="true"
@@ -512,6 +518,12 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--pf-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
     .pf-xt-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pf-xt-modal__backdrop { position: absolute; inset: 0; background: rgba(5, 5, 15, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    /* Below 1024px: the entries list scrolls inside the card; its head (count · Sort) stays on top (owner 2026-11-21). */
+    .pf-xt__grid-wrap:has(> .pf-xt__listscroll) { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .pf-xt__listhead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
+    .pf-xt__listhead-n { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+    /* Phones: the last rows clear the floating Add-expense bar. */
+    @media (max-width: 640px) { .pf-xt__listscroll { padding-bottom: 96px; } }
     .pf-xt-modal__card { position: relative; width: 100%; max-width: 32rem; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; overflow-y: auto;
       border-radius: var(--pf-radius-card, 18px); background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); }
     .pf-xt-modal__head { display: flex; align-items: center; gap: 12px; }
@@ -847,7 +859,12 @@ export class ExpenseTrackerComponent {
 
   /** Below 1024px the entries are the shared work list (owner 2026-11-21). */
   readonly listMode = mediaSignal(WORK_LIST_MQ);
-  readonly entryItems = computed<WorkListItem<ExpenseEntry>[]>(() => this.visibleEntries().map(e => {
+  /** The list's Sort chip: the grid headers' sorts (Date, Amount, Item), both directions. */
+  readonly entrySortOptions = columnSortOptions([{ id: 'date', label: 'Date', first: 'desc' }, { id: 'amount', label: 'Amount', first: 'desc' }, { id: 'item', label: 'Item' }]);
+  readonly entrySort = signal<string | null>(null);
+  readonly entryItems = computed<WorkListItem<ExpenseEntry>[]>(() => sortItems(this.visibleEntries(), this.entrySort(), {
+    date: e => e.date + (e.createdAt ?? ''), amount: e => e.amount, item: e => e.description,
+  }).map(e => {
     const bills = e.attachments.length;
     return {
       id: e.id, name: e.description || '—',

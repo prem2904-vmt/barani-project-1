@@ -2883,6 +2883,24 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { display: none; }
       :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .mw-headpill { margin-right: auto; }
     }
+    /* New design below 1024px: a pane body that holds a sticky list head (Lab Intake) has no top padding, so the head
+       sits flush under the pane title and no row shows above it while scrolling. */
+    @media (max-width: 1023.98px) {
+      :host-context(.design-new) .pf-mw-pane__body:has(.pf-wl-head--sticky) { padding-top: 0; }
+      :host-context(.design-new) .pf-mw-pane__body:has(.pf-wl-head--sticky) .pf-wl-head--sticky { padding-top: 8px; }
+    }
+    /* New design, phones: the page no longer scrolls as a whole (owner 2026-11-21: "the whole page scrolls away" —
+       band search, tabs and the list head were lost). The band + tab strip stay put, the visible pane fills the rest
+       and ONLY its body / list scrolls (the list head is sticky inside it). iPad portrait already works this way. */
+    @media (max-width: 640px) {
+      :host-context(.design-new) { height: 100%; min-height: 0; overflow: hidden; }
+      :host-context(.design-new) > section { flex: 1 1 auto; min-height: 0; }
+      :host-context(.design-new) .pf-mw-split { flex: 1 1 auto; min-height: 0; }
+      :host-context(.design-new) .pf-mw-pane,
+      :host-context(.design-new) .pf-mw-pane:first-of-type,
+      :host-context(.design-new) .pf-mw-pane:not(:first-of-type) { flex: 1 1 0 !important; min-height: 0 !important; }
+      :host-context(.design-new) .pf-mw-pane__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {

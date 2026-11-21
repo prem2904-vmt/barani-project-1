@@ -129,27 +129,43 @@ const TESTS = Array.from({ length: 12 }, (_, i) => {
     type: 'individual', isActive: true, price: 120 + i * 30, priceIsDefault: false, isOffered: true, tatHours: 4, department: { id: d.id, name: d.name, code: d.code }, departmentId: d.id, tubeColor: 'Red', parameters: '[]' };
 });
 
+/** Long lists (the scroll tests): 40 rows on every list. */
+let BIG = false;
+const many = <T,>(base: T[], n: number, f: (x: T, i: number) => T): T[] => Array.from({ length: n }, (_, i) => f(base[i % base.length], i));
+const bigOrders = () => many(ORDERS, 40, (o, i) => ({ ...o, id: `bo${i}`, dailyNo: i + 1, orderNumber: `LAB-2611-01${String(i).padStart(3, '0')}`, patient: { ...o.patient, id: `bp${i}`, displayName: `${o.patient.displayName} ${i + 1}` } }));
+const bigDispatched = () => many(DISPATCHED, 40, (o, i) => ({ ...o, id: `bdo${i}`, dailyNo: 100 + i, samples: o.samples.map(sm => ({ ...sm, id: `bds${i}`, orderId: `bdo${i}`, barcode: `27${String(i).padStart(3, '0')}` })), patient: { ...o.patient, id: `bdp${i}`, displayName: `${o.patient.displayName} ${i + 1}` } }));
+const bigLines = (base: Line[]) => many(base, 40, (l, i) => {
+  const so = l['subOrder'] as Record<string, unknown>;
+  const ord = so['order'] as Record<string, unknown>;
+  return { ...l, id: `${l['id']}-${i}`, subOrder: { ...so, id: `${so['id']}-${i}`, barcode: `03${String(i).padStart(4, '0')}`, order: { ...ord, id: `${ord['id']}-${i}`, dailyNo: 200 + i } } };
+});
+const bigOutsourced = () => many(OUTSOURCED, 40, (t, i) => ({ ...t, sampleId: `bos${i}`, barcode: `BIO27${String(i).padStart(3, '0')}`, dailyNo: 300 + i, patientName: `${t.patientName} ${i + 1}` }));
+const bigReports = () => many(REPORTS, 40, (r, i) => ({ ...r, id: `brq-${i}`, orderId: `bord-r${i}`, order: { ...r.order, id: `bord-r${i}`, dailyNo: 400 + i } }));
+const bigExpenses = () => ({ ...EXPENSES, entries: many(EXPENSES.entries, 40, (e, i) => ({ ...e, id: `be${i}`, description: `${e.description} #${i + 1}` })) });
+
 test.beforeEach(async ({ page, context }) => {
   test.setTimeout(240_000);
+  BIG = false;
   resetNeg();
   neg.bills = [bill('o4', 450)];
   neg.hook = r => {
     if (r.method !== 'GET') return undefined;
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
-    if (r.path === '/api/samples/outsourced') return ok({ items: OUTSOURCED, total: OUTSOURCED.length, page: 1, pageSize: 50, counts: { outsourced: 2, completed: 0 } });
+    if (r.path === '/api/samples/outsourced') { const t = BIG ? bigOutsourced() : OUTSOURCED; return ok({ items: t, total: t.length, page: 1, pageSize: 50, counts: { outsourced: t.length, completed: 0 } }); }
+    if (r.path === '/api/samples/outsourced-legacy') return ok({ items: OUTSOURCED, total: OUTSOURCED.length, page: 1, pageSize: 50, counts: { outsourced: 2, completed: 0 } });
     switch (r.path) {
-      case '/api/orders/today': case '/api/orders/range': return ok(ORDERS);
+      case '/api/orders/today': case '/api/orders/range': return ok(BIG ? bigOrders() : ORDERS);
       case '/api/appointments/today': case '/api/appointments': return ok(APPTS);
-      case '/api/orders/dispatched': return ok(DISPATCHED);
+      case '/api/orders/dispatched': return ok(BIG ? bigDispatched() : DISPATCHED);
       case '/api/samples/in-transit': return ok([]);
-      case '/api/results/my-work': return ok(MY_WORK);
+      case '/api/results/my-work': return ok(BIG ? bigLines(MY_WORK) : MY_WORK);
       case '/api/results/queue': case '/api/results/service-queue': return ok(QUEUE);
       case '/api/results/completed': return ok(DONE);
-      case '/api/validation/queue': return ok(PV);
+      case '/api/validation/queue': return ok(BIG ? bigLines(PV) : PV);
       case '/api/validation/scope': return ok({ scoped: true, departments: [HAE, BIO], validatedToday: 14, validatedTodayByMe: 6 });
       case '/api/tenants/branch-lab-config': return ok({ effectiveQueueFocus: 'patient', queueFocus: 'patient' });
       case '/api/microbiology/culture-queue': return ok(CULTURES);
-      case '/api/expenses': return ok(EXPENSES);
+      case '/api/expenses': return ok(BIG ? bigExpenses() : EXPENSES);
       case '/api/tests': case '/api/tests/': return ok(TESTS);
       case '/api/tenants/departments': return ok(DEPTS);
       default: return undefined;
@@ -163,7 +179,7 @@ test.beforeEach(async ({ page, context }) => {
     const cors = { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' },
-      body: JSON.stringify({ success: true, data: { items: REPORTS, total: REPORTS.length, page: 1, pageSize: 50, hasMore: false, counts: { all: 3, pending: 2, delivered: 1, failed: 0 } } }) });
+      body: JSON.stringify({ success: true, data: { items: BIG ? bigReports() : REPORTS, total: (BIG ? 40 : REPORTS.length), page: 1, pageSize: 50, hasMore: false, counts: { all: 3, pending: 2, delivered: 1, failed: 0 } } }) });
   });
   await page.addInitScript(() => {
     const css = '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}';
@@ -376,6 +392,66 @@ test.describe('small screens — one list family, grid ≥1024', () => {
       await settle(page, wait);
       await page.waitForTimeout(1200);
       await screen(page, name, kind);
+    });
+  }
+
+  // ── Long lists below 1024px: the band search and the list head (Sort / Filters) never scroll away (owner 2026-11-21).
+  // Pattern: the band + tab strip stay put, the card head stays put, ONLY the list scrolls (inside the card).
+  const SCROLL: [string, string, string?, string?][] = [
+    ['fd-ip', '/frontdesk', 'In progress', '.pf-work-find__filter'],
+    ['fd-out', '/frontdesk', 'Outsourced', '.pf-work-find__filter'],
+    ['lab-intake', '/lab/my-work', 'Intake'],
+    ['lab-mywork', '/lab/my-work'],
+    ['pathologist', '/pathologist'],
+    ['results', '/reports'],
+    ['expenses', '/expenses'],
+  ];
+  for (const [name, route, tab, headSel] of SCROLL) {
+    test(`long list stays usable mid-scroll: ${name}`, async ({ page }) => {
+      test.skip(!['phone', 'tablet'].includes(projectName()), 'below 1024px only (wider = the grid, which scrolls inside its card already)');
+      BIG = true;
+      await go(page, route);
+      await page.locator('pf-work-list .pf-wl__row').locator('visible=true').first().waitFor({ timeout: 45_000 }).catch(() => undefined);
+      if (tab) { await pick(page, tab); await page.waitForTimeout(1200); }
+      if (tab === 'Intake') {
+        // iPad portrait: Lab Intake is the stacked pane (a labelled bar until opened).
+        const rail = page.locator('button[aria-label="Open Lab Intake"]').locator('visible=true').first();
+        if (await rail.count()) { await rail.click(); await page.waitForTimeout(1200); }
+      }
+      await page.locator('pf-work-list .pf-wl__row').locator('visible=true').nth(10).waitFor({ timeout: 30_000 });
+      if (process.env['SS_PROBE'] === '1') console.log(`CHAIN ${name} @${projectName()}\n` + await page.evaluate(() => {
+        const out: string[] = []; let e = document.querySelector('pf-work-list') as HTMLElement | null;
+        while (e && e.tagName !== 'BODY') { const c = getComputedStyle(e); const r = e.getBoundingClientRect();
+          out.push(`${e.tagName.toLowerCase()}.${String(e.className).split(' ').slice(0, 3).join('.')} disp=${c.display} ov=${c.overflowY} h=${Math.round(r.height)} sh=${e.scrollHeight} flex=${c.flex} minh=${c.minHeight} hgt=${c.height}`); e = e.parentElement; }
+        return out.join('\n');
+      }));
+      // Scroll the way a finger does: the wheel over the list (whatever element owns the scroll), 2000px.
+      const list = page.locator('pf-work-list').locator('visible=true').first();
+      const box = (await list.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, Math.min(box.y + 200, (page.viewportSize()!.height) - 160));
+      for (let i = 0; i < 10; i++) { await page.mouse.wheel(0, 200); await page.waitForTimeout(60); }
+      await page.waitForTimeout(600);
+      const moved = await page.evaluate(() => {
+        const l = Array.from(document.querySelectorAll('pf-work-list .pf-wl__row')).find(r => r.getBoundingClientRect().height > 0);
+        let e: HTMLElement | null = l as HTMLElement | null; let top = 0;
+        while (e) { top = Math.max(top, e.scrollTop); e = e.parentElement; }
+        return top;
+      });
+      const inView = async (sel: string) => {
+        const el = page.locator(sel).locator('visible=true').first();
+        if (!(await el.count())) return `${sel}: missing`;
+        const b = await el.boundingBox();
+        const vh = page.viewportSize()!.height;
+        return b && b.y >= 0 && b.y + b.height <= vh ? 'ok' : `${sel}: out of view (${b ? Math.round(b.y) : '?'})`;
+      };
+      const searchSel = 'pf-hero-band input';
+      const sortSel = headSel ?? '[data-testid="sort-chip"]';
+      await shots(page, `scroll-${name}`);
+      if (AUDIT) return;
+      expect(moved, `${name}: the list really scrolled`).toBeGreaterThan(600);
+      expect(await inView(searchSel), `${name}: band search still on screen`).toBe('ok');
+      expect(await inView(sortSel), `${name}: Sort / Filters still on screen`).toBe('ok');
+      expect(await page.evaluate(() => { const se = document.scrollingElement as HTMLElement; return se.scrollWidth > se.clientWidth + 1; }), `${name}: no sideways scroll`).toBe(false);
     });
   }
 });

@@ -160,8 +160,7 @@ type Tab = 'mine' | 'all';
             } @else if (phone()) {
               <!-- Below 1024px: the ONE shared work list (owner 2026-11-21); the row's own actions at the right edge. -->
               @if (rows().length) {
-                <div class="pv-listhead pf-wl-head">
-                  <span class="pv-count pf-num">{{ listItems().length }} {{ listItems().length === 1 ? 'sample' : 'samples' }}</span>
+                <div class="pv-listhead pf-wl-head pf-wl-head--sticky">
                   <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
                 </div>
               }
@@ -429,7 +428,8 @@ type Tab = 'mine' | 'all';
       display: block;
       height: 100%;
     }
-    .pv-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
+    .pv-scroll:has(> .pv-listhead) { padding-top: 0; }
+    .pv-listhead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
     .pv-page {
       height: 100%;
       display: flex;
