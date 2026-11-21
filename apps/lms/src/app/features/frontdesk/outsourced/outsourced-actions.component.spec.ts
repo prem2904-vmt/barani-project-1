@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
-import { OutsourcedActionsComponent } from './outsourced-actions.component';
+import { OutsourcedActionsComponent, outsourcedCompactActs } from './outsourced-actions.component';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -22,7 +22,7 @@ const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
   ...o,
 });
 
-function setup(tube: OutsourcedTube, confirm = true) {
+function setup(tube: OutsourcedTube, confirm = true, compact = false) {
   const svc = {
     upload: vi.fn(async () => '/uploads/t/p.pdf'),
     complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
@@ -46,6 +46,7 @@ function setup(tube: OutsourcedTube, confirm = true) {
   });
   const f = TestBed.createComponent(OutsourcedActionsComponent);
   f.componentRef.setInput('tube', tube);
+  if (compact) f.componentRef.setInput('compact', true);
   f.detectChanges();
   return { f, c: f.componentInstance, el: f.nativeElement as HTMLElement, svc, toasts, dialog, uploads };
 }
@@ -160,5 +161,41 @@ describe('OutsourcedActionsComponent — row actions (shared by the list and the
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf' } }] }));
     c.view('/u/r.pdf');
     expect(uploads.open).toHaveBeenCalledWith('/u/r.pdf');
+  });
+});
+
+/** Owner 2026-11-21 (phone, 390px): a completed row's View · Detach · Undo · Replace squeezed the patient name to one
+ *  letter wide — the phone list shows ONE primary (the tube's next step) + ⋯ with the rest. */
+describe('OutsourcedActionsComponent — compact (phone list)', () => {
+  const rep = { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: true };
+  const done = row({ status: 'completed', hasReport: true, tests: [{ orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true, report: rep }] });
+  const waiting = row({ hasReport: true, tests: [{ orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'outsourced', completed: false, report: rep }] });
+
+  it('picks the next step as the primary and keeps every other action in the menu', () => {
+    expect(outsourcedCompactActs(row())).toEqual({ primary: 'upload', more: [] });
+    const d = outsourcedCompactActs(done);
+    expect(d.primary).toBe('view');
+    expect(d.more.map(a => a.id)).toEqual(['attach', 'undo', 'upload']);
+    expect(d.more.map(a => a.label)).toEqual(['Detach from report', 'Undo completed', 'Replace report']);
+    const w = outsourcedCompactActs(waiting);
+    expect(w.primary).toBe('complete');
+    expect(w.more.map(a => a.id)).toEqual(['view', 'attach', 'upload']);
+  });
+
+  it('renders one primary + the ⋯ trigger, never the full button row', () => {
+    const { el } = setup(done, true, true);
+    const buttons = [...el.querySelectorAll('button')];
+    expect(el.querySelector('[data-testid="out-act-primary"]')?.textContent?.trim()).toBe('View');
+    expect(buttons.length).toBe(2);
+    expect(el.querySelectorAll('.pf-rowact__t').length).toBe(0);
+  });
+
+  it('run() reaches the same handlers as the full row', async () => {
+    const { c, svc, uploads } = setup(done, true, true);
+    c.run('view');
+    expect(uploads.open).toHaveBeenCalledWith('/u/r.pdf');
+    c.run('attach');
+    await new Promise(r => setTimeout(r, 0));
+    expect(svc.setAttachToReport).toHaveBeenCalledWith(['t1'], false);
   });
 });

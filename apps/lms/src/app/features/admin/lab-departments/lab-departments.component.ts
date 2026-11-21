@@ -523,9 +523,10 @@ export class LabDepartmentsComponent implements OnInit {
     ];
     // Rename / Delete only exist for the lab's own departments: no blank, divided actions column for a catalogue-only list.
     if (this._departments().some(d => this.isLabMade(d))) {
-      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
+      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), true));
     }
-    if (this.phone()) return cols.filter(c => c.colId !== 'origin');
+    // Phone: no clipped columns — the code folds away, the name may narrow, the actions are pinned in full view.
+    if (this.phone()) return cols.filter(c => c.colId !== 'origin' && c.colId !== 'code').map(c => (c.colId === 'name' ? { ...c, minWidth: 120 } : c));
     return cols;
   });
   onGridReady(e: GridReadyEvent<Department>) { this.gridApi = e.api; }

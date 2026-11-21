@@ -58,13 +58,17 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
              aria-haspopup="listbox"
              (click)="toggle($event)">
           @if (selectedOptions.length && !compactMulti) {
-            <span class="pf-dd__chips">
-              @for (o of selectedOptions; track o.value) {
+            <span class="pf-dd__chips" [class.pf-dd__chips--capped]="maxChips != null">
+              @for (o of shownChips; track o.value) {
                 <span class="pf-dd__chip">
                   <span class="pf-dd__chip-lbl">{{ o.label }}</span>
                   <span class="pf-dd__chip-x" role="button" tabindex="0" aria-label="Remove"
                         (click)="removeChip(o, $event)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
                 </span>
+              }
+              @if (hiddenChipCount > 0) {
+                <!-- Capped (a grid / table cell): the rest is a count; the full list is the open panel's ticks. -->
+                <span class="pf-dd__chip pf-dd__chip--more" [attr.aria-label]="hiddenChipCount + ' more selected'" [attr.title]="hiddenChipTitle">+{{ hiddenChipCount }}</span>
               }
             </span>
           }
@@ -236,6 +240,10 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       height: auto; min-height: 44px;
       padding: 6px 34px 6px 10px; position: relative;
     }
+    /* Root cause of the Auto-assign spill (owner 2026-11-21): the small size's fixed 34px height (two classes) beat the
+       multi trigger's height:auto (one class), so wrapped chips overflowed onto the rows below. The multi trigger
+       always grows with its chips, small or not. */
+    pf-select .pf-dd--sm .pf-dd__trigger--multi { height: auto; min-height: 34px; padding: 4px 30px 4px 8px; }
     pf-select .pf-dd__trigger--multi .pf-dd__chevron { position: absolute; right: 12px; top: 50%; margin-top: -7px; }
     pf-select .pf-dd--open .pf-dd__trigger--multi .pf-dd__chevron { transform: rotate(180deg); }
     pf-select .pf-dd__chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
@@ -246,6 +254,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       color: var(--text-primary, #0f172a); border: 1px solid var(--input-border, rgba(148,163,184,0.4));
     }
     pf-select .pf-dd__chip-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Capped chips: at most N chips + the count, wrapping INSIDE the field (the field grows, the row with it — it never
+       spills over the next row); a single long chip ellipsizes within the field's width. */
+    pf-select .pf-dd__chips--capped .pf-dd__chip { min-width: 0; }
+    pf-select .pf-dd__chips--capped .pf-dd__chip-lbl { min-width: 0; }
+    pf-select .pf-dd__chip--more { flex: none; padding: 3px 8px; font-variant-numeric: tabular-nums; color: var(--text-secondary, #475569); }
     pf-select .pf-dd__chip-x {
       flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
       width: 18px; height: 18px; border-radius: 999px; cursor: pointer; font-size: 10px; line-height: 1;
@@ -384,6 +397,9 @@ export class SelectComponent<T = unknown> implements OnChanges, OnDestroy {
    *  summary ("3 selected") — for panels whose selection is already rendered
    *  elsewhere (e.g. the AST rows below the control). */
   @Input() compactMulti = false;
+  /** Multi-select in a grid / table cell: at most this many chips in the field, then "+N" (owner 2026-11-21: chips
+   *  spilled over the rows below). The field never overlaps its neighbours — the full list is in the panel. */
+  @Input() maxChips: number | null = null;
   /** Fixed caption for the compact trigger (e.g. "+ Add antibiotic") — reads
    *  as an action instead of a count. */
   @Input() triggerLabel?: string;
@@ -600,6 +616,14 @@ export class SelectComponent<T = unknown> implements OnChanges, OnDestroy {
     const vals = (this.values ?? []).map(String);
     return this.allOptions.filter(o => vals.includes(String(o.value)));
   }
+
+  /** The chips drawn in the field (all, or the first `maxChips`). */
+  get shownChips(): PfSelectOption<T>[] {
+    const all = this.selectedOptions;
+    return this.maxChips != null && all.length > this.maxChips ? all.slice(0, Math.max(0, this.maxChips)) : all;
+  }
+  get hiddenChipCount(): number { return this.selectedOptions.length - this.shownChips.length; }
+  get hiddenChipTitle(): string { return this.selectedOptions.slice(this.shownChips.length).map(o => o.label).join(', '); }
 
   /** Remove one chip without opening/closing the panel. */
   removeChip(opt: PfSelectOption<T>, ev: Event): void {

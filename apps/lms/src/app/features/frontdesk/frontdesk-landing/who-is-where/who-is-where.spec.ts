@@ -274,7 +274,7 @@ describe('one filter state (ServiceShelfService)', () => {
     expect(h.workSel.clear).toHaveBeenCalled();
     h.pickService({ service: 'lab', step: null });
     expect(h.svcOn('lab')).toBe(true);
-    h.clearServiceFilter();                      // the "Lab ✕" chip
+    h.clearServiceFilter();                      // (kept for the bottom bar's All; the side-card chip is gone)
     expect(s.selected()).toBe('all');
     const ts = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.ts', 'utf8');
     // The step narrows the grid with the very function the chart counts with.
@@ -283,7 +283,11 @@ describe('one filter state (ServiceShelfService)', () => {
     expect(ts).toMatch(/readonly whoItems = computed<WhoItem\[\]>\(\(\) => \{[\s\S]{0,300}this\.draftOrders\(\)\.map\(d => whoItemOf\(draftFlowRow\(d, now\)\)\)[\s\S]{0,120}this\._ipAll\(\)\.map\(o => whoItemOf\(orderFlowRow\(o, p, now, \{ primary: 'ip' \}\)\)\)/);
     const html = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.html', 'utf8');
     expect(html).toMatch(/\[service\]="svcSelected\(\)"\s*\[step\]="svcStep\(\)" \(pick\)="pickService\(\$event\)"/);
-    expect(html).toMatch(/svcFilterLabel\(\); as l\) \{[\s\S]{0,300}class="fd-side-sub__chip press"[\s\S]{0,120}\(click\)="clearServiceFilter\(\)"/);
+    // No service chip in the Bookings card (owner 2026-11-21): the Services filter lives in the bottom bar only.
+    expect(html).not.toContain('fd-side-filter-chip');
+    expect(html).not.toContain('fd-side-sub__chip');
+    // The side switch's tooltip sits beside it (positioned), never the browser's own (below, over the pills).
+    expect(html).toMatch(/\[attr\.aria-label\]="sideSwitchAria\(\)" \[attr\.data-tip\]="sideSwitchAria\(\)" data-tip-pos="right"/);
     // Pane actions in the head (calendar + "+ New"); the week strip is the ONE date picker, with ‹ › weeks.
     expect(html).toMatch(/data-testid="fd-side-cal"/);
     expect(html).toMatch(/\(click\)="shiftApptWeek\(-1\)" aria-label="Previous week"/);

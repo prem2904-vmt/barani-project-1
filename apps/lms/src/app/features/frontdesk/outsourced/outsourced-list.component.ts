@@ -55,7 +55,7 @@ import { WorkListItem } from '../../../shared/components/work-list/work-list';
       <!-- New design: the ONE shared work list (owner 2026-11-21) — divider rows, status in words, the upload /
            view control at the right edge. No pills inside rows. -->
       <pf-work-list class="pf-wl-scroll" data-testid="out-list" label="Outsourced tests" [items]="items()" [actionTpl]="outActs" />
-      <ng-template #outActs let-it><pf-outsourced-actions [tube]="it.data" /></ng-template>
+      <ng-template #outActs let-it><pf-outsourced-actions [tube]="it.data" [compact]="true" /></ng-template>
       @if (svc.hasMore()) {
       <div class="pf-out__more">
         <button type="button" class="pf-btn pf-btn--secondary pf-out__more-btn press"

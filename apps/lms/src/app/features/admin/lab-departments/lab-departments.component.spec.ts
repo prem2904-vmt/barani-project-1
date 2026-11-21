@@ -90,7 +90,8 @@ describe('Lab departments — Departments tab', () => {
     expect(el.querySelector('.pf-sg-main pf-data-grid ag-grid-angular')).not.toBeNull();
     expect(c.visibleDepartments().map((d: any) => d.name)).toEqual(['Haematology', 'Cytogenetics']);
     expect(c.colDefs().map((x: any) => x.colId)).toEqual(['name', 'code', 'origin', 'status', 'actions']);
-    expect(c.colDefs().find((x: any) => x.colId === 'actions').pinned).toBeUndefined();
+    // Pinned right at every size (owner 2026-11-21: row actions were cut off at the edge on phone / tablet).
+    expect(c.colDefs().find((x: any) => x.colId === 'actions').pinned).toBe('right');
     expect(cell(c, 'origin', MASTER).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.catalogue);
     expect(cell(c, 'origin', OWN).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.lab);
     expect(c.actionsFor(MASTER)).toEqual([]);

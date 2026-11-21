@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { test, expect, shotsDir, expectLayout, isPhone, isTouch, projectName } from './support/form-factor';
 import { deskAllStatuses } from './support/frontdesk';
+import { expectGridGlass } from './support/grid-glass';
 
 /**
  * Frontdesk side card "Who is where" (owner-approved 2026-11-20, mock fd-chart-v12) at every form factor — API
@@ -214,8 +215,41 @@ async function expectTabsFit(page: Page, tag: string, _allowMenu = false) {
   expect(tb.x + tb.width, `${tag}: title inside the side card`).toBeLessThanOrEqual(card.x + card.width + 1);
 }
 
+/** Owner 2026-11-21: a head control's tooltip sits BESIDE it (data-tip-pos="right"), never over the controls below. */
+async function expectTipBeside(page: Page, sel: string): Promise<void> {
+  const btn = page.locator(sel).locator('visible=true').first();
+  if (!(await btn.count())) return;
+  expect(await btn.getAttribute('title'), `${sel}: no native title (it opens below, over the pills)`).toBeNull();
+  expect(await btn.getAttribute('data-tip-pos')).toBe('right');
+  await btn.focus();
+  const r = await btn.evaluate(e => {
+    const b = e.getBoundingClientRect(); const a = getComputedStyle(e, '::after');
+    return { content: a.content, left: parseFloat(a.left), top: parseFloat(a.top), w: b.width };
+  });
+  expect(r.content, 'tooltip text').not.toBe('none');
+  expect(r.left, 'tooltip starts right of the button').toBeGreaterThanOrEqual(r.w);
+}
+
 test.describe('who is where — Lab + OPD user', () => {
   test.beforeEach(async ({ page }) => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); await backend(page, true); });
+
+  // Owner 2026-11-21 (glass across the grid): in light the WORK grid's rows read exactly like the panel's empty area —
+  // service sections (Lab + OPD) and each scope (all statuses, Completed, Payments due); cropped grid shots.
+  test('light: the WORK grid rows show the panel glass (sections + scopes)', async ({ page }) => {
+    await openDesk(page);
+    if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'the grid lives at >= 1024px' }); return; }
+    await theme(page, false); await page.waitForTimeout(600);
+    await expectGridGlass(page, 'Frontdesk sections');
+    const card = vis(page, '.pf-appt-split__pane--work');
+    await card.screenshot({ path: `${OUT}/22-work-grid-sections--light.png` });
+    for (const scope of ['Completed', 'Payments due']) {
+      const pill = page.locator(`.pf-work-hdr [role="radio"][aria-label="${scope}"], .pf-work-hdr [role="radio"]:has-text("${scope}")`).locator('visible=true').first();
+      if (!(await pill.count())) continue;
+      await pill.click(); await page.waitForTimeout(900);
+      if (await page.locator('.pf-fd-flow .ag-row').locator('visible=true').count()) await expectGridGlass(page, `Frontdesk ${scope}`);
+      await card.screenshot({ path: `${OUT}/22-work-grid-${scope.toLowerCase().replace(' ', '-')}--light.png` });
+    }
+  });
 
   test('the chart tab, the sunburst + chips, the overdue dot; tabs fit; no page scroll', async ({ page }) => {
     await openDesk(page);
@@ -312,12 +346,15 @@ test.describe('who is where — Lab + OPD user', () => {
     await expect(vis(page, '.pf-fd-flow pf-journey-ring').first().locator('text.pf-jring__lbl')).toHaveCount(0);
     await shots(page, '04-chart-opd');
 
-    // Appointments carry the filter: Lab bookings only, so OPD shows none + the removable chip.
+    // Appointments carry the filter: Lab bookings only, so OPD shows none. No "OPD ✕" chip (owner 2026-11-21): the
+    // Services filter lives in the bottom bar only.
     await goSide(page, 'appt');
     await expectTabsFit(page, 'appointments');
-    const chip = vis(page, '[data-testid="fd-side-filter-chip"]');
-    await expect(chip).toHaveText(/OPD/);
+    const chip = page.locator('[data-testid="fd-side-filter-chip"]');
+    await expect(chip).toHaveCount(0);
     await expect(sideCard(page).getByText('None for OPD')).toBeVisible();
+    await expect(sideCard(page).getByText(/bottom bar/)).toBeVisible();
+    await expectTipBeside(page, '[data-testid="fd-side-view-btn"]');
     await shots(page, '05-appointments-opd');
 
     // Shelf / chart → Lab: the appointments come back, still with the chip; the overdue one reads soft rose.
@@ -325,7 +362,7 @@ test.describe('who is where — Lab + OPD user', () => {
     await chart.locator('.wiw__chip[data-svc="lab"]').click();
     await expect(page.getByText('Ms. Meera Iyer (OPD)').locator('visible=true')).toHaveCount(0);
     await goSide(page, 'appt');
-    await expect(chip).toHaveText(/Lab/);
+    await expect(chip).toHaveCount(0);
     await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
     await expect(vis(page, '[data-testid="fd-appt-late"]').first()).toContainText(/Not arrived · \d+m late/);
     const newBtn = vis(page, '[data-testid="fd-new-appt"]');
@@ -333,8 +370,10 @@ test.describe('who is where — Lab + OPD user', () => {
     expect(nb.height, '+ New: a head button (32px, 44px on touch)').toBeGreaterThanOrEqual(isTouch() ? 44 : 32);
     await expect(vis(page, '[data-testid="fd-side-cal"]')).toBeVisible();
     await shots(page, '06-appointments-lab');
-    await chip.click();
-    await expect(chip).toHaveCount(0);
+    // Clearing the service = the same pick again (chart chip / bottom-bar shelf), never a chip in the side card.
+    await goSide(page, 'who');
+    await chart.locator('.wiw__chip[data-svc="lab"]').click();
+    await goSide(page, 'appt');
     await expect(page.getByText('Ms. Meera Iyer (OPD)').locator('visible=true').first()).toBeVisible();
     expect(await page.evaluate(k => localStorage.getItem(k), `pf-lms.frontdesk.service.${ME.id}`)).toBe('all');
     // "+ New" opens the EXISTING booking flow.

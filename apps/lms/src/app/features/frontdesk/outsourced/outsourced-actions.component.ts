@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, input, signal } from '@angular/core';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { UploadsService } from '../../../core/services/uploads.service';
@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { ActionsMenuComponent, PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import {
   ATTACH_DEFAULT, OutsourcedTube, PARTNER_REPORT_ACCEPT, actionLines, attachState, firstAttachProblem,
   partnerFileProblem, rowReport,
@@ -24,10 +25,35 @@ import {
 @Component({
   selector: 'pf-outsourced-actions',
   standalone: true,
-  imports: [BusyDirective],
+  imports: [BusyDirective, ActionsMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <input #file type="file" class="pf-out-acts__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
+    @if (compact()) {
+      <!-- Phone list (owner 2026-11-21): ONE primary + ⋯ so the patient name keeps the row's width. -->
+      <div class="pf-out-acts pf-out-acts--compact">
+        @switch (primaryAct()) {
+          @case ('view') {
+            <button type="button" class="pf-rowact pf-out-acts__primary" data-testid="out-act-primary"
+                    [attr.aria-label]="'View partner report for ' + (tube().barcode ?? 'this tube')" (click)="run('view')">View</button>
+          }
+          @case ('complete') {
+            <button type="button" class="pf-rowact pf-out-acts__primary" data-testid="out-act-primary" [disabled]="busy()"
+                    [pfBusy]="busy() && busyAct() === 'complete'" pfBusyLabel="Completing…"
+                    [attr.aria-label]="'Mark completed for ' + (tube().barcode ?? 'this tube')" (click)="run('complete')">Complete</button>
+          }
+          @default {
+            <button type="button" class="pf-rowact pf-out-acts__primary" data-testid="out-act-primary" [disabled]="busy()"
+                    [pfBusy]="busy() && busyAct() === 'upload'" pfBusyLabel="Uploading…"
+                    [attr.aria-label]="'Upload partner report for ' + (tube().barcode ?? 'this tube')" (click)="run('upload')">Upload</button>
+          }
+        }
+        @if (moreActs().length) {
+          <pf-actions-menu [actions]="moreActs()" triggerClass="pf-rowact pf-rowact--icon pf-out-acts__more"
+                           [label]="'More for ' + (tube().barcode ?? 'this tube')" [heading]="tube().barcode ?? ''" (action)="run($event)" />
+        }
+      </div>
+    } @else {
     <div class="pf-out-acts">
       @if (rowReport(tube()); as rep) {
         <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()"
@@ -81,15 +107,21 @@ import {
         <span class="pf-rowact__t">{{ busy() ? 'Uploading…' : (tube().hasReport ? 'Replace report' : 'Upload report') }}</span>
       </button>
     </div>
+    }
   `,
   styles: [`
     :host { display: contents; }
     .pf-out-acts__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-out-acts { display: flex; align-items: center; gap: 6px; }
+    .pf-out-acts--compact { flex: none; }
+    .pf-out-acts__primary { height: 44px; min-height: 44px; padding: 0 14px; font-size: 13px; white-space: nowrap; color: var(--violet-text, var(--text-primary)); }
+    :host ::ng-deep .pf-out-acts__more { width: 44px; height: 44px; min-height: 44px; }
   `],
 })
 export class OutsourcedActionsComponent {
   readonly tube = input.required<OutsourcedTube>();
+  /** Phone list: ONE primary + ⋯ (the rest of the same actions) instead of the full button row. */
+  readonly compact = input(false);
 
   private readonly svc = inject(OutsourcingService);
   private readonly toasts = inject(ToastService);
@@ -105,6 +137,21 @@ export class OutsourcedActionsComponent {
   readonly attachState = attachState;
 
   @ViewChild('file') private fileInput?: ElementRef<HTMLInputElement>;
+
+  /** Compact: the row's ONE primary — the next step for the tube (pure: `outsourcedCompactActs`). */
+  readonly primaryAct = computed(() => outsourcedCompactActs(this.tube()).primary);
+  readonly moreActs = computed<PfAction[]>(() => outsourcedCompactActs(this.tube()).more);
+  /** One entry point for the compact primary and the ⋯ menu (the same handlers as the full row). */
+  run(id: string): void {
+    const rep = rowReport(this.tube());
+    switch (id) {
+      case 'view': if (rep) this.view(rep.url); break;
+      case 'attach': void this.toggleAttach(); break;
+      case 'complete': void this.markCompleted(); break;
+      case 'undo': void this.undo(); break;
+      case 'upload': this.pick(); break;
+    }
+  }
 
   private testNames(): string { return this.tube().tests.map(t => t.testName).join(', '); }
 
@@ -227,4 +274,18 @@ export class OutsourcedActionsComponent {
       this.busy.set(false);
     }
   }
+}
+
+/** The compact (phone) action set for one outsourced tube: the ONE primary (the tube's next step — View once
+ *  completed with a report, Complete when a report waits, else Upload) and the rest, in the full row's order. */
+export function outsourcedCompactActs(t: OutsourcedTube): { primary: 'view' | 'complete' | 'upload'; more: PfAction[] } {
+  const rep = rowReport(t);
+  const all: PfAction[] = [];
+  if (rep) all.push({ id: 'view', label: 'View partner report', icon: 'view' });
+  if (rep) all.push({ id: 'attach', label: attachState(t) === 'separate' ? 'Attach to report' : 'Detach from report', icon: 'link' });
+  if (t.status === 'completed') all.push({ id: 'undo', label: 'Undo completed', tone: 'danger' });
+  else if (t.hasReport) all.push({ id: 'complete', label: 'Mark completed' });
+  all.push({ id: 'upload', label: t.hasReport ? 'Replace report' : 'Upload report' });
+  const primary: 'view' | 'complete' | 'upload' = t.status === 'completed' && rep ? 'view' : (t.status !== 'completed' && t.hasReport ? 'complete' : 'upload');
+  return { primary, more: all.filter(a => a.id !== primary) };
 }

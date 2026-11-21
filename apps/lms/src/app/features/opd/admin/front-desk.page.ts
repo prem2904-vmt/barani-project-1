@@ -56,7 +56,10 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
         <pf-setting-group label="Work grid columns" scope="this branch" id="columns" [wide]="true" hint="What the Frontdesk list shows for OPD."
                           icon="M3 4h18v16H3zM3 10h18M9 10v10M15 10v10">
           <button group-tools type="button" class="pf-btn pf-btn--secondary pf-ofd__reset" data-testid="fdgc-reset"
-                  [disabled]="!gc.canReset()" (click)="gc.reset()">Reset to default</button>
+                  [disabled]="!gc.canReset()" (click)="gc.reset()" aria-label="Reset columns to default">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+          Reset to default
+        </button>
           <pf-fd-grid-columns #gc module="opd"></pf-fd-grid-columns>
         </pf-setting-group>
       }
