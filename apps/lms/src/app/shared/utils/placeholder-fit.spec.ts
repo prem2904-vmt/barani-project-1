@@ -17,7 +17,7 @@ describe('placeholder fit', () => {
     expect(fitPlaceholder(full, 1000, px)).toBe(full);
     expect(fitPlaceholder(full, 130, px)).toBe('Search patient');
     expect(fitPlaceholder(full, 60, px)).toBe('Search');
-    expect(fitPlaceholder(full, 10, px)).toBe('Search');
+    expect(fitPlaceholder(full, 10, px)).toBe('');      // nothing fits: no placeholder, never a clipped one
     expect(fitPlaceholder(full, 0, px)).toBe(full);   // not laid out yet: leave it
   });
 });

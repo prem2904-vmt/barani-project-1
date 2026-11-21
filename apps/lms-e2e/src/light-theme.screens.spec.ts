@@ -4,6 +4,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { test, expect, isPhone, projectName } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, ME } from './support/neg-backend';
+import { expectGridGlass as gridGlass, expectSecondaryContrast } from './support/grid-glass';
+const expectGridGlass = async (page: Page, tag: string) => { await theme(page, false); await page.waitForTimeout(300); await gridGlass(page, tag); };
 
 /**
  * Light theme (owner-approved mock light-mode-v6, 2026-11-21): new design light = brand band + soft violet glass
@@ -180,30 +182,6 @@ async function expectGlass(page: Page, tag: string) {
   if (!isPhone()) expect(r.count, `${tag}: a docked panel on screen`).toBeGreaterThan(0);
   expect(r.bad, `${tag}: every docked panel is glass (light)`).toEqual([]);
 }
-/** Owner 2026-11-21 (glass across the grid): in LIGHT the grid's rows, header and floating filters are translucent
- *  (alpha <= .55) so the panel glass shows through; the pinned cells are frosted (backdrop blur). */
-async function expectGridGlass(page: Page, tag: string) {
-  if ((page.viewportSize()?.width ?? 0) < 1024) return;   // below 1024px the screens draw the shared list, not a grid
-  await theme(page, false);
-  await page.waitForTimeout(300);
-  const r = await page.evaluate(() => {
-    const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
-    const vis = (e: Element) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('.ag-row')).filter(e => vis(e) && !e.closest('.ag-header')).slice(0, 6);
-    const head = Array.from(document.querySelectorAll<HTMLElement>('.ag-header')).filter(vis)[0];
-    const pinned = Array.from(document.querySelectorAll<HTMLElement>('.ag-row .ag-grid-pinned-left-cells, .ag-row .ag-grid-pinned-right-cells, .ag-pinned-left-cols-container, .ag-pinned-right-cols-container')).filter(vis);
-    const bf = (e: HTMLElement) => { const c = getComputedStyle(e); return c.backdropFilter || (c as unknown as Record<string, string>)['webkitBackdropFilter'] || ''; };
-    return {
-      rows: rows.map(e => alpha(getComputedStyle(e).backgroundColor)),
-      head: head ? alpha(getComputedStyle(head).backgroundColor) : -1,
-      pinnedNoBlur: pinned.filter(e => !/blur/.test(bf(e))).map(e => String(e.className).slice(0, 60)),
-    };
-  });
-  expect(r.rows.length, `${tag}: grid rows on screen`).toBeGreaterThan(0);
-  for (const a of r.rows) expect(a, `${tag}: row tint is translucent in light`).toBeLessThanOrEqual(0.55);
-  if (r.head >= 0) expect(r.head, `${tag}: grid header is translucent in light`).toBeLessThanOrEqual(0.55);
-  expect(r.pinnedNoBlur, `${tag}: every pinned cell block is frosted`).toEqual([]);
-}
 /** Dev aid (LT_PROBE=1): every big rounded surface on screen — its own background, its ::before glass, whether a
  *  bigger rounded surface holds it, and any role=dialog ancestor. Written to <shots>/<project>/probe.txt. */
 async function probe(page: Page, name: string) {
@@ -312,6 +290,14 @@ test.describe('light theme — every screen, light + dark', () => {
     await shots(page, 'frontdesk');
     if (!SHOTS_ONLY) expectLightTokens(await lightFacts(page, '.pf-appt-split__pane'), 'Frontdesk');
     if (!SHOTS_ONLY) await expectGridGlass(page, 'Frontdesk');
+    { const work = page.locator('.pf-appt-split__pane--work').locator('visible=true').first();
+      if (await work.count()) {
+        await theme(page, false); await page.waitForTimeout(400);
+        await work.screenshot({ path: path.join(OUT_BASE, projectName(), 'lt-frontdesk-grid--light.png') });
+        // Secondary text stays readable on the more see-through panel (owner 2026-11-21: panels at .5 + stronger pools).
+        const b = (await work.boundingBox())!;
+        if (!SHOTS_ONLY) await expectSecondaryContrast(page, 'Frontdesk WORK panel', b.x + 30, b.y + b.height - 60);
+      } }
   });
 
   test('Lab My Work + Culture + skeleton (+ token checks)', async ({ page }) => {

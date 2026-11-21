@@ -274,7 +274,8 @@ test.describe('band search placeholders fit', () => {
         return { ph: el.placeholder, full: el.dataset['phFull'] ?? '', text: ctx.measureText(el.placeholder).width, room };
       });
       expect(r.text, `${name}: "${r.ph}" fits its field (${Math.round(r.text)} <= ${Math.round(r.room)}; full: "${r.full}")`).toBeLessThanOrEqual(r.room + 1);
-      expect(r.ph.length, `${name}: a placeholder is shown`).toBeGreaterThan(0);
+      // A placeholder shows whenever one word fits (an empty one only when the field is squeezed below "Search").
+      if (r.room >= 60) expect(r.ph.length, `${name}: a placeholder is shown`).toBeGreaterThan(0);
       if (isPhone() && name === 'frontdesk') await shots(page, 'band-search-frontdesk');
     });
   }

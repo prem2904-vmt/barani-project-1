@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { test, expect, shotsDir, expectLayout, isPhone, isTouch, projectName } from './support/form-factor';
 import { deskAllStatuses } from './support/frontdesk';
+import { expectGridGlass } from './support/grid-glass';
 
 /**
  * Frontdesk side card "Who is where" (owner-approved 2026-11-20, mock fd-chart-v12) at every form factor — API
@@ -231,6 +232,24 @@ async function expectTipBeside(page: Page, sel: string): Promise<void> {
 
 test.describe('who is where — Lab + OPD user', () => {
   test.beforeEach(async ({ page }) => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); await backend(page, true); });
+
+  // Owner 2026-11-21 (glass across the grid): in light the WORK grid's rows read exactly like the panel's empty area —
+  // service sections (Lab + OPD) and each scope (all statuses, Completed, Payments due); cropped grid shots.
+  test('light: the WORK grid rows show the panel glass (sections + scopes)', async ({ page }) => {
+    await openDesk(page);
+    if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'the grid lives at >= 1024px' }); return; }
+    await theme(page, false); await page.waitForTimeout(600);
+    await expectGridGlass(page, 'Frontdesk sections');
+    const card = vis(page, '.pf-appt-split__pane--work');
+    await card.screenshot({ path: `${OUT}/22-work-grid-sections--light.png` });
+    for (const scope of ['Completed', 'Payments due']) {
+      const pill = page.locator(`.pf-work-hdr [role="radio"][aria-label="${scope}"], .pf-work-hdr [role="radio"]:has-text("${scope}")`).locator('visible=true').first();
+      if (!(await pill.count())) continue;
+      await pill.click(); await page.waitForTimeout(900);
+      if (await page.locator('.pf-fd-flow .ag-row').locator('visible=true').count()) await expectGridGlass(page, `Frontdesk ${scope}`);
+      await card.screenshot({ path: `${OUT}/22-work-grid-${scope.toLowerCase().replace(' ', '-')}--light.png` });
+    }
+  });
 
   test('the chart tab, the sunburst + chips, the overdue dot; tabs fit; no page scroll', async ({ page }) => {
     await openDesk(page);

@@ -1,7 +1,7 @@
 /**
  * Band search placeholders fit their field (owner 2026-11-21: "Search pa…" was clipped on a 390px phone).
  * The placeholder a screen writes stays the full sentence; on a narrow field the band shows the longest SHORTER form
- * that fits — the part before the first " · " / " — " / " - " / ", " / "…", then the first two words, then "Search".
+ * that fits — the part before the first " · " / " — " / " - " / ", " / "…", then the first two words, then the first word, else none (never a clipped one).
  * Pure (the measure is passed in) so it is unit-tested; `pf-hero-band` applies it to every input in its search.
  */
 export function placeholderCandidates(full: string): string[] {
@@ -20,7 +20,8 @@ export function placeholderCandidates(full: string): string[] {
 export function fitPlaceholder(full: string, room: number, measure: (s: string) => number): string {
   const c = placeholderCandidates(full);
   if (!(room > 0)) return c[0];
-  return c.find((s) => measure(s) <= room) ?? c[c.length - 1];
+  // Not even one word fits (a field squeezed to its icon): no placeholder rather than a clipped one.
+  return c.find((s) => measure(s) <= room) ?? '';
 }
 
 /** Fit every `input[placeholder]` inside `root` (the full text is kept in `data-ph-full`). */
