@@ -14,9 +14,10 @@
    which would move them. No `isolation` either (it would trap a card's
    popovers under the next card): the layer sits at z-index -1, under the
    panel's content, over the page's (transparent) ground. */
-// Floating surfaces (see the block below): never glass, even when they reuse .pf-card.
-$pf-floats: '.sm-panel, [data-start-menu], .pf-modal-centered, .pf-dh-card, .pf-dd__panel, [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]:not(pf-select *):not(.pf-dd *), [role="tooltip"], .pf-popover, .pf-pop, [class*="__pop"]:not([class*="__pop-"]), [class$="-pop"], .pf-menu, .pf-sheet, .pf-drawer, .pf-toast, .pf-jov__panel, .pf-bell-pop, .pf-ctx, .sm-ctx, .cdk-overlay-pane > *';
-$pf-light-panels: '.pf-card, .pf-rq-card, .pf-mw-pane, .pf-mw-rail, .pf-appt-split__pane, .pf-side-card, .pf-panel-glass';
+// Floating surfaces (see the block below): never glass, even when they reuse .pf-card. A page-level
+// role="dialog" (no aria-modal) is NOT a float — only modal dialogs, menus, popovers, sheets, toasts are.
+$pf-floats: '.sm-panel, [data-start-menu], .pf-modal-centered, .pf-dh-root, .pf-dh-card, .pf-dd__panel, [role="dialog"][aria-modal="true"], [role="alertdialog"], [role="menu"], [role="listbox"]:not(pf-select *):not(.pf-dd *), [role="tooltip"], .pf-popover, .pf-pop, [class*="__pop"]:not([class*="__pop-"]), [class$="-pop"], .pf-menu, .pf-sheet, .pf-drawer:not(.pf-drawer--hosted), .pf-sc-side--drawer, .pf-toast, .pf-jov__panel, .pf-bell-pop, .pf-ctx, .sm-ctx, .cdk-overlay-pane > *';
+$pf-light-panels: '.pf-card, .pf-rq-card, .pf-mw-pane, .pf-mw-rail, .pf-appt-split__pane, .pf-side-card, .pf-oc-cat, .pf-oc-bill, .dp__card, .pf-panel-glass';
 // Outer panels only: a card INSIDE a panel (Frontdesk's row cards, nested kit cards) stays as it is.
 $pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *):not(:is(#{$pf-floats})):not(:is(#{$pf-floats}) *)';
 
@@ -41,16 +42,24 @@ $pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *):not(:is(#{$pf-
   pointer-events: none;
 }
 
-/* ── AG-Grid: OPAQUE inside the glass panel ───────────────────────────
-   Owner 2026-11-21: grids pin columns and scroll sideways, so every row,
-   cell, pinned container, full-width row, header and floating filter is
-   SOLID (scrolled cells must never show through a pinned column). Hover /
-   selection are opaque tints. Glass stays on the docked panel behind. */
+/* Collect: the hosted drawer IS the docked right panel (glass above); its flush inner sections (the VIALS card,
+   the docked details column, the body wrappers) let that glass through. The vial tiles stay solid. */
+:root.light.design-new .pf-drawer--hosted :is(.pf-drawer__panel, .pf-body, .pf-sc-vials, .pf-sc-side:not(.pf-sc-side--drawer), .pf-card__body) {
+  background: transparent !important;
+}
+
+/* ── AG-Grid inside the glass panel ───────────────────────────────────
+   Owner 2026-11-21: ROWS, pinned cells, full-width rows, headers and floating
+   filters are SOLID (scrolled cells must never show through a pinned column;
+   hover / selection are opaque tints) — but the grid root, its body viewport
+   and the empty area under the last row are TRANSPARENT, so the panel's glass
+   shows through like on Frontdesk. */
 :root.light.design-new .ag-root-wrapper {
-  --ag-background-color: var(--pf-card-bg);
+  --ag-background-color: transparent;
   --ag-odd-row-background-color: var(--pf-card-bg);
-  --ag-data-background-color: var(--pf-card-bg);
-  --ag-wrapper-background-color: var(--pf-card-bg);
+  --ag-data-background-color: transparent;
+  --ag-wrapper-background-color: transparent;
+  background-color: transparent;
   --ag-chrome-background-color: var(--pf-head-bg);
   --ag-header-background-color: var(--pf-head-bg);
   --ag-header-text-color: var(--pf-head-text);
@@ -76,7 +85,7 @@ $pf-ag-solid: '.ag-row, .ag-full-width-row, .ag-grid-pinned-left-cells, .ag-grid
   color: var(--pf-head-text);
 }
 :root.light.design-new .ag-header-cell-text { color: var(--pf-head-text); font-weight: 600; }
-:root.light.design-new .pf-dg__skel { background: var(--pf-card-bg); }
+:root.light.design-new .pf-dg__skel { background: transparent; }   /* loading: the panel glass shows behind the skeleton bars */
 
 /* ── Floating surfaces: NEAR-OPAQUE, never glass ────────────────────────
    Glass is ONLY for docked page panels. Everything that floats over the page
