@@ -180,6 +180,30 @@ async function expectGlass(page: Page, tag: string) {
   if (!isPhone()) expect(r.count, `${tag}: a docked panel on screen`).toBeGreaterThan(0);
   expect(r.bad, `${tag}: every docked panel is glass (light)`).toEqual([]);
 }
+/** Owner 2026-11-21 (glass across the grid): in LIGHT the grid's rows, header and floating filters are translucent
+ *  (alpha <= .55) so the panel glass shows through; the pinned cells are frosted (backdrop blur). */
+async function expectGridGlass(page: Page, tag: string) {
+  if ((page.viewportSize()?.width ?? 0) < 1024) return;   // below 1024px the screens draw the shared list, not a grid
+  await theme(page, false);
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => {
+    const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
+    const vis = (e: Element) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.ag-row')).filter(e => vis(e) && !e.closest('.ag-header')).slice(0, 6);
+    const head = Array.from(document.querySelectorAll<HTMLElement>('.ag-header')).filter(vis)[0];
+    const pinned = Array.from(document.querySelectorAll<HTMLElement>('.ag-row .ag-grid-pinned-left-cells, .ag-row .ag-grid-pinned-right-cells, .ag-pinned-left-cols-container, .ag-pinned-right-cols-container')).filter(vis);
+    const bf = (e: HTMLElement) => { const c = getComputedStyle(e); return c.backdropFilter || (c as unknown as Record<string, string>)['webkitBackdropFilter'] || ''; };
+    return {
+      rows: rows.map(e => alpha(getComputedStyle(e).backgroundColor)),
+      head: head ? alpha(getComputedStyle(head).backgroundColor) : -1,
+      pinnedNoBlur: pinned.filter(e => !/blur/.test(bf(e))).map(e => String(e.className).slice(0, 60)),
+    };
+  });
+  expect(r.rows.length, `${tag}: grid rows on screen`).toBeGreaterThan(0);
+  for (const a of r.rows) expect(a, `${tag}: row tint is translucent in light`).toBeLessThanOrEqual(0.55);
+  if (r.head >= 0) expect(r.head, `${tag}: grid header is translucent in light`).toBeLessThanOrEqual(0.55);
+  expect(r.pinnedNoBlur, `${tag}: every pinned cell block is frosted`).toEqual([]);
+}
 /** Dev aid (LT_PROBE=1): every big rounded surface on screen — its own background, its ::before glass, whether a
  *  bigger rounded surface holds it, and any role=dialog ancestor. Written to <shots>/<project>/probe.txt. */
 async function probe(page: Page, name: string) {
@@ -281,9 +305,13 @@ function expectLightTokens(f: Awaited<ReturnType<typeof lightFacts>>, tag: strin
 test.describe('light theme — every screen, light + dark', () => {
   test('Frontdesk (+ token checks)', async ({ page }) => {
     await go(page, '/frontdesk');
-    await settle(page, 'Priya Nair');
+    await settle(page);
+    // The WORK grid with rows (Completed holds the demo orders): the glass must read through the rows too.
+    const done = page.locator('[role="radio"][aria-label="Completed"], [role="radio"]:has-text("Completed")').locator('visible=true').first();
+    if (await done.count()) { await done.click(); await settle(page, 'Priya Nair'); }
     await shots(page, 'frontdesk');
     if (!SHOTS_ONLY) expectLightTokens(await lightFacts(page, '.pf-appt-split__pane'), 'Frontdesk');
+    if (!SHOTS_ONLY) await expectGridGlass(page, 'Frontdesk');
   });
 
   test('Lab My Work + Culture + skeleton (+ token checks)', async ({ page }) => {
@@ -407,17 +435,21 @@ test.describe('light theme — every screen, light + dark', () => {
     if (!SHOTS_ONLY && !isPhone()) {
       await theme(page, false);
       await page.waitForTimeout(300);
-      // The painted surface behind a pinned cell (the cell, else its row) is fully opaque.
+      // Owner 2026-11-21 (glass across the grid): the surface behind a pinned cell is FROSTED — a backdrop blur and a
+      // near-opaque (>= .8) tint — so the scrolled cells passing under it are blurred, never readable.
       const r = await page.evaluate(() => {
         const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
         const cell = Array.from(document.querySelectorAll<HTMLElement>('.ag-grid-pinned-left-cells .ag-cell, .ag-pinned-left-cols-container .ag-cell')).find(e => e.getBoundingClientRect().width > 0);
-        if (!cell) return { found: false, alpha: -1 };
+        if (!cell) return { found: false, alpha: -1, blur: '' };
         let e: HTMLElement | null = cell;
         while (e && getComputedStyle(e).backgroundColor === 'rgba(0, 0, 0, 0)' && !e.classList.contains('ag-root-wrapper')) e = e.parentElement;
-        return { found: true, alpha: e ? alpha(getComputedStyle(e).backgroundColor) : 0, what: e?.className };
+        const cs = e ? getComputedStyle(e) : null;
+        return { found: true, alpha: cs ? alpha(cs.backgroundColor) : 0, blur: cs ? (cs.backdropFilter || (cs as unknown as Record<string, string>)['webkitBackdropFilter'] || '') : '', what: e?.className };
       });
       expect(r.found, 'a pinned cell on screen').toBe(true);
-      expect(r.alpha, `pinned cell surface is opaque (${(r as { what?: string }).what})`).toBe(1);
+      expect(r.alpha, `pinned cell surface is frosted, near-opaque (${(r as { what?: string }).what})`).toBeGreaterThanOrEqual(0.8);
+      expect(r.blur, `pinned cell surface has a backdrop blur (${(r as { what?: string }).what})`).toMatch(/blur/);
+      await expectGridGlass(page, 'Test Master');
     }
   });
 
