@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { environment } from '../../../../environments/environment';
 import { OPD_FLAG_KEY, OPD_PREVIEW_HEADER } from './opd-gate';
 import { opdPreviewInterceptor } from './opd-preview.interceptor';
 
@@ -51,6 +52,26 @@ describe('opdPreviewInterceptor', () => {
     const r = ctl.expectOne('https://prefrontal.sgp1.digitaloceanspaces.com/t/r.pdf');
     expect(r.request.headers.has(OPD_PREVIEW_HEADER)).toBe(false);
     r.flush({});
+    ctl.verify();
+  });
+});
+
+describe('opdPreviewInterceptor — dev only', () => {
+  const devUrl = environment.auth.supabaseUrl;
+  afterEach(() => { environment.auth.supabaseUrl = devUrl; });
+
+  it('off dev (another Supabase project): a leftover flag adds no header', () => {
+    environment.auth.supabaseUrl = 'https://prod-project.supabase.co';
+    const { http, ctl } = setup(true);
+    http.get('/api/orders').subscribe();
+    expect(ctl.expectOne('/api/orders').request.headers.has(OPD_PREVIEW_HEADER)).toBe(false);
+    ctl.verify();
+  });
+
+  it('on dev: the flag adds the header', () => {
+    const { http, ctl } = setup(true);
+    http.get('/api/orders').subscribe();
+    expect(ctl.expectOne('/api/orders').request.headers.get(OPD_PREVIEW_HEADER)).toBe('1');
     ctl.verify();
   });
 });
