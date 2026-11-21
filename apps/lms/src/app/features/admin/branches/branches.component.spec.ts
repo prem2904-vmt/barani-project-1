@@ -122,7 +122,7 @@ describe('Branches — OPS-11 deactivate a branch', () => {
     await Promise.resolve(); await Promise.resolve();
     expect(dialog.confirm).toHaveBeenCalled();
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: false });
-    expect((c.colDefs().find((d: any) => d.colId === 'status').cellRenderer({ data: c.branches()[0] }) as HTMLElement).textContent).toBe('Inactive');
+    expect(c.colDefs().find((d: any) => d.colId === 'status').cellRendererParams.statusWords(c.branches()[0]).now).toBe('Inactive');
   });
 
   it('declining the confirm changes nothing', async () => {
