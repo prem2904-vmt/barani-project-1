@@ -10,7 +10,7 @@ import type { Order } from '../../../shared/models/order.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
-import { SettingToggleComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { SettingRowComponent, SettingToggleComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
 import {
   FD_MODULE_LABEL, type FdDataSource, type FdModule, addFdColumn, defaultFdColumns, fdColumn, fdConfigOf, fdPalette, insertFdColumn,
@@ -51,7 +51,7 @@ interface DragState {
 @Component({
   selector: 'pf-fd-grid-columns',
   standalone: true,
-  imports: [FlowGridComponent, SettingsSavebarComponent, SettingToggleComponent, SkeletonComponent, NgTemplateOutlet],
+  imports: [FlowGridComponent, SettingsSavebarComponent, SettingRowComponent, SettingToggleComponent, SkeletonComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './fd-grid-columns.component.html',
   styleUrl: './fd-grid-columns.component.scss',
@@ -69,6 +69,19 @@ export class FdGridColumnsComponent implements OnInit {
   private readonly zone = viewChild<ElementRef<HTMLElement>>('zone');
   private readonly pal = viewChild<ElementRef<HTMLElement>>('pal');
   private readonly ghost = viewChild<ElementRef<HTMLElement>>('ghost');
+  private readonly fit = viewChild<ElementRef<HTMLElement>>('fit');
+  private readonly grid = viewChild(FlowGridComponent);
+
+  // ── Scale to fit (owner review 2026-11-21: the preview fits its box like the real Frontdesk, never clipped) ──
+  /** The preview box's inner width and the grid's laid-out height (both measured). */
+  private readonly boxW = signal(0);
+  private readonly gridH = signal(0);
+  /** The grid lays out at its natural width (every column at its minimum, more when the box is wider)… */
+  readonly fitW = computed(() => Math.max(this.boxW(), (this.grid()?.minTotal() ?? 0) + 4) || null);
+  /** …and is scaled down to the box when that is wider than the box. */
+  readonly fitScale = computed(() => { const w = this.fitW(), b = this.boxW(); return w && b && w > b ? b / w : 1; });
+  /** The box takes the scaled height (a transform does not change layout). */
+  readonly fitH = computed(() => (this.gridH() && this.fitScale() < 1 ? Math.ceil(this.gridH() * this.fitScale()) + 2 : null));
 
   readonly grip = GRIP;
   readonly loading = signal(true);
@@ -87,6 +100,7 @@ export class FdGridColumnsComponent implements OnInit {
   readonly canReset = computed(() => !this.loading() && !this.isDefault());
   readonly countLabel = computed(() => { const n = this.order().length; return `${n} ${n === 1 ? 'column' : 'columns'}`; });
 
+  private ro: ResizeObserver | null = null;
   private readonly snap = dirtySnapshot(() => ({ columns: this.order(), staffMayHide: this.staffMayHide() }));
   readonly dirty = this.snap.dirty;
 
@@ -98,7 +112,20 @@ export class FdGridColumnsComponent implements OnInit {
   readonly ctx = previewContext({ columnEdit: this.edit });
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.unlisten());
+    inject(DestroyRef).onDestroy(() => { this.unlisten(); this.ro?.disconnect(); });
+    // Measure the box and the grid (ResizeObserver; the grid sits in an @defer block, so re-observe when it lands).
+    effect(() => {
+      const zone = this.zone()?.nativeElement;
+      const fit = this.fit()?.nativeElement;
+      if (typeof ResizeObserver === 'undefined' || !zone) return;
+      this.ro?.disconnect();
+      this.ro = new ResizeObserver(() => {
+        this.boxW.set(Math.floor(zone.clientWidth));
+        if (fit) this.gridH.set(fit.offsetHeight);
+      });
+      this.ro.observe(zone);
+      if (fit) this.ro.observe(fit);
+    });
     effect(() => {
       const el = this.ghost()?.nativeElement as (HTMLElement & { showPopover?: () => void; hidePopover?: () => void }) | undefined;
       const on = !!this.drag()?.on;
@@ -177,7 +204,12 @@ export class FdGridColumnsComponent implements OnInit {
     const cfg = { columns: this.order(), staffMayHide: this.staffMayHide() };
     return new Promise<boolean>(resolve => this.svc.save(this.module(), cfg).subscribe({
       next: () => { this.snap.mark(); this.saving.set(false); this.toast.success('Saved. The Frontdesk shows these columns now.'); resolve(true); },
-      error: () => { this.saving.set(false); this.toast.error('Could not save the columns. Try again.'); resolve(false); },
+      error: (e: { status?: number }) => {
+        this.saving.set(false);
+        // A server without the work-grid endpoint yet (404): say so plainly; the columns stay as edited (Save stays on).
+        this.toast.error(e?.status === 404 ? 'Saving columns is not available on this server yet. Your changes are kept on this page.' : 'Could not save the columns. Try again.');
+        resolve(false);
+      },
     }));
   }
 

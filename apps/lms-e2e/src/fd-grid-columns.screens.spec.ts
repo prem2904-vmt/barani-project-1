@@ -128,6 +128,17 @@ async function headOrder(page: Page, scope: string): Promise<string[]> {
     .filter(c => c.w > 0 && c.id !== 'sel').sort((a, b) => a.x - b.x).map(c => c.id));
 }
 const DESK = 'pf-fd-work-view';
+/** The preview shows EVERY column inside its box (scaled to fit) — nothing clipped, no sideways scroll. */
+async function expectPreviewFits(page: Page, tag: string) {
+  await page.waitForTimeout(300);
+  const r = await page.evaluate((sel) => {
+    const box = document.querySelector<HTMLElement>(sel)!.getBoundingClientRect();
+    const cells = Array.from(document.querySelectorAll<HTMLElement>(`${sel} .ag-header-cell[col-id]`)).filter(c => c.getBoundingClientRect().width > 0);
+    return { n: cells.length, out: cells.filter(c => { const b = c.getBoundingClientRect(); return b.right > box.right + 1 || b.left < box.left - 1; }).map(c => c.getAttribute('col-id')) };
+  }, PREVIEW);
+  expect(r.n, `${tag}: header cells`).toBeGreaterThan(5);
+  expect(r.out, `${tag}: preview columns clipped at ${projectName()}`).toEqual([]);
+}
 /** The preview's column list (catalogue ids) as the page holds it. */
 const previewOrder = (page: Page) => page.locator('.fdgc[data-fd-order]').getAttribute('data-fd-order').then(v => (v ?? '').split(','));
 const FD_OF: Record<string, string> = { wait: 'waiting', pay: 'payment' };
@@ -197,6 +208,7 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     await expect(page.locator('[data-testid="fdgc-reset"]').locator('visible=true').first()).toBeDisabled();
     expect(await previewOrder(page)).toEqual(['token', 'patient', 'where', 'samples', 'payment', 'waiting', 'next']);
     expect(await headOrder(page, PREVIEW)).toEqual(['token', 'patient', 'where', 'samples', 'pay', 'wait', 'next']);
+    await expectPreviewFits(page, 'default');
     // Where now (ring + words) and Waiting are fixed: no ✕, no Journey column.
     await expect(page.locator(`${PREVIEW} [data-fd-remove="waiting"], ${PREVIEW} [data-fd-remove="where"]`)).toHaveCount(0);
     await expect(page.locator(`${PREVIEW} .ag-header-cell[col-id="journey"]`)).toHaveCount(0);
@@ -210,6 +222,7 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'priority', 'samples', 'payment', 'waiting', 'next']);
     await expect(page.locator('[data-fd-item="priority"]')).toHaveCount(0);
     await expect(bandSave(page)).toBeEnabled();
+    await expectPreviewFits(page, 'after drag-in');
     await shots(page, '02-settings-dragged-in');
 
     // Drag a header to move it: Samples in front of Priority.
