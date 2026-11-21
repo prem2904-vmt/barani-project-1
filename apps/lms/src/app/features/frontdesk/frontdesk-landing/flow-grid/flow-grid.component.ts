@@ -116,7 +116,9 @@ export class FlowGridComponent implements AfterViewInit {
   private readonly width = signal(1200);
   readonly tier = computed(() => flowColumnTier(this.width()));
   /** What folds at the grid's own width (flow-fold.ts): never a sideways scroll. */
-  readonly tokenW = computed(() => tokenWidth(this.rows().map(r => r.visit ? r.visit.tokenLabel : dailyNoLabel(r.order?.dailyNo, r.order?.dailyNoDay))));
+  /** Stacked sections share ONE Token width (the work view passes it) so Token / Patient line up across sections. */
+  readonly sharedTokenW = input<number | null>(null);
+  readonly tokenW = computed(() => this.sharedTokenW() ?? tokenWidth(this.rows().map(r => r.visit ? r.visit.tokenLabel : dailyNoLabel(r.order?.dailyNo, r.order?.dailyNoDay))));
   readonly layout = computed(() => flowLayout(this.width(), { selecting: this.selecting(), service: this.service(), tokenW: this.tokenW() }));
   /** Payment folded into the Patient line. */
   readonly folded = computed(() => this.layout().fold.has('pay'));
@@ -193,6 +195,8 @@ export class FlowGridComponent implements AfterViewInit {
         width: ringSmall ? W.ringSmall : W.ring, minWidth: ringSmall ? W.ringSmall : W.ring, maxWidth: ringSmall ? W.ringSmall : W.ring + 16,
         cellRenderer: FlowRingCellComponent, cellRendererParams: { ringSize: ringSmall ? 32 : 44 }, cellClass: 'fd-flow__c-ring' }),
       ...mid,
+      // Sections: Waiting is a FIXED column right before Next — the same x in every section (owner 2026-11-21).
+      ...(own && !waitIn ? [waitCol()] : []),
       actionCol<FlowRow>({ colId: 'next', headerName: 'Next', width: tight ? W.nextTight : W.next, minWidth: tight ? W.nextTight : W.next,
         headerClass: 'fd-flow__h-right', cellClass: 'fd-flow__c-next', cellRenderer: FlowNextCellComponent }),
     ];

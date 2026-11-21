@@ -11,6 +11,14 @@
 .fd-flow { flex: 1 1 auto; min-height: 0; }
 /* A stacked SECTION grid (All split by service): grows with its rows; the sections' body scrolls, never the grid. */
 .fd-flow.fd-flow--auto { flex: none; min-height: 0 !important; }
+/* A section hugs its rows (owner 2026-11-21): AG-Grid's auto-height layout keeps a 50–150px minimum body
+   (--ag-auto-height-min-body-height on .ag-grid-scrolling-rows) — a blank "row" under a short section — and a
+   horizontal scrollbar strip; a section's columns always fit (flow-fold.ts), so neither is kept. */
+:host ::ng-deep .fd-flow--auto {
+  --ag-auto-height-min-body-height: 0px;
+  .ag-grid-scrolling-rows { min-height: 0 !important; }
+  .ag-body-horizontal-scroll { display: none !important; }
+}
 :host-context(.fd-sec) { flex: none; }
 
 :host ::ng-deep {

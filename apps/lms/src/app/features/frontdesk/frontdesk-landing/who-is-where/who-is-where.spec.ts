@@ -15,7 +15,7 @@ import { WhoIsWhereComponent } from './who-is-where.component';
 import {
   OTHER_STEP, SUN, WhoItem, apptOverdueMin, apptStartMs, apptTabAria, arcPath, buildWhoTree, centreOf, describeSlice,
   effectiveSideTab, layoutSunburst, sideTabOptions, sliceOn, stepOfRow, sunDiameter, whoItemOf,
-  nextSideView, overdueDotLabel, sideSwitchLabel, sideViewTitle, sideViews,
+  overdueDotLabel, sideSwitchLabel, sideSwitchOn, sideTitleOf, toggleSideView,
 } from './who-is-where';
 
 /**
@@ -168,7 +168,7 @@ describe('appointments: overdue + the tab dot', () => {
     expect(apptTabAria(7, 1)).toBe('Appointments, 7, 1 overdue');
     expect(apptTabAria(7, 0)).toBe('Appointments, 7');
     const t = sideTabOptions({ who: true, appt: true, home: true, apptN: 7, overdue: 1, homeN: 2 });
-    expect(t.map(o => [o.value, o.label, o.count])).toEqual([['who', 'Who is where', undefined], ['appt', 'Appointments', 7], ['home', 'Home', 2]]);
+    expect(t.map(o => [o.value, o.label, o.count])).toEqual([['who', 'Patient flow', undefined], ['appt', 'Appointments', 7], ['home', 'Home', 2]]);
     expect(t[1].alert).toBe(true);
     expect(t[1].aria).toBe('Appointments, 7, 1 overdue');
     expect(sideTabOptions({ who: true, appt: true, home: false, apptN: 3, overdue: 0, homeN: 0 })[1].alert).toBe(false);
@@ -201,10 +201,10 @@ describe('single-service tenants: no chart, no "Who is where" tab', () => {
     expect(html).toMatch(/@if \(leftTab\(\) === 'who'\) \{\s*<div class="fd-who-body">\s*<pf-fd-who-is-where/);
     // "+ New" opens the EXISTING book-appointment flow, for every tenant.
     expect(html).toMatch(/data-testid="fd-new-appt"\s*\(click\)="bookAppointment\(\)"/);
-    // The card head (owner 2026-11-21): the icon IS the view switch (no tab row); one view only = the static VISITS head.
+    // The card head (owner 2026-11-21): the icon is a TWO-state switch (Who is where ↔ Bookings); Bookings has the pills.
     expect(html).toMatch(/<button type="button" class="pf-svb" data-testid="fd-side-view-btn"/);
-    expect(html).not.toContain('fd-side-switch');
-    expect(html).toMatch(/<span class="fd-side-title" data-testid="fd-side-title">\s*<span class="pf-card__icon" aria-hidden="true">[\s\S]{0,700}<span class="pf-card__label">Visits<\/span>/);
+    expect(html).toMatch(/<div class="fd-side-switch" data-testid="fd-bookings-pills">\s*<pf-segmented class="pf-tabs fd-side-tabs" ariaLabel="Bookings"/);
+    expect(html).toContain('{{ sideTitle() }}');
   });
 });
 
@@ -391,31 +391,34 @@ describe('<pf-fd-who-is-where>', () => {
   });
 });
 
-describe('VISITS card-head icon switch (owner 2026-11-21)', () => {
-  const counts = { apptN: 5, homeN: 2 };
-  it('cycles Who is where → Appointments → Home visits → back; lab-only cycles Appointments ↔ Home', () => {
-    const all = sideViews({ who: true, appt: true, home: true });
-    expect(all).toEqual(['who', 'appt', 'home']);
-    expect(nextSideView('who', all)).toBe('appt');
-    expect(nextSideView('appt', all)).toBe('home');
-    expect(nextSideView('home', all)).toBe('who');
-    const lab = sideViews({ who: false, appt: true, home: true });
-    expect(lab).toEqual(['appt', 'home']);
-    expect(nextSideView('appt', lab)).toBe('home');
-    expect(nextSideView('home', lab)).toBe('appt');
-    expect(nextSideView('appt', ['appt'])).toBe('appt');
+describe('VISITS card-head icon switch (owner 2026-11-21, refined: two states)', () => {
+  it('Who is where ↔ Bookings; Bookings returns to the last pill (Appointments by default)', () => {
+    const both = { appt: true, home: true };
+    expect(toggleSideView('who', null, both)).toBe('appt');
+    expect(toggleSideView('who', 'home', both)).toBe('home');
+    expect(toggleSideView('who', 'home', { appt: true, home: false })).toBe('appt');
+    expect(toggleSideView('who', null, { appt: false, home: true })).toBe('home');
+    expect(toggleSideView('appt', null, both)).toBe('who');
+    expect(toggleSideView('home', null, both)).toBe('who');
   });
-  it('the title names the view with its count; the switch names the NEXT view', () => {
-    expect(sideViewTitle('who', counts)).toEqual({ label: 'Who is where', count: null });
-    expect(sideViewTitle('appt', counts)).toEqual({ label: 'Appointments', count: 5 });
-    expect(sideViewTitle('home', counts)).toEqual({ label: 'Home visits', count: 2 });
-    expect(sideSwitchLabel('appt', counts)).toBe('Show appointments (5)');
-    expect(sideSwitchLabel('who', counts)).toBe('Show who is where');
+  it('a switch only where the chart AND a bookings list exist (lab-only: static icon)', () => {
+    expect(sideSwitchOn({ who: true, appt: true, home: true })).toBe(true);
+    expect(sideSwitchOn({ who: false, appt: true, home: true })).toBe(false);
+    expect(sideSwitchOn({ who: true, appt: false, home: false })).toBe(false);
   });
-  it('the rose dot: overdue appointments while NOT on Appointments', () => {
-    expect(overdueDotLabel('who', 3)).toBe('3 appointments overdue');
-    expect(overdueDotLabel('home', 1)).toBe('1 appointment overdue');
+  it('titles, the switch label, and the rose dot on the icon while on Who is where', () => {
+    expect(sideTitleOf('who')).toBe('Patient flow');
+    expect(sideTitleOf('appt')).toBe('Bookings');
+    expect(sideTitleOf('home')).toBe('Bookings');
+    expect(sideSwitchLabel('who')).toBe('Show bookings');
+    expect(sideSwitchLabel('home')).toBe('Show patient flow');
+    expect(overdueDotLabel('who', 3)).toBe('3 appointments overdue · show bookings');
+    expect(overdueDotLabel('who', 1)).toBe('1 appointment overdue · show bookings');
     expect(overdueDotLabel('appt', 3)).toBeNull();
     expect(overdueDotLabel('who', 0)).toBeNull();
+  });
+  it('the bookings pills: Appointments n (rose dot when overdue) | Home collection n', () => {
+    const t = sideTabOptions({ who: false, appt: true, home: true, apptN: 5, overdue: 3, homeN: 2 });
+    expect(t.map(o => [o.value, o.label, o.count, !!o.alert])).toEqual([['appt', 'Appointments', 5, true], ['home', 'Home collection', 2, false]]);
   });
 });

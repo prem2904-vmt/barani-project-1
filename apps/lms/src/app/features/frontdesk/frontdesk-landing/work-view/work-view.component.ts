@@ -7,6 +7,8 @@ import type { FlowGridContext } from '../flow-grid/flow-cells';
 import type { FlowRow } from '../flow-grid/flow-row';
 import { ClinicViewComponent } from './clinic-view.component';
 import { chipOf } from './clinic';
+import { tokenWidth } from '../flow-grid/flow-fold';
+import { dailyNoLabel } from '../../../../shared/utils/daily-no';
 import { buildSections, loadSectionOrder, mergeSectionOrder, moveSection, saveSectionOrder } from './sections';
 
 export type WorkViewMode = 'list' | 'clinic';
@@ -70,7 +72,7 @@ export function tileFace(r: FlowRow): Omit<MorphTile, 'id' | 'x' | 'y' | 'w' | '
                     @if (s.late) { <span class="fd-sec__late">{{ s.late }} late</span> }
                   </header>
                   <pf-fd-flow-grid class="pf-fd-flow fd-sec__grid" [rows]="s.rows" [service]="s.id" [auto]="true" [context]="context()"
-                    [selecting]="selecting()" (opened)="opened.emit($event)" />
+                    [selecting]="selecting()" [sharedTokenW]="tokenW()" (opened)="opened.emit($event)" />
                 </section>
               }
               @if (drag(); as d) { <div class="fd-secs__drop" aria-hidden="true" [style.top.px]="d.lineY"></div> }
@@ -144,6 +146,8 @@ export class WorkViewComponent {
     return mergeSectionOrder(key ? loadSectionOrder(key) : null, [...svcs, ...withRows]);
   });
   readonly sections = computed(() => buildSections(this.rows(), this.order()));
+  /** ONE Token width for every section (Token / Patient at the same x in each). */
+  readonly tokenW = computed(() => tokenWidth(this.rows().map(r => r.visit ? r.visit.tokenLabel : dailyNoLabel(r.order?.dailyNo, r.order?.dailyNoDay))));
 
   readonly drag = signal<{ id: ServiceId; dy: number; lineY: number; to: number } | null>(null);
   readonly announce = signal('');

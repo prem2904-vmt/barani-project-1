@@ -15,9 +15,11 @@ import { type SectionColPlan, sectionPlan } from '../work-view/sections';
 export type FlowFoldStep = 'pay' | 'wait' | 'token' | 'ring' | 'tight';
 
 export const FLOW_MIN = {
-  sel: 52, token: 100, patient: 220, patientTight: 132, ring: 80, ringSmall: 56,
+  sel: 52, token: 100, patient: 220, patientTight: 132, ring: 92, ringSmall: 56,
   where: 170, whereTight: 120, wait: 112, pay: 110, next: 156, nextTight: 140,
 };
+/** One floor for every service's own columns (so the fixed columns fold alike in every section). */
+export const OWN_FLOOR = 130;
 /** Room for the grid's own chrome (vertical scrollbar, borders). */
 export const FLOW_SLACK = 16;
 
@@ -59,19 +61,17 @@ export function flowLayout(width: number, opts: { selecting?: boolean; service?:
       + (has(fold, 'wait') ? 0 : FLOW_MIN.wait) + (has(fold, 'pay') ? 0 : FLOW_MIN.pay);
     return { fold, own: null, need };
   }
-  // A section: drop its own columns against the full fixed set, then fold the fixed ones.
-  const fixed0 = fixedNeed(new Set(), selecting, tw);
-  const own = sectionPlan(opts.service, width - FLOW_SLACK - fixed0).cols;
-  const ownMin = (o: readonly SectionColPlan[], tight: boolean) =>
-    o.reduce((s, c) => s + (tight && c.id === 'where' ? FLOW_MIN.whereTight : c.min), 0);
-  const fold = new Set<FlowFoldStep>();
+  // A section (owner 2026-11-21: Token · Patient · Waiting · Next sit at the SAME x in every section): the fixed columns —
+  // selection, Token, Patient, Journey, Waiting, Next — fold by the WIDTH alone (+ one shared floor for the service's own
+  // columns), so every section folds them alike; the service's own columns then take what is left.
+  const secFixed = (f: Set<FlowFoldStep>) => fixedNeed(f, selecting, tw) + (has(f, 'wait') ? 0 : FLOW_MIN.wait);
+  const tightSaves = (FLOW_MIN.patient - FLOW_MIN.patientTight) + (FLOW_MIN.next - FLOW_MIN.nextTight);
+  const fold = foldSteps<FlowFoldStep>(width, secFixed(new Set()) + OWN_FLOOR, [
+    { id: 'wait', saves: FLOW_MIN.wait }, { id: 'token', saves: tw },
+    { id: 'ring', saves: FLOW_MIN.ring - FLOW_MIN.ringSmall }, { id: 'tight', saves: tightSaves },
+  ], FLOW_SLACK);
+  const own = sectionPlan(opts.service, width - FLOW_SLACK - secFixed(fold)).cols;
   if (!own.some(c => c.id === 'pay')) fold.add('pay');
-  if (!own.some(c => c.id === 'wait')) fold.add('wait');
-  const tail: FlowFoldStep[] = ['token', 'ring', 'tight'];
-  const needOf = () => fixedNeed(fold, selecting, tw) + ownMin(own, has(fold, 'tight'));
-  for (const st of tail) {
-    if (width >= needOf() + FLOW_SLACK) break;
-    fold.add(st);
-  }
-  return { fold, own, need: needOf() };
+  const ownMin = own.reduce((s, c) => s + (has(fold, 'tight') && c.id === 'where' ? FLOW_MIN.whereTight : c.min), 0);
+  return { fold, own, need: secFixed(fold) + ownMin };
 }

@@ -162,8 +162,7 @@ import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.compon
 import { OpdDeskApi } from '../../opd/frontdesk/desk-api.service';
 import type { OpdVisitRow, PaymentDue } from '../../opd/frontdesk/desk.models';
 import { opdDueByVisit, opdVisitFlowRow, opdVisitMatches, opdVisitOpen } from './opd-visits';
-import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, nextSideView, overdueDotLabel, sideSwitchLabel, sideTabOptions, sideViewTitle, sideViews, stepOfRow, whoItemOf } from './who-is-where/who-is-where';
-import { ActionsMenuComponent as PfActionsMenuComponent, type PfAction as PfMenuAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, overdueDotLabel, sideSwitchLabel, sideSwitchOn, sideTabOptions, sideTitleOf, stepOfRow, toggleSideView, whoItemOf } from './who-is-where/who-is-where';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
@@ -203,7 +202,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfActionsMenuComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -450,58 +449,34 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   setLeftTab(t: LeftTab) {
     const changed = t !== this.leftTab();
     this._leftTab.set(t);
-    try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t);
+      if (t !== 'who') localStorage.setItem(FrontdeskLandingComponent.BOOKINGS_TAB_KEY, t);
+    } catch { /* ignore */ }
     if (changed) this.slideSideIn();
   }
 
-  // ── VISITS card-head icon switch (owner 2026-11-21: replaces "Who is where | Appointments | Home"). The view on show
-  //    stays `leftTab()` / `setLeftTab()` (remembered per browser under LEFT_TAB_KEY) — the names other code binds to. ──
-  /** The views the icon cycles: Who is where → Appointments → Home visits (lab-only: Appointments ↔ Home). */
-  readonly sideViewList = computed<SideTab[]>(() => sideViews({ who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
-  private readonly sideCounts = computed(() => ({ apptN: this.visibleAppointments().length, homeN: this.homeCollections().length }));
-  readonly sideTitle = computed(() => sideViewTitle(this.leftTab(), this.sideCounts()));
-  readonly sideNextView = computed<SideTab>(() => nextSideView(this.leftTab(), this.sideViewList()));
-  /** "3 appointments overdue" while NOT on Appointments (the rose dot on the icon). */
-  readonly sideOverdueDot = computed(() => overdueDotLabel(this.leftTab(), this.overdueAppointments()));
-  readonly sideSwitchAria = computed(() => {
-    const base = sideSwitchLabel(this.sideNextView(), this.sideCounts());
-    const dot = this.sideOverdueDot();
-    return dot ? `${base} · ${dot}` : base;
-  });
-  readonly sideTint = computed(() => this.leftTab() === 'appt' ? 'sky' : this.leftTab() === 'home' ? 'pink' : null);
-  /** The direct-jump menu (long-press · right-click · Alt+↓): every view with its count. */
-  readonly sideMenuActions = computed<PfMenuAction[]>(() => this.sideViewList().map(t => {
-    const ti = sideViewTitle(t, this.sideCounts());
-    const overdue = t === 'appt' && this.overdueAppointments() > 0;
-    return { id: t, label: ti.label, count: ti.count ?? undefined, current: t === this.leftTab(),
-      hint: overdue ? `${this.overdueAppointments()} overdue` : undefined };
+  // ── VISITS card-head icon switch (owner 2026-11-21, refined): TWO states — Who is where ↔ Bookings; inside Bookings
+  //    the pill toggle "Appointments n | Home collection n". The view stays `leftTab()` / `setLeftTab()` ('who' | 'appt' |
+  //    'home', remembered under LEFT_TAB_KEY) — the names other code binds to; the icon = 'who' vs the last bookings pill. ──
+  private static readonly BOOKINGS_TAB_KEY = 'pf.lms.frontdesk.bookingsTab';
+  /** The icon is a switch only where the chart AND a bookings list both exist (lab-only: a static icon). */
+  readonly sideSwitchOn = computed(() => sideSwitchOn({ who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
+  readonly sideTitle = computed(() => sideTitleOf(this.leftTab()));
+  /** "3 appointments overdue · show bookings" — the rose dot on the icon while on Who is where. */
+  readonly sideOverdueDot = computed(() => this.sideSwitchOn() ? overdueDotLabel(this.leftTab(), this.overdueAppointments()) : null);
+  readonly sideSwitchAria = computed(() => this.sideOverdueDot() ?? sideSwitchLabel(this.leftTab()));
+  readonly sideTint = computed(() => this.leftTab() === 'who' ? null : 'sky');
+  /** The bookings pills (Appointments n · rose dot when overdue | Home collection n) — only with both lists on. */
+  readonly bookingPillOptions = computed<SegmentedOption<LeftTab>[]>(() => sideTabOptions({
+    who: false, appt: this.showAppt(), home: this.showHome(),
+    apptN: this.visibleAppointments().length, overdue: this.overdueAppointments(), homeN: this.homeCollections().length,
   }));
-  private readonly sideMenu = viewChild<PfActionsMenuComponent>('sideMenu');
-  private sidePressTimer: ReturnType<typeof setTimeout> | null = null;
-  private sideSuppressClick = false;
-  onSideSwitchClick(ev: MouseEvent): void {
-    ev.stopPropagation();
-    if (this.sideSuppressClick) { this.sideSuppressClick = false; return; }
-    this.setLeftTab(this.sideNextView());
-  }
-  openSideMenu(ev?: Event): void {
-    ev?.preventDefault();
+  toggleSideView(ev?: Event): void {
     ev?.stopPropagation();
-    this.sideMenu()?.show('first');
-  }
-  onSideSwitchKey(ev: KeyboardEvent): void {
-    ev.stopPropagation();
-    if (ev.altKey && ev.key === 'ArrowDown') this.openSideMenu(ev);
-  }
-  sidePressStart(ev: PointerEvent): void {
-    if (ev.button !== 0) return;
-    this.sidePressEnd();
-    this.sidePressTimer = setTimeout(() => { this.sidePressTimer = null; this.sideSuppressClick = true; this.openSideMenu(); }, 500);
-  }
-  sidePressEnd(): void { if (this.sidePressTimer) { clearTimeout(this.sidePressTimer); this.sidePressTimer = null; } }
-  pickSideView(id: string): void {
-    this.setLeftTab(id as LeftTab);
-    requestAnimationFrame(() => (document.querySelector('[data-testid="fd-side-view-btn"]') as HTMLElement | null)?.focus());
+    let last: SideTab | null = null;
+    try { last = localStorage.getItem(FrontdeskLandingComponent.BOOKINGS_TAB_KEY) as SideTab | null; } catch { /* not remembered */ }
+    this.setLeftTab(toggleSideView(this.leftTab(), last, { appt: this.showAppt(), home: this.showHome() }));
   }
   /** Owner motion style: the side card's body slides / fades in (260ms; nothing under reduced motion). */
   private slideSideIn(): void {
