@@ -1,5 +1,5 @@
 import {
-  cultureColumns, cultureDay, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep, cultureStatusOptions, filterCultures, readDue, stageSub,
+  cultureColumns, cultureDay, cultureDueMin, cultureMeta, culturePatientMeta, culturePrimary, cultureStatus, cultureTest, nextStep, cultureStatusOptions, filterCultures, readDue, stageSub,
 } from './culture-grid';
 import type { CultureCaseView } from './culture-panel.component';
 
@@ -22,7 +22,10 @@ describe('Culture grid — status, day, read due (the culture queue\'s own field
   it('day counter, meta line and the stage sub-line', () => {
     const c = kase('1', [stg('Growth', 'open', { incubateUntil: iso(90) })]);
     expect(cultureDay(c, NOW)).toBe(2);
-    expect(cultureMeta(c)).toBe('Bacterial Culture & Sensitivity · Microbiology · Urine');
+    expect(cultureMeta(c)).toBe('Urine · Bacterial Culture & Sensitivity · Microbiology');
+    // The patient line, exactly as My Work ("32/F · AA0023"); an older server without the patient → the specimen.
+    expect(culturePatientMeta({ ...c, patient: { age: 32, sex: 'Female', mrn: 'AA0023' } })).toBe('32/F · AA0023');
+    expect(culturePatientMeta(c)).toBe('Urine');
     expect(stageSub(c, NOW, 'me')).toBe('Incubating · ready in 1h 30m');
     expect(stageSub(kase('2', [stg('Gram', 'picked', { holderUserId: 'me' })]), NOW, 'me')).toBe('You');
     expect(readDue(kase('3', [stg('Growth', 'done', { incubateUntil: iso(-30) })]), NOW)).toBeNull();   // a done read is never due
@@ -40,7 +43,7 @@ describe('Culture grid — Due (the next read) + the primary', () => {
     expect(culturePrimary(kase('2', [stg('Gram', 'done')], { caseState: 'awaiting_signout' }), NOW).label).toBe('Open');
     expect(nextStep(kase('3', [stg('Gram', 'done'), stg('Growth', 'open', { incubateUntil: iso(-5) })]), NOW)).toMatchObject({ label: 'Growth', tone: 'rose' });
     expect(nextStep(kase('4', [stg('Gram', 'done')], { caseState: 'awaiting_signout' }), NOW).label).toBe('Sign-out');
-    expect(cultureTest(kase('5', []))).toBe('Bacterial Culture & Sensitivity · Microbiology');
+    expect(cultureTest(kase('5', []))).toBe('Urine · Bacterial Culture & Sensitivity · Microbiology');
   });
 });
 

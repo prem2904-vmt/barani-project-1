@@ -67,13 +67,13 @@ const CRIT = [{ id: 'cr1', status: 'open', source: 'live', orderTestId: 'v1', or
 
 const cstage = (label: string, state: string, extra: Record<string, unknown> = {}) => ({ key: label.toLowerCase(), label, state, ...extra });
 const CULTURES = [
-  { orderTestId: 'cu1', caseState: 'in_progress', createdAt: ago(26 * 60), barcode: 'MICRO26001', sampleId: 'sc1', patientName: 'Mrs. Shanthi M', dailyNo: 31, dailyNoDay: today,
+  { orderTestId: 'cu1', caseState: 'in_progress', createdAt: ago(26 * 60), patient: { age: 34, sex: 'Female', mrn: 'AA0031' }, barcode: 'MICRO26001', sampleId: 'sc1', patientName: 'Mrs. Shanthi M', dailyNo: 31, dailyNoDay: today,
     testName: 'Bacterial Culture & Sensitivity', departmentName: 'Microbiology', specimen: 'Urine',
     stages: [cstage('Gram / Direct smear', 'done', { doneAt: ago(25 * 60), doneByName: 'Ravi T' }), cstage('Growth', 'open', { incubateUntil: ago(-90) }), cstage('ID', 'open'), cstage('AST', 'open')] },
-  { orderTestId: 'cu2', caseState: 'in_progress', createdAt: ago(50 * 60), barcode: 'MICRO26002', sampleId: 'sc2', patientName: LONG, dailyNo: 32, dailyNoDay: today,
+  { orderTestId: 'cu2', caseState: 'in_progress', createdAt: ago(50 * 60), patient: { age: 62, sex: 'Female', mrn: 'AA0007' }, barcode: 'MICRO26002', sampleId: 'sc2', patientName: LONG, dailyNo: 32, dailyNoDay: today,
     testName: 'Blood Culture', departmentName: 'Microbiology', specimen: 'Blood',
     stages: [cstage('Gram / Direct smear', 'done', { doneAt: ago(49 * 60) }), cstage('Growth', 'open', { incubateUntil: ago(40) }), cstage('AST', 'open')] },
-  { orderTestId: 'cu3', caseState: 'in_progress', createdAt: ago(3 * 60), barcode: 'MICRO26003', sampleId: 'sc3', patientName: 'Mr. Prem Kumar K', dailyNo: 33, dailyNoDay: today,
+  { orderTestId: 'cu3', caseState: 'in_progress', createdAt: ago(3 * 60), patient: { age: 41, sex: 'Male', mrn: 'AA0011' }, barcode: 'MICRO26003', sampleId: 'sc3', patientName: 'Mr. Prem Kumar K', dailyNo: 33, dailyNoDay: today,
     testName: 'Pus Culture', departmentName: 'Microbiology', specimen: 'Pus', stages: [cstage('Gram / Direct smear', 'picked', { holderName: 'Ravi T', pickedAt: ago(20) }), cstage('Growth', 'open')] },
   { orderTestId: 'cu4', caseState: 'awaiting_signout', createdAt: ago(72 * 60), barcode: 'MICRO26004', sampleId: 'sc4', patientName: 'Baby Leo S', dailyNo: 34, dailyNoDay: today,
     testName: 'Stool Culture', departmentName: 'Microbiology', specimen: 'Stool', stages: [cstage('Gram / Direct smear', 'done'), cstage('Growth', 'done')] },
@@ -286,6 +286,9 @@ for (const dark of [false, true]) {
     if (!isPhone()) {
       await expect(visible(page, '[data-testid="cg-grid"] .ag-row')).toBeVisible({ timeout: 20_000 });
       await expect(page.locator('[data-testid="cg-grid"] .ag-row.cg-row').locator('visible=true')).toHaveCount(4);
+      // The patient line matches My Work ("34/F · AA0031"); MICRO26004 (older API shape, no patient) falls back to its specimen.
+      await expect(visible(page, '[data-testid="cg-grid"] .ag-row:has-text("Mrs. Shanthi M") .wg-who__meta').first()).toHaveText('34/F · AA0031');
+      await expect(visible(page, '[data-testid="cg-grid"] .ag-row:has-text("Baby Leo S") .wg-who__meta').first()).toHaveText('Stool');
       expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="cg-grid"] .ag-row button')).toEqual([]);
       expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
       if (isTouch()) expect(await visible(page, '[data-testid="cg-grid"] .ag-row').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(63.5);

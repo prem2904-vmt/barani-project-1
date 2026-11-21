@@ -9,7 +9,7 @@ import {
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import {
   CultureFilter, cultureColumns, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep,
-  cultureStatusOptions, currentStage, filterCultures, readDue, stageSub,
+  cultureStatusOptions, culturePatientMeta, currentStage, filterCultures, readDue, stageSub,
 } from './culture-grid';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -66,6 +66,9 @@ export interface CultureCaseView {
    *  day, yyyy-MM-dd — on-screen only (utils/daily-no.ts). */
   dailyNo?: number | null;
   dailyNoDay?: string | null;
+  /** The patient line ("32/F · AA0023") — the same fields My Work's patient carries (DOB is the age's source).
+   *  Absent on older servers: the row falls back to the specimen. */
+  patient?: { dateOfBirth?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null; sex?: string | null; mrn?: string | null } | null;
   testName?: string | null;
   departmentName?: string | null;
   createdAt: string;
@@ -186,6 +189,7 @@ export interface CultureCaseView {
                 <span class="wg-pill" [attr.data-tone]="st.tone" [attr.title]="st.title"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
               </span>
               <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
+                @if (pmeta(c); as pm) { <span class="wg-who__meta pf-num">{{ pm }}</span> }
                 <span class="wg-who__meta">{{ meta(c) }}</span></span>
               <span class="wg-card__foot">
                 <span class="wg-tat" [class.wg-tat--late]="dueOf(c).late">Day {{ day(c) }} · {{ dueOf(c).text }}</span>
@@ -213,7 +217,7 @@ export interface CultureCaseView {
       <span class="wg-who">
         @if (fold() === 'tight') { <span class="wg-id">{{ c.barcode || c.sampleId || '—' }}</span> }
         <span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
-        @if (c.specimen) { <span class="wg-who__meta">{{ c.specimen }}</span> }
+        @if (pmeta(c); as pm) { <span class="wg-who__meta pf-num">{{ pm }}</span> }
         @if (fold() !== 'full') { <span class="wg-who__meta">{{ test(c) }}</span> }
         @if (fold() === 'tight') {
           @let n = next(c);
@@ -348,6 +352,7 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
   dueOf(c: CultureCaseView) { return dueCell(cultureDueMin(c, this.now())); }
   next(c: CultureCaseView) { return nextStep(c, this.now()); }
   test(c: CultureCaseView) { return cultureTest(c); }
+  pmeta(c: CultureCaseView) { return culturePatientMeta(c); }
   onRow(e: RowClickedEvent<CultureCaseView>): void {
     if ((e.event?.target as HTMLElement | null)?.closest?.('button, a, [role="menu"]')) return;
     if (e.data) this.open(e.data);
@@ -392,7 +397,7 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
     // Test Master's header filter on every data column.
     const rules: Record<string, ColDef<CultureCaseView>> = {
       sample: { ...alignCol('left'), ...textFilterCol<CultureCaseView>(c => [c.barcode, c.sampleId].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
-      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<CultureCaseView>(c => [c.patientName, c.testName, c.specimen].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
+      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<CultureCaseView>(c => [c.patientName, c.patient?.mrn, c.testName, c.specimen].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
       test: { ...alignCol('left', 'wg-c-wrap'), ...setFilterCol<CultureCaseView>(c => this.test(c), set) } as ColDef<CultureCaseView>,
       day: { ...alignCol('center'), ...numberFilterCol<CultureCaseView>(c => this.day(c)),
         sortable: true, sortingOrder: ['desc', 'asc', null], comparator: (_a: unknown, _b: unknown, na: { data?: CultureCaseView }, nb: { data?: CultureCaseView }) =>

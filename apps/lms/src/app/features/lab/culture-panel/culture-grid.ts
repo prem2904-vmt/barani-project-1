@@ -1,6 +1,7 @@
 import type { CultureCaseView, CultureStageView } from './culture-panel.component';
 import type { GridFold, WorkStatus } from '../../../shared/utils/work-grid';
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { formatPatientMeta } from '../../../shared/models/patient.model';
 
 /**
  * My Work's CULTURE tab as the work grid (owner 2026-11-20: "Culture is not following that grid in the lab"). Pure
@@ -46,9 +47,13 @@ export function cultureStatus(c: CultureCaseView, now: number): CultureStatus {
   return s('to_start', 'neutral');
 }
 
-/** "Bacterial Culture & Sensitivity · Microbiology · Urine". */
+/** "Urine · Bacterial Culture & Sensitivity · Microbiology" — the specimen leads the test line. */
 export function cultureMeta(c: CultureCaseView): string {
-  return [c.testName || 'Culture', c.departmentName, c.specimen].filter(Boolean).join(' · ');
+  return [c.specimen, c.testName || 'Culture', c.departmentName].filter(Boolean).join(' · ');
+}
+/** The patient line, exactly as My Work: "32/F · AA0023". An older server without the patient → the specimen. */
+export function culturePatientMeta(c: CultureCaseView): string {
+  return c.patient ? formatPatientMeta(c.patient as never) : c.specimen ?? '';
 }
 
 /** What the stage cell says under the stage name: who holds it, or the incubation countdown. */
@@ -94,9 +99,9 @@ export function nextStep(c: CultureCaseView, now: number): { label: string; tone
   const cur = currentStage(c);
   return { label: cur?.label ?? 'Sign-out', tone: st.tone, title: [st.label, stageSub(c, now, null)].filter(Boolean).join(' · ') };
 }
-/** "Bacterial Culture & Sensitivity · Microbiology" (+ specimen) — the Test column. */
+/** The Test column: "Urine · Bacterial Culture & Sensitivity · Microbiology". */
 export function cultureTest(c: CultureCaseView): string {
-  return [c.testName || 'Culture', c.departmentName].filter(Boolean).join(' · ');
+  return cultureMeta(c);
 }
 
 // ── Card-head filters ──────────────────────────────────────────────────────────
@@ -105,7 +110,7 @@ export interface CultureFilter { q: string; status: string; dept: string | null 
 export function filterCultures(rows: CultureCaseView[], f: CultureFilter, now: number): CultureCaseView[] {
   const q = f.q.trim().toLowerCase();
   return rows.filter(c =>
-    (!q || [c.barcode, c.sampleId, c.patientName, c.testName, c.specimen].filter(Boolean).join(' ').toLowerCase().includes(q) || matchesDailyNo(q, c))
+    (!q || [c.barcode, c.sampleId, c.patientName, c.patient?.mrn, c.testName, c.specimen].filter(Boolean).join(' ').toLowerCase().includes(q) || matchesDailyNo(q, c))
     && (f.status === 'all' || cultureStatus(c, now).key === f.status)
     && (!f.dept || c.departmentName === f.dept));
 }
