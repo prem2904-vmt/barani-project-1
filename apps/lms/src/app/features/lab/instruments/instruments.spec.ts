@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { INSTRUMENT_BRIDGE_SOURCE } from '../../../shared/instruments/instrument-bridge.service';
 import type { ElectronInstrumentsApi, InstrumentDto, ListenEvent } from '../../../shared/instruments/instrument.models';
 import { emptyInstrumentForm, buildInstrumentConfig } from '../../../shared/instruments/instrument-config';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { InstrumentsListComponent, searchInstruments } from './instruments-list.component';
 import { InstrumentEditorComponent } from './instrument-editor.component';
 import { SETTINGS_SECTIONS } from '../../admin/settings/settings-map';
@@ -350,5 +351,18 @@ describe('Instrument editor — web vs Electron', () => {
     expect(p.el.querySelectorAll('.pf-ie-img').length).toBe(0);
     expect(p.el.querySelector('.pf-ie-imgs__empty')!.textContent).toContain('No graphs received');
     expect(p.el.querySelector('img[src*="analyzer-samples"]')).toBeNull();
+  });
+});
+
+describe('Instruments grid — every data column sorts and filters on its real value', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  it('name / connection / status / unmatched sort + filter; actions is exempt', async () => {
+    const p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []) });
+    await flush(); p.f.detectChanges();
+    const cols = p.cmp.colDefs() as any[];
+    const data = cols.filter((c) => c.colId !== 'actions');
+    expect(data.map((c) => c.colId)).toEqual(['name', 'connection', 'status', 'unmatched']);
+    for (const c of data) expect(sortsAndFilters(c), c.colId).toBe(true);
+    expect(cols.find((c) => c.colId === 'actions').sortable).toBe(false);
   });
 });

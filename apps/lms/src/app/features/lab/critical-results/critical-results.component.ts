@@ -21,7 +21,8 @@ import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.comp
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { CriticalCommunicationDialogComponent } from '../../../shared/components/critical-communication-dialog/critical-communication-dialog.component';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { dateCol, textCol } from '../../../shared/utils/work-grid';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
 import { criticalStatusWords } from './critical-status-words';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
@@ -400,21 +401,20 @@ export class CriticalResultsComponent {
     const whole = (sub: string) => sub.split(' · ').map(x => `<span class="pf-cr-nb">${esc(x)}</span>`).join(' · ');
     const multiBranch = this.branchOptions().length > 1;
     const cols: ColDef<CriticalResultEvent>[] = [
-      { colId: 'detectedAt', headerName: 'Detected', minWidth: 190, width: 190, flex: 0, sort: 'desc',
-        valueGetter: p => p.data?.detectedAt ?? '',
+      dateCol<CriticalResultEvent>({ colId: 'detectedAt', headerName: 'Detected', minWidth: 190, width: 190, flex: 0, sort: 'desc',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(istStamp(p.data?.detectedAt), [
           p.data?.detectedByName ? 'by ' + p.data.detectedByName : '',
           p.data?.alertedAt ? p.data.alertedCount + ' alerted' : '',
         ].filter(Boolean).join(' · ')) },
-      { colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 120,
-        valueGetter: p => p.data?.patientName ?? '',
+        e => e.detectedAt ?? null, 'left'),
+      textCol<CriticalResultEvent>({ colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 120,
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.patientName ?? '',
           [p.data?.patientMrn, p.data?.orderNumber, multiBranch ? p.data?.branchName : null].filter(Boolean).join(' · ')) },
-      { colId: 'test', headerName: 'Test', flex: 1.4, minWidth: 110,
-        valueGetter: p => p.data?.testName ?? '',
+        e => [e.patientName, e.patientMrn, e.orderNumber].filter(Boolean).join(' · '), 'left', e => e.patientName ?? ''),
+      textCol<CriticalResultEvent>({ colId: 'test', headerName: 'Test', flex: 1.4, minWidth: 110,
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.testName ?? '', p.data?.summary) },
-      statusWordsCol<CriticalResultEvent>({ colId: 'status', headerName: 'Status', flex: 1.5, minWidth: this.isCoarse ? 200 : 230,
-        valueGetter: p => p.data?.status ?? '' }, e => {
+        e => e.testName ?? ''),
+      statusValuesCol<CriticalResultEvent>({ colId: 'status', headerName: 'Status', flex: 1.5, minWidth: this.isCoarse ? 200 : 230 }, e => {
         const lines: string[] = [];
         if (e.acknowledgedAt) lines.push(`${e.acknowledgedByName ?? ''}, ${istStamp(e.acknowledgedAt)}`);
         if (e.communicatedAt) lines.push(`Told ${e.communicatedToName ?? ''}${e.communicatedToRole ? ' (' + criticalRoleLabel(e.communicatedToRole) + ')' : ''} by ${criticalMethodLabel(e.communicationMethod).toLowerCase()}, ${istStamp(e.communicatedAt)}`
@@ -423,7 +423,7 @@ export class CriticalResultsComponent {
       }),
     ];
     if (canAct) cols.push({
-      colId: 'actions', headerName: 'Actions', headerClass: 'pf-cr-acthead', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      colId: 'actions', headerName: 'Actions', headerClass: 'pf-cr-acthead', sortable: false, filter: false, resizable: false, pinned: 'right', lockPinned: true,
       minWidth: web ? 196 : 116, width: web ? 196 : 116, flex: 0, cellClass: 'pf-cr-actcell',
       cellRenderer: CriticalActionsCellComponent,
       cellRendererParams: { web, userId: me, onMenu: (e: CriticalResultEvent, id: 'ack' | 'comm') => (id === 'ack' ? this.acknowledge(e) : this.dialogFor.set(e)) },
@@ -456,9 +456,8 @@ export class CriticalResultsComponent {
   protected phoneTrim(cols: ColDef<CriticalResultEvent>[]): ColDef<CriticalResultEvent>[] {
     if (!this.isPhone) return cols;
     const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
-    const record: ColDef<CriticalResultEvent> = {
+    const record: ColDef<CriticalResultEvent> = textCol<CriticalResultEvent>({
       colId: 'record', headerName: 'Record', flex: 1, minWidth: 150,
-      valueGetter: p => p.data?.patientName ?? '',
       cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const e = p.data; if (!e) return '';
         const st = criticalStatusWord(e.status);
@@ -467,7 +466,7 @@ export class CriticalResultsComponent {
           `<span>${esc(e.testName)} <span class="pf-cr-cell__sub">${esc(e.summary)}</span></span>` +
           `<span class="pf-cr-word" data-tone="${st.tone}" title="${st.label}">${e.status === 'open' ? "Not ack'd" : st.label}</span></div>`;
       },
-    };
+    }, e => [e.patientName, e.patientMrn, e.orderNumber, e.testName, e.status].filter(Boolean).join(' · '), 'left', e => e.patientName ?? '');
     const detected = cols.find(c => c.colId === 'detectedAt');
     const actions = cols.find(c => c.colId === 'actions');
     return [

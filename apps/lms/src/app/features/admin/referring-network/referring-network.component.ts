@@ -34,6 +34,9 @@ import {
   ALL_HOSPITALS, Doctor, Hospital, NO_HOSPITAL,
   doctorHospitalIds, doctorHospitals, doctorHospitalsLabel, filterDoctorsByHospital, linkDiff,
 } from './referring-network.model';
+import { ReferringPasteComponent } from './referring-paste.component';
+import type { PasteMode } from './referring-paste';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -65,7 +68,7 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
   selector: 'pf-referring-network',
   standalone: true,
   imports: [SkelGridComponent, BusyDirective, SkeletonRowsComponent, SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, SegmentedComponent, SelectComponent, DataGridComponent, NgTemplateOutlet],
+    HeroBandComponent, SegmentedComponent, SelectComponent, DataGridComponent, NgTemplateOutlet, ReferringPasteComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -168,7 +171,20 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
                 Add doctor
               </button>
             }
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press pf-rn-paste"
+                    [disabled]="editorOpen()" (click)="openPaste()" data-testid="rn-paste-open"
+                    [attr.aria-label]="view() === 'doctors' ? 'Paste doctors from a sheet' : 'Paste hospitals from a sheet'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+              Paste from sheet
+            </button>
     </ng-template>
+
+      <!-- ── Paste from a sheet (bulk add) ──────────────────────── -->
+      @if (paste(); as pm) {
+        <pf-referring-paste [mode]="pm" [doctors]="doctorsAll()" [hospitals]="hospitals()"
+                            (saved)="onPasteSaved()" (closed)="paste.set(null)"></pf-referring-paste>
+      }
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
@@ -602,7 +618,17 @@ export class ReferringNetworkComponent implements OnInit {
   readonly linkEditor = signal<{ hospitalId: string; hospitalName: string; doctorIds: string[] } | null>(null);
   readonly savingLink = signal(false);
   /** An editor modal is open: its footer Save is the view's ONE primary. */
-  readonly editorOpen = computed(() => !!this.hospitalEditor() || !!this.doctorEditor() || !!this.linkEditor());
+  readonly editorOpen = computed(() => !!this.hospitalEditor() || !!this.doctorEditor() || !!this.linkEditor() || !!this.paste());
+  /** Paste from a sheet (bulk add) — open for the current view's list. */
+  readonly paste = signal<PasteMode | null>(null);
+  openPaste(): void { this.paste.set(this.view()); }
+  /** "Add doctor" / "Add hospital" for the current view (a host card head calls it). */
+  addNew(): void {
+    if (this.view() === 'hospitals') this.openHospitalEditor(null);
+    else this.openDoctorEditor(null, this.filterHospital()?.id ?? null);
+  }
+  /** Rows were saved from the paste sheet: re-read both lists (links + counts are server-owned). */
+  async onPasteSaved(): Promise<void> { await Promise.all([this.loadHospitals(), this.loadDoctors()]); }
 
   // Inline, per-field backend errors for the editors (e.g. duplicate name/code).
   readonly hospitalFieldErr = signal<Record<string, string>>({});
@@ -759,13 +785,17 @@ export class ReferringNetworkComponent implements OnInit {
     const web = this.web() && !this.phone();
     this.hospitalFilter(); this.hospitals();
     const cols: ColDef<Doctor>[] = [
-      { headerName: 'Doctor', colId: 'name', field: 'name', flex: 1.3, minWidth: 190, sort: 'asc',
+      // Every data column sorts + filters on its real value (owner 2026-11-21); the name filter also finds the
+      // designation and registration number shown under it.
+      textCol<Doctor>({ headerName: 'Doctor', colId: 'name', flex: 1.3, minWidth: 190, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<Doctor>) => sgCell(p.data?.name, [p.data?.designation, p.data?.registrationNo ? 'Reg ' + p.data.registrationNo : null].filter(Boolean).join(' · ') || null, true) },
-      { headerName: 'Qualification', colId: 'qualification', valueGetter: q => q.data?.qualification || '', flex: 0.8, minWidth: 120 },
-      { headerName: 'Hospital(s)', colId: 'hospitals', valueGetter: q => q.data ? doctorHospitalsLabel(q.data) : '', flex: 1.3, minWidth: 180,
+        d => [d.name, d.designation, d.registrationNo].filter(Boolean).join(' '), 'left', d => d.name),
+      textCol<Doctor>({ headerName: 'Qualification', colId: 'qualification', flex: 0.8, minWidth: 140 }, d => d.qualification || ''),
+      textCol<Doctor>({ headerName: 'Hospital(s)', colId: 'hospitals', flex: 1.3, minWidth: 180,
         cellRenderer: (p: ICellRendererParams<Doctor>) => sgChips(p.data ? doctorHospitals(p.data).map(h => h.name) : [], 'Independent') },
-      { headerName: 'Department', colId: 'department', valueGetter: q => q.data?.department || q.data?.specialisation || '', flex: 0.8, minWidth: 130 },
-      { headerName: 'Phone', colId: 'phone', field: 'phone', width: 140, flex: 0, cellClass: 'pf-num' },
+        d => doctorHospitalsLabel(d)),
+      textCol<Doctor>({ headerName: 'Department', colId: 'department', flex: 0.8, minWidth: 140 }, d => d.department || d.specialisation || ''),
+      textCol<Doctor>({ headerName: 'Phone', colId: 'phone', width: 150, flex: 0, cellClass: 'pf-num' }, d => d.phone || ''),
       sgPillCol<Doctor>(d => d.isActive),
       sgActionsCol<Doctor>(web, [], 3, p => (p.data ? sgActions(web, this.doctorActions(p.data)) : document.createElement('span'))),
     ];
@@ -776,13 +806,14 @@ export class ReferringNetworkComponent implements OnInit {
   readonly hospitalColDefs = computed<ColDef<Hospital>[]>(() => {
     const web = this.web() && !this.phone();
     const cols: ColDef<Hospital>[] = [
-      { headerName: 'Hospital', colId: 'name', field: 'name', flex: 1.4, minWidth: 190, sort: 'asc',
+      textCol<Hospital>({ headerName: 'Hospital', colId: 'name', flex: 1.4, minWidth: 190, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<Hospital>) => sgCell(p.data?.name, p.data?.address || null, true) },
-      { headerName: 'Code', colId: 'code', valueGetter: q => q.data?.code || '—', width: 110, flex: 0, cellClass: 'pf-num' },
-      { headerName: 'Doctors', colId: 'doctors', valueGetter: q => q.data?.doctorCount ?? 0, width: 110, flex: 0, type: 'rightAligned', cellClass: 'pf-num' },
-      { headerName: 'Phone', colId: 'phone', valueGetter: q => q.data?.phone || '', width: 140, flex: 0, cellClass: 'pf-num' },
-      { headerName: 'GSTIN', colId: 'gstin', valueGetter: q => q.data?.gstin || '', flex: 0.9, minWidth: 150, cellClass: 'pf-num',
-        cellRenderer: (p: ICellRendererParams<Hospital>) => { const el = sgCell(p.data?.gstin || null, p.data?.gstin ? null : 'Not set'); if (!p.data?.gstin) el.firstElementChild?.remove(); return el; } },
+        h => [h.name, h.address].filter(Boolean).join(' '), 'left', h => h.name),
+      textCol<Hospital>({ headerName: 'Code', colId: 'code', width: 116, flex: 0, cellClass: 'pf-num', valueFormatter: q => q.value || '—' }, h => h.code || ''),
+      numberCol<Hospital>({ headerName: 'Doctors', colId: 'doctors', width: 120, flex: 0, cellClass: 'pf-num' }, h => h.doctorCount ?? 0),
+      textCol<Hospital>({ headerName: 'Phone', colId: 'phone', width: 150, flex: 0, cellClass: 'pf-num' }, h => h.phone || ''),
+      textCol<Hospital>({ headerName: 'GSTIN', colId: 'gstin', flex: 0.9, minWidth: 150, cellClass: 'pf-num',
+        cellRenderer: (p: ICellRendererParams<Hospital>) => { const el = sgCell(p.data?.gstin || null, p.data?.gstin ? null : 'Not set'); if (!p.data?.gstin) el.firstElementChild?.remove(); return el; } }, h => h.gstin || ''),
       sgPillCol<Hospital>(h => h.isActive),
       sgActionsCol<Hospital>(web, [], 2, p => (p.data ? sgActions(web, this.hospitalActions(p.data)) : document.createElement('span'))),
     ];

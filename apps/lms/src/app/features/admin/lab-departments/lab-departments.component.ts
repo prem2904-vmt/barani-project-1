@@ -3,6 +3,8 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, co
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import {
@@ -502,13 +504,13 @@ export class LabDepartmentsComponent implements OnInit {
   readonly colDefs = computed<ColDef<Department>[]>(() => {
     const web = !this.isCoarse && !this.phone();
     const cols: ColDef<Department>[] = [
-      { colId: 'name', field: 'name', headerName: 'Department', flex: 1.6, minWidth: 180, sort: 'asc',
+      // `field` stays so an inline rename still writes through it; the helper's value getter returns the same name.
+      textCol<Department>({ colId: 'name', field: 'name', headerName: 'Department', flex: 1.6, minWidth: 180, sort: 'asc',
         editable: p => !!p.data && this.isLabMade(p.data),
         valueParser: p => String(p.newValue ?? '').trim().slice(0, 80) || p.oldValue,
-        cellRenderer: (p: ICellRendererParams<Department>) => sgCell(p.data?.name, null, true) },
-      { colId: 'code', field: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num' },
-      { colId: 'origin', headerName: 'Origin', width: 170, minWidth: 140, flex: 0,
-        valueGetter: p => (p.data && this.isLabMade(p.data) ? this.originLabel.lab : this.originLabel.catalogue),
+        cellRenderer: (p: ICellRendererParams<Department>) => sgCell(p.data?.name, null, true) }, d => d.name ?? ''),
+      textCol<Department>({ colId: 'code', field: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num' }, d => d.code ?? ''),
+      valuesCol<Department>({ colId: 'origin', headerName: 'Origin', width: 170, minWidth: 140, flex: 0,
         cellRenderer: (p: ICellRendererParams<Department>) => {
           const el = document.createElement('span');
           const own = !!p.data && this.isLabMade(p.data);
@@ -516,7 +518,7 @@ export class LabDepartmentsComponent implements OnInit {
           el.dataset['testid'] = 'ld-origin';
           el.textContent = own ? this.originLabel.lab : this.originLabel.catalogue;
           return el;
-        } },
+        } }, d => (this.isLabMade(d) ? this.originLabel.lab : this.originLabel.catalogue), WorkSetFilterComponent),
       sgStatusCol<Department>(d => d.isActive, d => d.name, d => this.toggleActive(d)),
     ];
     // Rename / Delete only exist for the lab's own departments: no blank, divided actions column for a catalogue-only list.

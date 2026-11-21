@@ -1,6 +1,6 @@
 import type { ColDef } from 'ag-grid-community';
 import {
-  SORT_CYCLE, choiceCol, compareNum, compareText, dateCol, duePresets, durationCol, durationText, epochOf, moneyCol, numComparator, numberCol,
+  SORT_CYCLE, choiceCol, compareNum, compareText, dateCol, duePresets, durationCol, durationText, epochOf, moneyCol, moneyComparator, numComparator, toPaise, numberCol,
   ratioCol, ratioValue, shapeCol, sortsAndFilters, textCol, textComparator, tokenCol, tokenLabelValue, tokenValue, valuesCol, waitPresets,
 } from './work-grid';
 
@@ -108,8 +108,10 @@ describe('money — "₹450 due" vs "Paid" sorts on the amount (paise)', () => {
     expect(sortRows(pay, rows).map(r => r.id)).toEqual(['paid', 'due99.99', 'due450', 'due1200.5', 'notbilled']);
     expect(sortRows(pay, rows, true).map(r => r.id)).toEqual(['due1200.5', 'due450', 'due99.99', 'paid', 'notbilled']);
   });
-  it('paise are integers (no float drift); the filter is in rupees with Has dues / Nothing due', () => {
-    expect((pay.valueGetter as (p: { data: P }) => unknown)({ data: rows[4] })).toBe(9999);
+  it('the value stays in rupees (editors / ₹ formatters read it); the compare is in integer paise; filter in rupees', () => {
+    expect((pay.valueGetter as (p: { data: P }) => unknown)({ data: rows[4] })).toBe(99.99);
+    expect(toPaise(99.99)).toBe(9999);
+    expect(moneyComparator(0.1 + 0.2, 0.3)).toBe(0);
     expect((pay as unknown as Fv).filterValueGetter({ data: rows[0] })).toBe(450);
     expect(presetOf(pay, 'wgDue').predicate([], 450)).toBe(true);
     expect(presetOf(pay, 'wgDue').predicate([], 0)).toBe(false);
@@ -217,5 +219,15 @@ describe('every helper builds sort + filter together (a column cannot be made wi
     const rows: Dr[] = [{ id: 'P1', v: 5 }, { id: 'P1-detail', v: 5 }, { id: 'P2', v: 1 }, { id: 'P3', v: 5 }];
     expect(sortRows(c, rows).map(r => r.id)).toEqual(['P2', 'P1', 'P1-detail', 'P3']);
     expect(sortRows(c, rows, true).map(r => r.id)).toEqual(['P1', 'P1-detail', 'P3', 'P2']);
+  });
+});
+
+describe('helpers keep a per-row (function) cellClass', () => {
+  it('calls the function per cell, with the alignment class first', () => {
+    const c = textCol<{ late: boolean }>({ colId: 'x', cellClass: (p: { data?: { late: boolean } }) => (p.data?.late ? 'late' : '') } as never, () => 'v');
+    const fn = c.cellClass as unknown as (p: unknown) => string[];
+    expect(typeof fn).toBe('function');
+    expect(fn({ data: { late: true } })).toEqual(['wg-c-left', 'late']);
+    expect(fn({ data: { late: false } })).toEqual(['wg-c-left']);
   });
 });

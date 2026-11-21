@@ -15,6 +15,9 @@ import { FORMS } from '../shared/rx-schedule';
 import type { DrugForm, DrugSchedule } from '../shared/opd.models';
 import { PharmacyApi, type DrugEdit, type PharmacyDrugRow, type PregnancyRisk } from './pharmacy.api';
 import { errText, inr, scheduleLabel } from './pharmacy-math';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
+import { numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
 import { PregnancyRiskEditorComponent } from './pregnancy-risk-editor.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -53,6 +56,43 @@ export function buildDrugEdits(dirty: Map<string, Partial<DrugGridRow>>, rows: D
 
 export function originWord(o: PharmacyDrugRow['origin'] | undefined, isNew?: boolean): string {
   return isNew ? 'New' : o === 'override' ? 'Changed here' : o === 'local' ? 'Your drug' : 'Master';
+}
+
+/**
+ * The drug master grid's columns. Editable columns keep their RAW value as the cell value (the select / checkbox
+ * editors and the `field` write-back read it) and sort / filter on the word the user sees.
+ */
+export function drugMasterColumns(): ColDef<DrugGridRow>[] {
+  return [
+    textCol<DrugGridRow>({ field: 'generic', headerName: 'Generic', flex: 2, minWidth: 220, editable: true, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.generic ?? ''),
+    textCol<DrugGridRow>({ field: 'name', headerName: 'Brand', flex: 1.4, minWidth: 160, editable: true, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.name ?? ''),
+    textCol<DrugGridRow>({ field: 'strength', headerName: 'Strength', width: 100, editable: true }, r => r.strength ?? ''),
+    rawChoiceCol<DrugGridRow>({ field: 'form', headerName: 'Form', width: 110, editable: true, cellEditor: 'agSelectCellEditor', cellEditorParams: { values: Object.keys(FORMS) } }, r => r.form, r => r.form ?? ''),
+    rawChoiceCol<DrugGridRow>({ field: 'schedule', headerName: 'Schedule', width: 110, editable: true, cellEditor: 'agSelectCellEditor', cellEditorParams: { values: SCHEDULES }, valueFormatter: p => scheduleLabel(p.value) }, r => r.schedule, r => scheduleLabel(r.schedule)),
+    textCol<DrugGridRow>({ field: 'hsnCode', headerName: 'HSN', width: 84, editable: true }, r => r.hsnCode ?? ''),
+    numberCol<DrugGridRow>({ field: 'taxSlab', headerName: 'GST', width: 85, editable: true, type: 'rightAligned', cellEditor: 'agSelectCellEditor', cellEditorParams: { values: GST_SLABS }, valueFormatter: p => `${p.value ?? 0}%` }, r => r.taxSlab ?? 0, 'right'),
+    numberCol<DrugGridRow>({ field: 'defaultMrp', headerName: 'MRP', width: 100, editable: true, type: 'rightAligned', cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 }, valueFormatter: p => (p.value == null ? '' : inr(p.value)) }, r => r.defaultMrp ?? null, 'right'),
+    textCol<DrugGridRow>({ field: 'unit', headerName: 'Per', width: 85, editable: true }, r => r.unit ?? ''),
+    rawChoiceCol<DrugGridRow>({
+      field: 'pregnancyRisk', headerName: 'Pregnancy', width: 140, editable: true, cellEditor: PregnancyRiskEditorComponent,
+      cellRenderer: (p: { value?: PregnancyRisk | '' | null }) => {
+        const r = p.value;
+        const label = pregnancyRiskLabel(r);
+        if (!label) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
+        const tone = r === 'avoid' || r === 'contraindicated' ? 'color:var(--red-text,#dc2626)' : r === 'caution' ? 'color:#b45309' : 'color:var(--text-tertiary)';
+        return `<span style="${tone};font-size:12.5px;font-weight:600">${label}</span>`;
+      },
+    }, r => r.pregnancyRisk ?? '', r => pregnancyRiskLabel(r.pregnancyRisk) || 'Not set'),
+    numberCol<DrugGridRow>({ field: 'onHand', headerName: 'In stock', width: 100, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') }, r => r.onHand ?? null, 'right'),
+    rawChoiceCol<DrugGridRow>({ field: 'isActive', headerName: 'On', width: 75, editable: true, cellEditor: 'agCheckboxCellEditor', cellRenderer: 'agCheckboxCellRenderer' }, r => r.isActive, r => (r.isActive ? 'On' : 'Off')),
+    valuesCol<DrugGridRow>({
+      colId: 'origin', headerName: 'Source', width: 190,
+      cellRenderer: (p: { data?: DrugGridRow; value: string }) =>
+        p.data?.origin === 'override' && !p.data.isNew
+          ? `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span> <button type="button" class="pf-btn pf-btn--tertiary" data-act="revert" style="height:28px">Revert</button>`
+          : `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span>`,
+    }, r => originWord(r.origin, r.isNew), WorkSetFilterComponent),
+  ];
 }
 
 /**
@@ -131,37 +171,7 @@ export class PharmacyDrugMasterComponent {
   });
   protected readonly rowId = (p: { data: DrugGridRow }) => p.data.key;
 
-  protected readonly cols: ColDef<DrugGridRow>[] = [
-    { field: 'generic', headerName: 'Generic', flex: 2, minWidth: 220, editable: true, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'name', headerName: 'Brand', flex: 1.4, minWidth: 160, editable: true, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'strength', headerName: 'Strength', width: 100, editable: true },
-    { field: 'form', headerName: 'Form', width: 110, editable: true, cellEditor: 'agSelectCellEditor', cellEditorParams: { values: Object.keys(FORMS) } },
-    { field: 'schedule', headerName: 'Schedule', width: 110, editable: true, cellEditor: 'agSelectCellEditor', cellEditorParams: { values: SCHEDULES }, valueFormatter: p => scheduleLabel(p.value) },
-    { field: 'hsnCode', headerName: 'HSN', width: 84, editable: true },
-    { field: 'taxSlab', headerName: 'GST', width: 85, editable: true, type: 'rightAligned', cellEditor: 'agSelectCellEditor', cellEditorParams: { values: GST_SLABS }, valueFormatter: p => `${p.value ?? 0}%` },
-    { field: 'defaultMrp', headerName: 'MRP', width: 100, editable: true, type: 'rightAligned', cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 }, valueFormatter: p => (p.value == null ? '' : inr(p.value)) },
-    { field: 'unit', headerName: 'Per', width: 85, editable: true },
-    {
-      field: 'pregnancyRisk', headerName: 'Pregnancy', width: 140, editable: true, cellEditor: PregnancyRiskEditorComponent,
-      cellRenderer: (p: { value?: PregnancyRisk | '' | null }) => {
-        const r = p.value;
-        const label = pregnancyRiskLabel(r);
-        if (!label) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
-        const tone = r === 'avoid' || r === 'contraindicated' ? 'color:var(--red-text,#dc2626)' : r === 'caution' ? 'color:#b45309' : 'color:var(--text-tertiary)';
-        return `<span style="${tone};font-size:12.5px;font-weight:600">${label}</span>`;
-      },
-    },
-    { field: 'onHand', headerName: 'In stock', width: 100, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') },
-    { field: 'isActive', headerName: 'On', width: 75, editable: true, cellEditor: 'agCheckboxCellEditor', cellRenderer: 'agCheckboxCellRenderer' },
-    {
-      colId: 'origin', headerName: 'Source', width: 190, sortable: false,
-      valueGetter: p => originWord(p.data?.origin, p.data?.isNew),
-      cellRenderer: (p: { data?: DrugGridRow; value: string }) =>
-        p.data?.origin === 'override' && !p.data.isNew
-          ? `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span> <button type="button" class="pf-btn pf-btn--tertiary" data-act="revert" style="height:28px">Revert</button>`
-          : `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span>`,
-    },
-  ];
+  protected readonly cols: ColDef<DrugGridRow>[] = drugMasterColumns();
 
   constructor() { this.load(); }
 

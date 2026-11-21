@@ -19,7 +19,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { bandFilter } from '../../../shared/utils/band-search';
 import { OPD_API } from '../shared/opd-api';
 import { OpdAdminApi, OpdDoctorAdminRow, OpdDoctorLite, OpdServiceRow } from './opd-admin.api';
-import { WEEK_DAYS, inr, opdGridDark, opdGridLight } from './opd-admin.util';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
+import { WEEK_DAYS, daysText, inr, opdGridDark, opdGridLight } from './opd-admin.util';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -166,28 +168,27 @@ export class DoctorsAdminComponent {
   readonly perDoctorServices = computed(() => this.services().filter((s) => s.priceMode === 'per_doctor' && s.isActive));
 
   readonly colDefs = computed<ColDef<DoctorRow>[]>(() => [
-    { field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 170, pinned: 'left' },
-    { headerName: 'Department', minWidth: 140, valueGetter: (p) => p.data?.department || '—' },
-    { headerName: 'Qualifications', minWidth: 160, valueGetter: (p) => (p.data?.specializations ?? []).join(', ') || '—' },
+    textCol<DoctorRow>({ field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 170, pinned: 'left' }, (r) => r.name ?? ''),
+    textCol<DoctorRow>({ colId: 'department', headerName: 'Department', minWidth: 140, valueFormatter: (p) => p.value || '—' }, (r) => r.department ?? ''),
+    textCol<DoctorRow>({ colId: 'qualifications', headerName: 'Qualifications', minWidth: 160, valueFormatter: (p) => p.value || '—' }, (r) => (r.specializations ?? []).join(', ')),
     // The ONE registration number (users.RegistrationId) — what prints under the signature.
-    { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'pf-num',
-      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' },
-    { field: 'room', headerName: 'Room', editable: true, minWidth: 110,
-      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 40) || null, valueFormatter: (p) => p.value || '—' },
-    { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'pf-num',
+    textCol<DoctorRow>({ field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'pf-num',
+      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' }, (r) => r.regNo ?? ''),
+    textCol<DoctorRow>({ field: 'room', headerName: 'Room', editable: true, minWidth: 110,
+      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 40) || null, valueFormatter: (p) => p.value || '—' }, (r) => r.room ?? ''),
+    textCol<DoctorRow>({ field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'pf-num',
       valueParser: (p) => { const s = String(p.newValue ?? '').trim().toUpperCase(); return /^[A-Z0-9]{0,4}$/.test(s) ? (s || null) : p.oldValue; },
-      valueFormatter: (p) => p.value || '—' },
+      valueFormatter: (p) => p.value || '—' }, (r) => r.tokenPrefix ?? ''),
     // The doctor's assistant (consult v6 Page) — a tenant user; blank = none.
-    { colId: 'assistant', headerName: 'Assistant', minWidth: 200, sortable: false, autoHeight: false,
-      valueGetter: (p) => p.data?.assistantUserId ?? '',
+    rawChoiceCol<DoctorRow>({ colId: 'assistant', headerName: 'Assistant', minWidth: 200, autoHeight: false,
       cellRenderer: AssistantCellComponent,
       cellRendererParams: { options: this.userOpts(), onPick: (r: DoctorRow, id: string) => { r.assistantUserId = id || null; this.markDirty(r.id); } } },
-    { field: 'days', headerName: 'Sits on', minWidth: 290, flex: 1.6, sortable: false,
-      cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) },
-    ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => ({
+      (r) => r.assistantUserId ?? '', (r) => this.userOpts().find((o) => o.value === (r.assistantUserId ?? ''))?.label ?? 'None'),
+    textCol<DoctorRow>({ field: 'days', headerName: 'Sits on', minWidth: 290, flex: 1.6,
+      cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) }, (r) => daysText(r.days)),
+    ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => numberCol<DoctorRow>({
       colId: `fee:${s.id}`, headerName: `${s.name} (₹)`, headerTooltip: `${s.code} — per-doctor fee; blank = not offered`,
       editable: true, width: 150, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
-      valueGetter: (p) => p.data?.[`fee:${s.id}`] ?? null,
       valueSetter: (p) => {
         if (!p.data) return false;
         const t = String(p.newValue ?? '').trim();
@@ -197,11 +198,11 @@ export class DoctorsAdminComponent {
         return true;
       },
       valueFormatter: (p) => (p.value == null ? 'Not offered' : inr(p.value)),
-    })),
-    { field: 'fee', headerName: 'Default consult fee (₹)', editable: true, width: 190, flex: 0, headerTooltip: 'Legacy desk consult fee (pre-OPD Master)',
+    }, (r) => r[`fee:${s.id}`] ?? null, 'right')),
+    numberCol<DoctorRow>({ field: 'fee', headerName: 'Default consult fee (₹)', editable: true, width: 190, flex: 0, headerTooltip: 'Legacy desk consult fee (pre-OPD Master)',
       cellClass: 'pf-num', type: 'numericColumn',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
-      valueFormatter: p => '₹' + (p.value ?? 0) },
+      valueFormatter: p => '₹' + (p.value ?? 0) }, (r) => r.fee ?? null, 'right'),
   ]);
 
   constructor() {

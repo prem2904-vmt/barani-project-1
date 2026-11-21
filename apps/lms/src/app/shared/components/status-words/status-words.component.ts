@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewEncapsulatio
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { StatusWords } from '../../utils/status-words';
+import { valuesCol, type WorkAlign } from '../../utils/work-grid';
+import { WorkSetFilterComponent } from '../work-set-filter/work-set-filter.component';
 
 /**
  * `<pf-status-words [words]="w">` — THE status cell (owner design D, 2026-11-21): two lines of words, no pill, no dot.
@@ -66,4 +68,14 @@ export function statusWordsCol<T>(def: ColDef<T>, words: (row: T) => StatusWords
     cellRenderer: StatusWordsCellComponent,
     cellRendererParams: { statusWords: words } satisfies StatusWordsCellParams<T>,
   };
+}
+
+/**
+ * A status column that SORTS and FILTERS (owner 2026-11-21: "wherever a grid is used, filter and sort must be there"):
+ * drawn as words ({@link statusWordsCol}), the shared set filter of the line-1 words present, sorted by `rank` (a
+ * workflow order, e.g. Active before Inactive) when given, else by the words. Use it for every status column.
+ */
+export function statusValuesCol<T>(def: ColDef<T>, words: (row: T) => StatusWords | null | undefined,
+  rank?: (row: T) => number | null, a: WorkAlign = 'left'): ColDef<T> {
+  return valuesCol<T>(statusWordsCol<T>(def, words), r => words(r)?.now ?? '', WorkSetFilterComponent, a, rank);
 }

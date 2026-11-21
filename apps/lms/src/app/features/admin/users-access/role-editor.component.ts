@@ -10,6 +10,8 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SG_NARROW_MQ, SG_PHONE_MQ, sgCell, sgGridTheme, sgMedia, sgSwitch } from '../../../shared/settings-grid/settings-grid';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -36,6 +38,7 @@ interface PermRow {
   sensitive: boolean;
   group: string;
 }
+type Row = PermRow & { allowed: boolean };
 interface PermGroupView {
   key: string;
   label: string;
@@ -375,12 +378,12 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
   readonly gridTheme = sgGridTheme();
   readonly getRowId = (p: GetRowIdParams<PermRow & { allowed: boolean }>) => p.data.perm.id;
   readonly defaultColDef: ColDef = { sortable: false, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
-  readonly colDefs = computed<ColDef<PermRow & { allowed: boolean }>[]>(() => {
+  readonly colDefs = computed<ColDef<Row>[]>(() => {
     const all = !this.groupKey();
     const groupLabel = new Map(PERMISSION_GROUPS.map(g => [g.key, g.label] as const));
-    const cols: ColDef<PermRow & { allowed: boolean }>[] = [
-      { colId: 'allowed', headerName: 'Allowed', width: 96, minWidth: 96, maxWidth: 96, flex: 0, wrapText: false, autoHeight: false,
-        cellRenderer: (p: ICellRendererParams<PermRow & { allowed: boolean }>) => {
+    const cols: ColDef<Row>[] = [
+      valuesCol<Row>({ colId: 'allowed', headerName: 'Allowed', width: 96, minWidth: 96, maxWidth: 96, flex: 0, wrapText: false, autoHeight: false,
+        cellRenderer: (p: ICellRendererParams<Row>) => {
           const d = p.data;
           if (!d) return document.createElement('span');
           const el = sgSwitch(d.allowed, d.title, () => this.setGranted(d.perm.id, !this.isGranted(d.perm.id)));
@@ -388,22 +391,20 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
           b.setAttribute('aria-label', d.title);
           b.title = d.allowed ? 'Allowed — switch off' : 'Not allowed — switch on';
           return el;
-        } },
-      { colId: 'title', headerName: 'Permission', flex: 1.1, minWidth: 180,
-        valueGetter: p => p.data?.title ?? '',
-        cellRenderer: (p: ICellRendererParams<PermRow & { allowed: boolean }>) =>
+        } }, r => (r.allowed ? 'Allowed' : 'Not allowed'), WorkSetFilterComponent, 'left', r => (r.allowed ? 0 : 1)),
+      textCol<Row>({ colId: 'title', headerName: 'Permission', flex: 1.1, minWidth: 180,
+        cellRenderer: (p: ICellRendererParams<Row>) =>
           sgCell(p.data?.title, all && !this.phone() ? groupLabel.get(p.data?.group ?? '') : null, true) },
-      { colId: 'what', headerName: 'What it does', flex: 2, minWidth: 220, valueGetter: p => p.data?.what ?? '',
-        cellRenderer: (p: ICellRendererParams<PermRow & { allowed: boolean }>) => sgCell(p.data?.what) },
-      { colId: 'impact', headerName: 'Impact', width: 128, minWidth: 116, flex: 0, wrapText: false, autoHeight: false,
-        valueGetter: p => (p.data?.sensitive ? 'High impact' : ''),
-        cellRenderer: (p: ICellRendererParams<PermRow & { allowed: boolean }>) => {
+        r => r.title ?? ''),
+      textCol<Row>({ colId: 'what', headerName: 'What it does', flex: 2, minWidth: 220,
+        cellRenderer: (p: ICellRendererParams<Row>) => sgCell(p.data?.what) }, r => r.what ?? ''),
+      valuesCol<Row>({ colId: 'impact', headerName: 'Impact', width: 128, minWidth: 116, flex: 0, wrapText: false, autoHeight: false,
+        cellRenderer: (p: ICellRendererParams<Row>) => {
           const el = document.createElement('span');
           if (p.data?.sensitive) { el.className = 'pf-chip pf-chip--static re-perm__flag'; el.textContent = 'High impact'; }
           return el;
-        } },
-      { colId: 'code', headerName: 'Code', flex: 0.8, minWidth: 150, valueGetter: p => p.data?.perm.code ?? '',
-        cellClass: 'pf-num re-code' },
+        } }, r => (r.sensitive ? 'High impact' : 'Standard'), WorkSetFilterComponent, 'left', r => (r.sensitive ? 0 : 1)),
+      textCol<Row>({ colId: 'code', headerName: 'Code', flex: 0.8, minWidth: 150, cellClass: 'pf-num re-code' }, r => r.perm.code ?? ''),
     ];
     if (this.phone()) return cols.filter(c => c.colId === 'allowed' || c.colId === 'title' || c.colId === 'impact');
     return cols;

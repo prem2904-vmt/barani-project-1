@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subject, catchError, debounceTime, map, of, switchMap } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef } from 'ag-grid-community';
+import { moneyCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -661,12 +662,22 @@ export class InsightsDashboardComponent {
 
   private tableVm(w: RecipeWidget, d: WidgetData): TableView & { colDefs: ColDef[] } {
     const t = tableView(w, d);
-    return {
-      ...t,
-      colDefs: t.columns.map((c) => ({
-        field: c.field, headerName: c.headerName, ...(c.num ? { type: 'rightAligned', cellClass: 'pf-num' } : { minWidth: 140, flex: 1.4 }),
-      })),
-    };
+    type Row = Record<string, string | number>;
+    // The cells are formatted text ("₹1,200"); sort + filter read the REAL number by row position (`__i`).
+    const rows: Row[] = t.rows.map((r, i) => ({ ...r, __i: i }));
+    const idx = (r: Row) => Number(r['__i']);
+    const colDefs = t.columns.map((c): ColDef => {
+      const def = { field: c.field, headerName: c.headerName, ...(c.num ? { type: 'rightAligned', cellClass: 'pf-num' } : { minWidth: 140, flex: 1.4 }) } as ColDef<Row>;
+      if (!c.num) {
+        // Time buckets sort in time order (their labels are words), names sort by text.
+        return textCol<Row>(def, r => String(r[c.field] ?? ''), 'left', d.bucketUnit ? r => String(idx(r)).padStart(6, '0') : undefined) as ColDef;
+      }
+      const si = Number(c.field.slice(1));
+      const s = d.series[si];
+      const val = (r: Row) => { const v = s?.values[idx(r)]; return v == null || !Number.isFinite(v) ? null : v; };
+      return ((s?.unit ?? d.unit) === 'money' ? moneyCol<Row>(def, val, 'right') : numberCol<Row>(def, val, 'right')) as ColDef;
+    });
+    return { ...t, rows, colDefs };
   }
 
   private mq(query: string, set: (v: boolean) => void): boolean {

@@ -11,6 +11,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Location } from '@angular/common';
 import { Observable, Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
+import { dateCol, moneyCol, numberCol, textCol } from '../../shared/utils/work-grid';
 import { AllCommunityModule, ColDef, ModuleRegistry } from 'ag-grid-community';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -865,12 +866,12 @@ export class InsightsComponent {
     };
   });
   readonly profitCols = computed<ColDef<ProfitabilityRow>[]>(() => [
-    { field: 'name', headerName: this.profitView() === 'test' ? 'Test' : 'Department', flex: 1.6, minWidth: 180, wrapText: true, autoHeight: true },
-    { field: 'revenue', headerName: 'Revenue', type: 'rightAligned', minWidth: 120, valueFormatter: p => formatRupee(p.value as number), cellClass: 'pf-ins-num' },
-    { field: 'cost', headerName: 'Partner cost', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
-      valueFormatter: p => ((p.data as ProfitabilityRow)?.hasOutsourcedLines ? formatRupee(p.value as number) : '—') },
-    { field: 'margin', headerName: 'Margin', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
-      valueFormatter: p => ((p.data as ProfitabilityRow)?.hasOutsourcedLines ? formatRupee(p.value as number) : '—') },
+    textCol<ProfitabilityRow>({ field: 'name', headerName: this.profitView() === 'test' ? 'Test' : 'Department', flex: 1.6, minWidth: 180, wrapText: true, autoHeight: true }, r => r.name ?? ''),
+    moneyCol<ProfitabilityRow>({ field: 'revenue', headerName: 'Revenue', type: 'rightAligned', minWidth: 120, valueFormatter: p => formatRupee(p.value as number), cellClass: 'pf-ins-num' }, r => r.revenue ?? null, 'right'),
+    moneyCol<ProfitabilityRow>({ field: 'cost', headerName: 'Partner cost', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
+      valueFormatter: p => (p.value != null ? formatRupee(p.value as number) : '—') }, r => (r.hasOutsourcedLines ? r.cost ?? null : null), 'right'),
+    moneyCol<ProfitabilityRow>({ field: 'margin', headerName: 'Margin', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
+      valueFormatter: p => (p.value != null ? formatRupee(p.value as number) : '—') }, r => (r.hasOutsourcedLines ? r.margin ?? null : null), 'right'),
   ]);
 
   readonly revenueTotals = computed(() => {
@@ -955,23 +956,32 @@ export class InsightsComponent {
     if (!cfg) return [];
     if (this.phone()) return [this.phoneRecordCol()];
     const hidden = new Set(this.hiddenCols()[cfg.key] ?? []);
-    return this.availableCols().map((c): ColDef => ({
-      field: c.field, headerName: c.headerName, hide: hidden.has(c.field),
-      // Names take the spare width and wrap (never cut); codes, dates and
-      // amounts are sized to their content (autoSizeStrategy) on one line.
-      ...((c.flex ?? 1) > 1
-        ? { flex: c.flex, minWidth: Math.round((c.minWidth ?? 110) * 0.8), wrapText: true, autoHeight: true }
-        : { flex: undefined, minWidth: 72, wrapText: false, autoHeight: false }),
-      type: c.money || c.num ? 'rightAligned' : undefined,
-      cellClass: c.money || c.num || c.date || c.ref ? 'pf-ins-num' : undefined,
-      tooltipValueGetter: c.ref ? (p) => String(p.value ?? '') : undefined,
-      valueFormatter: c.date
-        ? (p: { value: unknown }) => (p.value ? formatDate(p.value as string, 'd MMM y, h:mm a', 'en-IN', LAB_TIME_ZONE) : '')
-        : c.money ? (p: { value: unknown }) => (p.value != null ? formatRupee(p.value as number) : '')
-        : c.ref ? (p: { value: unknown }) => (p.value ? String(p.value).slice(0, 8).toUpperCase() : '')
-        : c.num ? (p: { value: unknown }) => (p.value != null ? formatCount(p.value as number) : '')
-        : (p: { value: unknown }) => (p.value == null || p.value === '' ? '—' : String(p.value)),
-    }));
+    return this.availableCols().map((c): ColDef => {
+      const def: ColDef = {
+        field: c.field, headerName: c.headerName, hide: hidden.has(c.field),
+        // Names take the spare width and wrap (never cut); codes, dates and
+        // amounts are sized to their content (autoSizeStrategy) on one line.
+        ...((c.flex ?? 1) > 1
+          ? { flex: c.flex, minWidth: Math.round((c.minWidth ?? 110) * 0.8), wrapText: true, autoHeight: true }
+          : { flex: undefined, minWidth: 72, wrapText: false, autoHeight: false }),
+        type: c.money || c.num ? 'rightAligned' : undefined,
+        cellClass: c.money || c.num || c.date || c.ref ? 'pf-ins-num' : undefined,
+        tooltipValueGetter: c.ref ? (p) => String(p.value ?? '') : undefined,
+        valueFormatter: c.date
+          ? (p: { value: unknown }) => (p.value ? formatDate(p.value as number, 'd MMM y, h:mm a', 'en-IN', LAB_TIME_ZONE) : '')
+          : c.money ? (p: { value: unknown }) => (p.value != null ? formatRupee(p.value as number) : '')
+          : c.ref ? (p: { value: unknown }) => (p.value ? String(p.value).slice(0, 8).toUpperCase() : '')
+          : c.num ? (p: { value: unknown }) => (p.value != null ? formatCount(p.value as number) : '')
+          : (p: { value: unknown }) => (p.value == null || p.value === '' ? '—' : String(p.value)),
+      };
+      // Generated from data: every column still sorts + filters on its real value, by kind.
+      const raw = (r: Record<string, unknown>) => r[c.field];
+      const num = (r: Record<string, unknown>) => { const v = raw(r); return v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v); };
+      if (c.money) return moneyCol<Record<string, unknown>>(def as ColDef<Record<string, unknown>>, num, 'right') as ColDef;
+      if (c.num) return numberCol<Record<string, unknown>>(def as ColDef<Record<string, unknown>>, num, 'right') as ColDef;
+      if (c.date) return dateCol<Record<string, unknown>>(def as ColDef<Record<string, unknown>>, r => (raw(r) as string | number | null) ?? null, 'left') as ColDef;
+      return textCol<Record<string, unknown>>(def as ColDef<Record<string, unknown>>, r => { const v = raw(r); return v == null ? '' : String(v); }) as ColDef;
+    });
   });
   private fmtCell(c: { money?: boolean; date?: boolean; num?: boolean; ref?: boolean }, v: unknown): string {
     if (v == null || v === '') return '';
@@ -986,13 +996,13 @@ export class InsightsComponent {
    *  first money (or count) column as the value, every other column on a
    *  muted meta line. Nothing cut, no sideways scroll. */
   private phoneRecordCol(): ColDef {
+    type Row = Record<string, unknown>;
     const cols = this.availableCols();
     const texts = cols.filter(c => !c.money && !c.date && !c.num && !c.ref);
     const value = cols.find(c => c.money) ?? cols.find(c => c.num);
     const esc = (t: string) => t.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
-    return {
-      colId: 'record', headerName: this.listCfg()?.label ?? '', flex: 1, minWidth: 200, sortable: false,
-      valueGetter: p => (p.data ? cols.map(c => this.fmtCell(c, (p.data as Record<string, unknown>)[c.field])).join(' ') : ''),
+    return textCol<Row>({
+      colId: 'record', headerName: this.listCfg()?.label ?? '', flex: 1, minWidth: 200,
       cellRenderer: (p: { data?: Record<string, unknown> }) => {
         const d = p.data;
         if (!d) return '';
@@ -1004,7 +1014,7 @@ export class InsightsComponent {
           (value ? `<span class="pf-ins-rec__v">${esc(this.fmtCell(value, d[value.field]))}</span>` : '') +
           `</span>${meta ? `<span class="pf-ins-rec__m">${esc(meta)}</span>` : ''}</div>`;
       },
-    };
+    }, r => cols.map(c => this.fmtCell(c, r[c.field])).filter(Boolean).join(' ')) as ColDef;
   }
 
   /** Fixed-content columns fit their content; the name column flexes. */

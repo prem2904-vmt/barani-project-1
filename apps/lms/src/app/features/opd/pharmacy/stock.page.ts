@@ -14,6 +14,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
 import { PharmacyApi, type BatchRow, type MoveRow, type PharmacyDrugRow, type StockRow, type SupplierRow } from './pharmacy.api';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
 import { errText, expiryBand, expiryChip, expiryLabel, inr, monthsToExpiry, needsPrescription, scheduleLabel, unitWords } from './pharmacy-math';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
@@ -214,18 +216,7 @@ export class PharmacyStockPage {
   protected readonly canReceive = computed(() => !!this.rDrug() && !!this.rBatch().trim() && !!this.rExpiry() && this.rQty() > 0 && this.rMrp() >= 0);
 
   protected readonly rowId = (p: { data: StockRow }) => p.data.drugId;
-  protected readonly cols: ColDef<StockRow>[] = [
-    { field: 'name', headerName: 'Drug', flex: 1.5, minWidth: 140, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'generic', headerName: 'Generic', flex: 2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'schedule', headerName: 'Sch', width: 76, valueFormatter: p => scheduleLabel(p.value) },
-    { field: 'onHand', headerName: 'On hand', width: 104, type: 'rightAligned', valueFormatter: p => unitWords(p.value, p.data?.unit, p.data?.form) },
-    { field: 'nearestExpiry', headerName: 'Next expiry', width: 106, valueFormatter: p => expiryLabel(p.value),
-      cellClass: p => p.value ? expiryChip(p.value, labToday()).cls : '' },
-    { field: 'expiredQty', headerName: 'Expired', width: 86, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') },
-    { field: 'minQty', headerName: 'Reorder at', width: 100, type: 'rightAligned', editable: true, valueParser: p => Math.max(0, Number(p.newValue) || 0) },
-    { field: 'reorderQty', headerName: 'Order qty', width: 94, type: 'rightAligned', editable: true, valueParser: p => Math.max(0, Number(p.newValue) || 0) },
-    { colId: 'low', headerName: '', width: 84, cellDataType: 'text', valueGetter: p => (p.data?.low ? 'Reorder' : ''), cellStyle: { color: 'var(--red-text, #dc2626)' } },
-  ];
+  protected readonly cols: ColDef<StockRow>[] = stockColumns();
 
   constructor() {
     this.load();
@@ -329,4 +320,25 @@ export class PharmacyStockPage {
   // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
   // fresh on reload, sign-out and branch switch.
   private readonly _viewState = inject(ViewStateService).bind('opd.stock', { q: this.q, filter: this.filter });
+}
+
+/** The stock grid's columns. Reorder-at / Order-qty stay editable (the `field` still receives the edit). */
+export function stockColumns(): ColDef<StockRow>[] {
+  // The expiry chip colour is a cellClass FUNCTION; the helper only merges string classes, so it is added after.
+  const base = dateCol<StockRow>({ field: 'nearestExpiry', headerName: 'Next expiry', width: 106, valueFormatter: p => expiryLabel(p.data?.nearestExpiry) }, r => r.nearestExpiry ?? null, 'left');
+  const expiryCol: ColDef<StockRow> = { ...base, cellClass: p => [...(base.cellClass as string[]), p.data?.nearestExpiry ? expiryChip(p.data.nearestExpiry, labToday()).cls : ''] };
+  const level = (p: { newValue: unknown }) => Math.max(0, Number(p.newValue) || 0);
+  return [
+    textCol<StockRow>({ field: 'name', headerName: 'Drug', flex: 1.5, minWidth: 140, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.name ?? ''),
+    textCol<StockRow>({ field: 'generic', headerName: 'Generic', flex: 2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.generic ?? ''),
+    rawChoiceCol<StockRow>({ field: 'schedule', headerName: 'Sch', width: 76, valueFormatter: p => scheduleLabel(p.value) }, r => r.schedule, r => scheduleLabel(r.schedule)),
+    numberCol<StockRow>({ field: 'onHand', headerName: 'On hand', width: 104, type: 'rightAligned', valueFormatter: p => unitWords(p.value, p.data?.unit, p.data?.form) }, r => r.onHand ?? null, 'right'),
+    expiryCol,
+    numberCol<StockRow>({ field: 'expiredQty', headerName: 'Expired', width: 86, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') }, r => r.expiredQty ?? null, 'right'),
+    numberCol<StockRow>({ field: 'minQty', headerName: 'Reorder at', width: 100, type: 'rightAligned', editable: true, valueParser: level }, r => r.minQty ?? null, 'right'),
+    numberCol<StockRow>({ field: 'reorderQty', headerName: 'Order qty', width: 94, type: 'rightAligned', editable: true, valueParser: level }, r => r.reorderQty ?? null, 'right'),
+    // Was a header-less text cell ("Reorder" in red); now headed so it can be sorted / filtered.
+    rawChoiceCol<StockRow>({ colId: 'low', headerName: 'Reorder', width: 96, cellDataType: 'text', valueFormatter: p => (p.value ? 'Reorder' : ''), cellStyle: { color: 'var(--red-text, #dc2626)' } },
+      r => (r.low ? 'Reorder' : ''), r => (r.low ? 'Reorder' : 'OK')),
+  ];
 }

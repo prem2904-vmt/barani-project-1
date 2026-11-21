@@ -24,7 +24,9 @@ import { plural } from '../../../shared/utils/plural';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { InventoryEnableCardComponent } from './inventory-enable-card.component';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
 import {
   STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, stockWords,
@@ -467,20 +469,17 @@ export class InventoryComponent implements OnInit {
   readonly itemCols = computed<ColDef<InvItem>[]>(() => {
     const phone = this.phone();
     return [
-      { colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true, sortable: true,
-        valueGetter: p => p.data?.name ?? '',
+      textCol<InvItem>({ colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true,
         cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.isActive === false ? 'Off' : ''].filter(Boolean).join(' · ')) },
-      { colId: 'category', headerName: 'Category', width: 130, hide: phone, sortable: true,
-        valueGetter: p => p.data?.category ?? '', valueFormatter: p => (p.value ? String(p.value)[0].toUpperCase() + String(p.value).slice(1) : '') },
-      { colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', sortable: true, cellClass: 'inv-num',
-        valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
-      { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
-        valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
-      statusWordsCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140, sortable: true,
-        valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
-        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b) },
-        it => stockWords(it, phone)),
-
+        it => `${it.name ?? ''} ${it.sku ?? ''}`.trim(), 'left', it => it.name ?? ''),
+      valuesCol<InvItem>({ colId: 'category', headerName: 'Category', width: 130, hide: phone },
+        it => (it.category ? String(it.category)[0].toUpperCase() + String(it.category).slice(1) : ''), WorkSetFilterComponent),
+      numberCol<InvItem>({ colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', cellClass: 'inv-num',
+        valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() }, it => it.onHand ?? 0, 'right'),
+      numberCol<InvItem>({ colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
+        valueFormatter: p => qty(p.value) }, it => it.reorderLevel ?? 0, 'right'),
+      statusValuesCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140 },
+        it => stockWords(it, phone), it => ['out', 'low', 'ok'].indexOf(stockLevel(it))),
     ];
   });
   onGridReady(e: GridReadyEvent<InvItem>) { this.gridApi = e.api; }

@@ -14,10 +14,11 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
 import { bridgeStatusWords } from '../../../shared/bridges/bridge-status-words';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
@@ -233,24 +234,29 @@ export class BridgesListComponent {
   readonly colDefs = computed<ColDef<BridgeDto>[]>(() => {
     const web = this.web() && !this.phone();
     const cols: ColDef<BridgeDto>[] = [
-      { colId: 'name', headerName: 'Bridge', flex: 1.4, minWidth: 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+      textCol<BridgeDto>({ colId: 'name', headerName: 'Bridge', flex: 1.4, minWidth: 170, sort: 'asc',
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(p.data?.name ?? '', [p.data?.serialShort, plural(p.data?.analyzers?.length ?? 0, 'analyzer')].filter(Boolean).join(' · '), true) },
-      { colId: 'branch', headerName: 'Branch', flex: 0.7, minWidth: 90, valueGetter: (p) => p.data?.branchName ?? '' },
-      statusWordsCol<BridgeDto>({ colId: 'status', headerName: 'Status', flex: 1, minWidth: 150, valueGetter: (p) => STATUS_ORDER.indexOf((p.data?.status ?? 'never') as typeof STATUS_ORDER[number]) },
-        (d) => bridgeStatusWords(d.status, d.status !== 'online' && d.lastSeenAt ? `Last seen ${agoText(d.lastSeenAt).toLowerCase()}` : '')),
-      { colId: 'lastMessage', headerName: 'Last message', flex: 0.8, minWidth: 110, valueGetter: (p) => p.data?.lastMessageAt ?? '',
+        (d) => d.name ?? ''),
+      textCol<BridgeDto>({ colId: 'branch', headerName: 'Branch', flex: 0.7, minWidth: 90 }, (d) => d.branchName ?? ''),
+      statusValuesCol<BridgeDto>({ colId: 'status', headerName: 'Status', flex: 1, minWidth: 150 },
+        (d) => bridgeStatusWords(d.status, d.status !== 'online' && d.lastSeenAt ? `Last seen ${agoText(d.lastSeenAt).toLowerCase()}` : ''),
+        (d) => STATUS_ORDER.indexOf((d.status ?? 'never') as typeof STATUS_ORDER[number])),
+      dateCol<BridgeDto>({ colId: 'lastMessage', headerName: 'Last message', flex: 0.8, minWidth: 110,
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(agoText(p.data?.lastMessageAt) || '—') },
-      { colId: 'queue', headerName: 'Queue', width: 90, minWidth: 84, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueTotal ?? 0,
+        (d) => d.lastMessageAt ?? null, 'left'),
+      numberCol<BridgeDto>({ colId: 'queue', headerName: 'Queue', width: 90, minWidth: 84, flex: 0, type: 'rightAligned',
         cellRenderer: (p: { data?: BridgeDto }) => {
           const held = p.data?.quarantineTotal ?? 0;
           const el = sgCell(String(p.data?.queueTotal ?? 0), held ? `${held} held` : null);
           el.classList.add('pf-num');
           return el;
-        } },
-      { colId: 'version', headerName: 'Version', flex: 0.8, minWidth: 100, valueGetter: (p) => p.data?.version ?? '',
+        } }, (d) => d.queueTotal ?? 0, 'right'),
+      textCol<BridgeDto>({ colId: 'version', headerName: 'Version', flex: 0.8, minWidth: 100,
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(versionText(p.data ?? { version: null })) },
-      { colId: 'wifi', headerName: 'Wi-Fi', flex: 1.1, minWidth: 130, valueGetter: (p) => p.data?.network?.ssid ?? '',
+        (d) => d.version ?? ''),
+      textCol<BridgeDto>({ colId: 'wifi', headerName: 'Wi-Fi', flex: 1.1, minWidth: 130,
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(wifiSummary(p.data ?? {})) },
+        (d) => d.network?.ssid ?? ''),
       sgActionsCol<BridgeDto>(web, [], 1, (p) => sgActions(web, [
         { label: 'Open', aria: `Open ${p.data?.name ?? 'Bridge'}`, path: SG_ICON.open, icon: true, run: () => this.open(p.data) },
       ])),

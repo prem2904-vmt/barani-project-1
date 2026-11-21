@@ -3,6 +3,7 @@ import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { PricingComponent } from './pricing.component';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -100,5 +101,21 @@ describe('PricingComponent — per-specimen rows', () => {
     c.discard();
     expect(c.dirtyCount()).toBe(0);
     expect(c.specimenPriceNow('cs', 'SPEC005')).toBe(250);
+  });
+});
+
+describe('PricingComponent — grid columns sort + filter on the real value', () => {
+  it('every data column sorts and filters; the editable price stays in rupees and keeps its setter', () => {
+    const { c } = make();
+    const cols = c.prCols as any[];
+    expect(cols.map(x => x.colId)).toEqual(['name', 'type', 'offered', 'price']);
+    for (const col of cols) expect(sortsAndFilters(col), col.colId).toBe(true);
+    const price = cols.find(x => x.colId === 'price');
+    expect(price.editable).toBe(true);
+    expect(typeof price.valueSetter).toBe('function');
+    const row = (spec: string | null) => ({ key: 'cs|' + spec, testId: 'cs', spec, name: 'x', meta: '', type: 'Specimen' });
+    expect(price.valueGetter({ data: row('SPEC005') })).toBe(250);   // rupees, not paise
+    expect(price.valueGetter({ data: row('SPEC013') })).toBeNull();  // blank = base price
+    expect(price.valueGetter({ data: { key: 'cs', testId: 'cs', spec: null, name: 'x', meta: '', type: 'Test' } })).toBe(100);
   });
 });

@@ -7,6 +7,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { DEPARTMENT_ORIGIN_LABEL, departmentErrorMessage, departmentOrigin } from '../../../shared/utils/test-origin';
 
 /**
@@ -74,6 +75,15 @@ describe('Lab departments — Departments tab', () => {
   /** Grid helpers: a column's renderer output for a row (the grid's DOM is AG-Grid's). */
   const cell = (c: any, colId: string, d: any) => c.colDefs().find((x: any) => x.colId === colId).cellRenderer({ data: d }) as HTMLElement;
   const dept = (c: any, code: string) => c.departments().find((d: any) => d.code === code);
+
+  it('every data column sorts and filters on its real value; actions is exempt', () => {
+    const { c } = render();
+    const cols = c.colDefs() as any[];
+    const data = cols.filter((x) => x.colId !== 'actions');
+    expect(data.map((x) => x.colId)).toEqual(['name', 'code', 'origin', 'status']);
+    for (const x of data) expect(sortsAndFilters(x), x.colId).toBe(true);
+    expect(cols.find((x) => x.colId === 'actions').sortable).toBe(false);
+  });
 
   it('Test Master grid: every department, its origin, and only lab-made ones get rename / delete', () => {
     const { c, el } = render();

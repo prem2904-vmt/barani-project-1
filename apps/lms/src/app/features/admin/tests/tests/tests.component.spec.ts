@@ -10,6 +10,7 @@ import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { sortsAndFilters } from '../../../../shared/utils/work-grid';
 
 /**
  * Test Master single-source — Stage 1 safety net for the Test Master GRID.
@@ -209,7 +210,9 @@ describe('Test Master grid — Active/Inactive switch + status filter', () => {
     const row = c.rowData().find((r: any) => r.id === 'urea');
     const sw = col(c, 'status').cellRenderer({ data: row, context: {} }).querySelector('button[role=switch]');
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(col(c, 'status').valueGetter({ data: row })).toBe('Inactive');
+    // Sorts Active first (rank), filters on the words.
+    expect(col(c, 'status').valueGetter({ data: row })).toBe(1);
+    expect(col(c, 'status').filterValueGetter({ data: row })).toBe('Inactive');
     expect(c.getRowClass({ data: row })).toBe('pf-tm-row--off');
     expect(c.getRowClass({ data: c.rowData()[0] })).toBeUndefined();
     const name = col(c, 'name').cellRenderer({ data: row, value: row.name });
@@ -550,5 +553,46 @@ describe('Test Master batch Save — only when something changed (owner 2026-11-
     expect(c.dirtyCount()).toBe(1);
     c.saveAll();
     expect(c.dirtyCount()).toBe(0);
+  });
+});
+
+describe('Test Master grid — every data column sorts and filters on its real value', () => {
+  it('flat view: every column but the actions sorts + filters; actions is icon-only', () => {
+    const { c } = make([hb()]);
+    for (const d of c.colDefs()) {
+      const id = d.colId ?? d.field;
+      if (id === 'actions') { expect(d.sortable).toBe(false); expect(d.filter).toBe(false); continue; }
+      expect(sortsAndFilters(d), id).toBe(true);
+    }
+  });
+
+  it('tree view (profiles): the same, and the bundle name sorts too', () => {
+    const { c } = make([hb({ type: 'profile' })]);
+    c.setType('profile');
+    for (const d of c.colDefs()) {
+      const id = d.colId ?? d.field;
+      if (id === 'actions') continue;
+      expect(sortsAndFilters(d), id).toBe(true);
+    }
+  });
+
+  it('editing still writes the field: price sorts by number, container keeps the tube key for its editor', () => {
+    const { c } = make([hb({ tubeColor: 'purple' })]);
+    const row = hb({ tubeColor: 'purple', price: 1200 });
+    expect(col(c, 'price').valueGetter({ data: row })).toBe(1200);
+    expect(col(c, 'price').field).toBe('price');
+    expect(col(c, 'tubeColor').valueGetter({ data: row })).toBe('purple');
+    expect(col(c, 'tubeColor').field).toBe('tubeColor');
+    expect(col(c, 'tubeColor').editable).toBe(true);
+    expect(col(c, 'tatHours').field).toBe('tatHours');
+  });
+
+  it('a bundle keeps its members under it after a sort', () => {
+    const { c } = make([hb({ type: 'profile' })]);
+    c.setType('profile');
+    const n = (key: string, level: number) => ({ data: { _key: key, _level: level } });
+    const nodes = [n('b', 0), n('a>x', 1), n('a', 0), n('b>y', 1), n('a>w', 1)];
+    c.postSortRows({ nodes });
+    expect(nodes.map(x => x.data._key)).toEqual(['b', 'b>y', 'a', 'a>x', 'a>w']);
   });
 });

@@ -205,7 +205,7 @@ describe('ND audit D — Referral labs', () => {
     const btns = Array.from(acts.querySelectorAll('.pf-rowact'));
     expect(btns.map(t => t.querySelector('.pf-rowact__t')!.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
     expect(btns.every(b => b.classList.contains('pf-rowact--icon'))).toBe(true);
-    expect(cols.find((c: any) => c.colId === 'code').cellClass).toBe('pf-num');
+    expect(cols.find((c: any) => c.colId === 'code').cellClass).toContain('pf-num');
     const depts = cols.find((c: any) => c.colId === 'departments').cellRenderer({ data: labs[0] }) as HTMLElement;
     expect(depts.textContent).toContain('Microbiology');
     hygiene(p.el);

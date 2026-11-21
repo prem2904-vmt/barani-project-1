@@ -173,6 +173,9 @@
    identity transform behind (fill: both), which made the card the sheet's containing block (the sheet hid under the
    card head, its own head off screen). No transform while a sheet is open. */
 .pf-tp__body:has(.pf-sg-side--sheet), .pf-ss__scroll:has(.pf-sg-side--sheet) { animation: none !important; transform: none !important; }
+/* Same for a page's own fixed modal (the referring network's editors and its Paste-from-sheet panel): without this the
+   panel body's leftover transform clipped the modal inside the Settings card. */
+.pf-tp__body:has(.pf-rn-modal), .pf-ss__scroll:has(.pf-rn-modal) { animation: none !important; transform: none !important; }
 .pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) { display: flex; flex-direction: column; height: 100%; min-height: 0; padding-bottom: 6px; }
 .pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) > * { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 :root .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page,
@@ -184,6 +187,17 @@
    border; the card's radius clips the grid's corners. Shell main card, overview inline page and their wrappers. */
 .pf-tp__body:has(pf-data-grid), .pf-ss__scroll:has(pf-data-grid), .pf-ss__main:has(pf-data-grid), .pf-ov__inline:has(pf-data-grid) {
   padding: 0 !important;
+}
+/* …and a page of setting GROUPS that holds a grid in one group (Front desk = booking slots + priority engine + the
+   referring list + the work-grid preview) keeps the flush body for its wide content, while its ROWS, group heads and
+   hints keep the card's inner gutter like every other settings panel (owner 2026-11-21: labels / inputs were flush
+   against the card edges). Margin, not padding, so a row's divider stays inset too. A STACKED row holds wide content
+   (the work-grid preview, a list): only its label takes the gutter, the content keeps the card's width. */
+:is(.pf-tp__body, .pf-ss__scroll, .pf-ss__main, .pf-ov__inline):has(pf-data-grid) :is(.pf-sgroup__head, .pf-sgroup__hint, pf-setting-row:not(.pf-srow--stack), pf-setting-row.pf-srow--stack > .pf-srow__text, pf-settings-savebar) {
+  margin-inline: 24px;
+}
+@media (max-width: 767px) {
+  :is(.pf-tp__body, .pf-ss__scroll, .pf-ss__main, .pf-ov__inline):has(pf-data-grid) :is(.pf-sgroup__head, .pf-sgroup__hint, pf-setting-row:not(.pf-srow--stack), pf-setting-row.pf-srow--stack > .pf-srow__text, pf-settings-savebar) { margin-inline: 14px; }
 }
 .pf-tp__panel:has(pf-data-grid), .pf-ss__card:has(pf-data-grid) { overflow: hidden; }
 /* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
@@ -3035,3 +3049,7 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
 .ag-header-cell.wg-h-left .ag-header-cell-text,
 .ag-header-cell.wg-h-center .ag-header-cell-text,
 .ag-header-cell.wg-h-right .ag-header-cell-text { text-overflow: clip; white-space: normal; overflow-wrap: normal; word-break: keep-all; }
+
+/* No browser number spinners anywhere (the app's stepper is pf-number-input; a plain number field is just a field). */
+input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+input[type='number']::-webkit-outer-spin-button, input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

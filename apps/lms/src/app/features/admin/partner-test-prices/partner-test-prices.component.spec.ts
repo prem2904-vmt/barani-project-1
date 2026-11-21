@@ -2,6 +2,7 @@ import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { PartnerTestPricesComponent } from './partner-test-prices.component';
 import { renderBandPage } from '../admin-band.spec-helpers';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 
 describe('Partner prices — Test Master grid (pf-data-grid)', () => {
   const rows = [
@@ -38,5 +39,17 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
       rows: [{ id: 'p1', referralLabId: 'rl1', testCatalogKey: 'CBC', testName: 'Complete Blood Count', cost: 200, effectiveFrom: '2026-10-01' }],
     });
     void vi;
+  });
+
+  it('every data column sorts + filters on its real value and stays editable; actions is exempt', () => {
+    const p = make();
+    const cols = p.cmp.colDefs as any[];
+    const data = cols.filter((c) => c.colId !== 'actions');
+    expect(data.map((c) => c.colId)).toEqual(['testCatalogKey', 'testName', 'cost', 'effectiveFrom']);
+    for (const c of data) { expect(sortsAndFilters(c), c.colId).toBe(true); expect(c.editable, c.colId).toBe(true); expect(c.field, c.colId).toBe(c.colId); }
+    const row = { cost: 180, effectiveFrom: '2026-10-01' };
+    expect(data[2].valueGetter({ data: row })).toBe(180);
+    expect(data[3].valueGetter({ data: row })).toBe('2026-10-01');
+    expect(cols.find((c) => c.colId === 'actions').sortable).toBe(false);
   });
 });

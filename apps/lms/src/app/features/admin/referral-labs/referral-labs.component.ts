@@ -26,6 +26,7 @@ import { DataGridComponent } from '../../../shared/components/data-grid/data-gri
 import {
   SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgByStatus, sgCell, sgChips, sgGridTheme, sgMedia,
   sgPillCol, sgRowOff, sgStatusOptions, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { textCol } from '../../../shared/utils/work-grid';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -271,14 +272,17 @@ export class ReferralLabsComponent implements OnInit {
     const web = this.web() && !this.phone();
     this._departments();
     const cols: ColDef<ReferralLab>[] = [
-      { colId: 'name', headerName: 'Lab', flex: 1.3, minWidth: 180, sort: 'asc', valueGetter: p => p.data?.name ?? '',
+      textCol<ReferralLab>({ colId: 'name', headerName: 'Lab', flex: 1.3, minWidth: 180, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<ReferralLab>) => sgCell(p.data?.name, p.data?.address || null, true) },
-      { colId: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num', valueGetter: p => p.data?.code || '—' },
-      { colId: 'contact', headerName: 'Contact', flex: 1, minWidth: 160, valueGetter: p => p.data?.contactName ?? '',
+        l => `${l.name ?? ''} ${l.address ?? ''}`.trim(), 'left', l => l.name ?? ''),
+      textCol<ReferralLab>({ colId: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
+        valueFormatter: p => (p.value as string) || '—' }, l => l.code || ''),
+      textCol<ReferralLab>({ colId: 'contact', headerName: 'Contact', flex: 1, minWidth: 160,
         cellRenderer: (p: ICellRendererParams<ReferralLab>) => sgCell(p.data?.contactName || '—', [p.data?.contactPhone, p.data?.contactEmail].filter(Boolean).join(' · ') || null) },
-      { colId: 'departments', headerName: 'Departments handled', flex: 1.4, minWidth: 180, sortable: false,
-        valueGetter: p => (p.data ? this.deptCodesOf(p.data).map(c => this.deptName(c)).join(', ') : ''),
+        l => [l.contactName, l.contactPhone, l.contactEmail].filter(Boolean).join(' · '), 'left', l => l.contactName ?? ''),
+      textCol<ReferralLab>({ colId: 'departments', headerName: 'Departments handled', flex: 1.4, minWidth: 180,
         cellRenderer: (p: ICellRendererParams<ReferralLab>) => sgChips(p.data ? this.deptCodesOf(p.data).map(c => this.deptName(c)) : [], 'Any department') },
+        l => this.deptCodesOf(l).map(c => this.deptName(c)).join(', ')),
       sgPillCol<ReferralLab>(l => l.isActive),
       sgActionsCol<ReferralLab>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span'))),
     ];

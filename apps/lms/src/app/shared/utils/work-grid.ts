@@ -162,7 +162,11 @@ export function choiceFilterCol<P>(params: P, component: unknown): { filter: unk
 function withAlign<T>(def: ColDef<T>, a: WorkAlign): ColDef<T> {
   const al = ALIGN_CLASS[a];
   const list = (x: unknown) => (Array.isArray(x) ? x : x ? String(x).split(/\s+/).filter(Boolean) : []) as string[];
-  return { ...def, cellClass: [al.cellClass, ...list(def.cellClass)], headerClass: [al.headerClass, ...list(def.headerClass)] };
+  // A function class (a per-row class, e.g. an expiry tone) is KEPT: called per cell, the alignment class first.
+  const merge = <F>(own: unknown, base: string): F => (typeof own === 'function'
+    ? ((p: unknown) => [base, ...list((own as (p: unknown) => unknown)(p))]) as F
+    : [base, ...list(own)] as F);
+  return { ...def, cellClass: merge<ColDef<T>['cellClass']>(def.cellClass, al.cellClass), headerClass: merge<ColDef<T>['headerClass']>(def.headerClass, al.headerClass) };
 }
 /** Text column: text filter over `get` (name · MRN · phone…), sorted case-insensitively by `sortBy` (default `get`) —
  *  the WHOLE text, not its first word; blanks / "—" last both ways. */
@@ -303,12 +307,15 @@ export function durationCol<T>(def: ColDef<T>, minutes: Getter<T, number | null>
   }, o.align ?? 'center');
 }
 
-/** Money column ("₹450 due" vs "Paid"): sorts on PAISE (integer, no float drift), filters in rupees. `rupees` =
- *  the amount the column is about (the due); null = nothing billed (sorts last). */
+/** Money column ("₹450 due" vs "Paid"): the cell VALUE stays in rupees (so an editor, a "₹" formatter and an export
+ *  read the amount as it is), the comparator compares PAISE (integers, no float drift), the filter is in rupees.
+ *  `rupees` = the amount the column is about (the due); null = nothing billed (sorts last). */
+export const toPaise = (v: unknown): number | null => (isBlankNum(v) ? null : Math.round((v as number) * 100));
+export const moneyComparator = (a: unknown, b: unknown, _na?: unknown, _nb?: unknown, desc?: boolean): number =>
+  compareNum(toPaise(a), toPaise(b), !!desc);
 export function moneyCol<T>(def: ColDef<T>, rupees: Getter<T, number | null>, a: WorkAlign = 'center'): ColDef<T> {
-  const paise = (r: T) => { const v = rupees(r); return isBlankNum(v) ? null : Math.round((v as number) * 100); };
   return withAlign<T>({
-    ...def, ...numSort<T>(paise),
+    ...def, ...numSort<T>(r => { const v = rupees(r); return isBlankNum(v) ? null : (v as number); }), comparator: moneyComparator,
     filter: 'agNumberColumnFilter', filterValueGetter: p => (p.data ? rupees(p.data) : null),
     filterParams: { maxNumConditions: 1, buttons: ['reset'], filterPlaceholder: '₹', defaultOption: 'greaterThan',
       filterOptions: [preset('wgDue', 'Has dues', v => v > 0), preset('wgClear', 'Nothing due', v => v === 0), ...NUM_OPTIONS] },

@@ -1,7 +1,9 @@
 import { ColDef, ICellRendererParams, RowClassParams } from 'ag-grid-community';
 import { ORIGIN_ICON_PATHS } from '../../../../shared/utils/test-origin';
 import { statusWords, type StatusWords } from '../../../../shared/utils/status-words';
-import { statusWordsCol } from '../../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../../shared/components/status-words/status-words.component';
+import { dateCol, numberCol, textCol, valuesCol } from '../../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../../shared/components/work-set-filter/work-set-filter.component';
 import { whenText } from '../shared/when';
 import { DepartmentRow, FormRow } from '../data/studio-models';
 
@@ -156,9 +158,9 @@ export const sheetRowId = (p: { data: FormRow }): string => p.data.id;
 export const sheetRowClass = (p: RowClassParams<FormRow>): string | undefined => (p.data?.status === 'archived' ? 'pf-tm-row--off' : undefined);
 
 /** Name, Department, Origin, Version, Status, Pending, Updated, Edit — Test Master's columns for case sheets. */
-export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] {
+export function sheetColumns(web: boolean, isPhone: boolean, pendingOf: (f: FormRow) => number = () => 0): ColDef<FormRow>[] {
   const cols: ColDef<FormRow>[] = [
-    {
+    textCol<FormRow>({
       headerName: 'Name', field: 'title', colId: 'name', width: 210, minWidth: 170, pinned: 'left', wrapText: true, autoHeight: true, tooltipField: 'title',
       cellClass: 'pf-tm-wrap',
       cellRenderer: (p: ICellRendererParams<FormRow>) => {
@@ -180,30 +182,28 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
         wrap.appendChild(b);
         return wrap;
       },
-    },
-    { headerName: 'Department', colId: 'department', flex: 1.4, minWidth: 180, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
-    {
+    }, (f) => f.title ?? ''),
+    valuesCol<FormRow>({ headerName: 'Department', colId: 'department', flex: 1.4, minWidth: 180 }, (f) => f.departmentName ?? 'Other', WorkSetFilterComponent),
+    valuesCol<FormRow>({
       headerName: 'Origin', colId: 'origin', flex: 1, minWidth: 110, maxWidth: 130, editable: false,
-      valueGetter: (p) => (p.data ? ORIGIN_WORDS[p.data.origin].label : ''),
       cellRenderer: (p: ICellRendererParams<FormRow>) => (p.data ? originElement(p.data.origin, p.data.newerMaster) : document.createElement('span')),
-    },
-    { headerName: 'Version', colId: 'version', flex: 0.7, minWidth: 88, maxWidth: 96, valueGetter: (p) => (p.data?.published ? `v${p.data.published.versionNo}` : '—') },
-    statusWordsCol<FormRow>({ headerName: 'Status', colId: 'status', flex: 1, minWidth: 96, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') }, statusWordsOf),
-    {
+    }, (f) => ORIGIN_WORDS[f.origin].label, WorkSetFilterComponent),
+    numberCol<FormRow>({ headerName: 'Version', colId: 'version', flex: 0.7, minWidth: 88, maxWidth: 96,
+      valueFormatter: (p) => (p.value == null ? '—' : `v${p.value}`) }, (f) => f.published?.versionNo ?? null, 'left'),
+    statusValuesCol<FormRow>({ headerName: 'Status', colId: 'status', flex: 1, minWidth: 96 }, statusWordsOf),
+    numberCol<FormRow>({
       headerName: 'Pending', colId: 'pending', flex: 0.8, minWidth: 92, maxWidth: 98, type: 'numericColumn',
-      valueGetter: (p) => (p.data ? (p.context as SheetGridContext).pendingOf(p.data) : 0),
       cellRenderer: (p: ICellRendererParams<FormRow>) => {
         const s = document.createElement('span');
         s.className = 'pf-num';
         s.textContent = p.value ? String(p.value) : '—';
         return s;
       },
-    },
-    {
+    }, (f) => pendingOf(f), 'right'),
+    dateCol<FormRow>({
       headerName: 'Updated', colId: 'updated', flex: 1, minWidth: 100,
-      valueGetter: (p) => p.data?.draft?.updatedAt ?? p.data?.published?.publishedAt ?? '',
-      valueFormatter: (p) => (p.value ? whenText(p.value as string) : '—'),
-    },
+      valueFormatter: (p) => (p.value ? whenText(new Date(p.value as number).toISOString()) : '—'),
+    }, (f) => f.draft?.updatedAt ?? f.published?.publishedAt ?? null, 'left'),
     {
       headerName: '', colId: 'actions', cellClass: 'pf-tm-acts-cell', editable: false, sortable: false, filter: false, resizable: false, suppressSizeToFit: true,
       width: web ? 112 : 112, minWidth: 112, maxWidth: 112, pinned: 'right',

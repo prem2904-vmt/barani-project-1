@@ -22,7 +22,8 @@ import {
   TmDiffRow, TmLookups, isOpen, tmCanSeeKind, tmChangeLine, tmClinicalItems, tmConfidenceLine, tmDiffRows, tmExpiresLine,
   tmFailedWords, tmKindLabel, tmMatches, tmNeedsClinicalConfirm, tmPeopleLine, tmSourceLine, tmSourceShort, tmStatusLabel, tmStatusWords, tmWhenLine,
 } from '../../../../shared/utils/tm-proposals';
-import { StatusWordsCellComponent } from '../../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../../shared/components/status-words/status-words.component';
+import { dateCol, textCol } from '../../../../shared/utils/work-grid';
 
 /** Status → the dot tone of `.pf-sdot` (data, never decoration). */
 function statusTone(s: string): string {
@@ -424,18 +425,26 @@ export class PendingChangesPanelComponent implements OnInit {
     wrap.append(a);
     return wrap;
   };
+  /** "3 days ago" drawn from the row's createdAt (the column's value is the time itself, so it sorts by time). */
+  private readonly whenCell = (p: ICellRendererParams<TmProposal>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-tmp-cell';
+    const a = document.createElement('span'); a.className = 'pf-tmp-cell__text'; a.textContent = p.data ? agoWords(p.data.createdAt, this.now) : '';
+    wrap.appendChild(a);
+    return wrap;
+  };
   readonly cols = computed<ColDef<TmProposal>[]>(() => {
     const narrow = this.narrow();
-    const test: ColDef<TmProposal> = { headerName: 'Test', colId: 'test', flex: narrow ? 1.7 : 1.3, minWidth: narrow ? 120 : 150, cellRenderer: this.testCell };
-    const status: ColDef<TmProposal> = { headerName: 'Status', colId: 'status', flex: 1, minWidth: narrow ? 104 : 130, cellRenderer: StatusWordsCellComponent, cellRendererParams: { statusWords: (d: TmProposal) => tmStatusWords(d.status, (d.clinicalFields ?? []).length > 0) },
-      valueGetter: p => (p.data ? tmStatusLabel(p.data.status) : ''), wrapText: true, autoHeight: true };
+    const test = textCol<TmProposal>({ headerName: 'Test', colId: 'test', flex: narrow ? 1.7 : 1.3, minWidth: narrow ? 120 : 150, cellRenderer: this.testCell }, d => d.targetLabel ?? '');
+    const status = statusValuesCol<TmProposal>({ headerName: 'Status', colId: 'status', flex: 1, minWidth: narrow ? 104 : 130, wrapText: true, autoHeight: true },
+      d => tmStatusWords(d.status, (d.clinicalFields ?? []).length > 0));
     if (narrow) return [test, status];
     return [
       test,
-      { headerName: 'Change', colId: 'change', flex: 1.5, minWidth: 170, cellRenderer: this.changeCell },
-      { headerName: 'From', colId: 'from', flex: 0.8, minWidth: 110, valueGetter: p => (p.data ? tmSourceShort(p.data) : ''), cellRenderer: this.textCell },
+      textCol<TmProposal>({ headerName: 'Change', colId: 'change', flex: 1.5, minWidth: 170, cellRenderer: this.changeCell }, d => tmChangeLine(d)),
+      textCol<TmProposal>({ headerName: 'From', colId: 'from', flex: 0.8, minWidth: 110, cellRenderer: this.textCell }, d => tmSourceShort(d)),
       status,
-      { headerName: 'When', colId: 'when', flex: 0.7, minWidth: 96, valueGetter: p => (p.data ? agoWords(p.data.createdAt, this.now) : ''), cellRenderer: this.textCell },
+      dateCol<TmProposal>({ headerName: 'When', colId: 'when', flex: 0.7, minWidth: 96, cellRenderer: this.whenCell }, d => d.createdAt, 'left'),
     ];
   });
 

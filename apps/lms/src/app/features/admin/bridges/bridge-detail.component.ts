@@ -25,7 +25,8 @@ import { MANAGE_BRIDGES } from '../../../shared/bridges/bridge-nearby.service';
 import { clampHotspotMinutes } from '../../../shared/bridges/bridge-commands';
 import { bridgeConnectionText } from '../../../shared/bridges/bridge-assign';
 import type { BridgeCommandType, BridgeDetailDto, DetectedSourceDto } from '../../../shared/bridges/bridge.models';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { actionCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { linkStateWords } from '../../../shared/bridges/bridge-status-words';
 import {
   BridgeTone, agoText, bridgeErrorText, bridgeStatusWord, commandLine, commandStateWord, detectedSourceHeadline, framingWord,
@@ -389,22 +390,25 @@ export class BridgeDetailComponent implements OnInit {
       `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>` +
       `<span class="pf-rowact__t">${esc(label)}</span></button>`;
     const cols: ColDef<BridgeAnalyzerRow>[] = [
-      { colId: 'name', headerName: 'Analyzer', flex: 1.3, minWidth: this.isPhone ? 120 : 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+      textCol<BridgeAnalyzerRow>({ colId: 'name', headerName: 'Analyzer', flex: 1.3, minWidth: this.isPhone ? 120 : 170, sort: 'asc',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.name ?? '',
           this.isPhone ? [p.data?.connection, linkStateWord(p.data?.linkState).label].filter(Boolean).join(' · ')
             : (p.data?.makeModel && p.data.makeModel !== p.data.name ? p.data.makeModel : ''), 'pf-brd-cell__name') },
-      { colId: 'connection', headerName: 'Connection', flex: 1.3, minWidth: 170, valueGetter: (p) => p.data?.connection ?? '',
+        (r) => r.name ?? ''),
+      textCol<BridgeAnalyzerRow>({ colId: 'connection', headerName: 'Connection', flex: 1.3, minWidth: 170,
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.connection ?? '', p.data?.framing) },
-      statusWordsCol<BridgeAnalyzerRow>({ colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 110 : 150, valueGetter: (p) => p.data?.linkState ?? '' },
+        (r) => r.connection ?? ''),
+      statusValuesCol<BridgeAnalyzerRow>({ colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 110 : 150 },
         (r) => linkStateWords(r.linkState, r.lastMessageAt ? `Last result ${agoText(r.lastMessageAt).toLowerCase()}` : '')),
-      { colId: 'queue', headerName: 'Queue', width: 96, minWidth: 90, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueDepth ?? 0,
+      numberCol<BridgeAnalyzerRow>({ colId: 'queue', headerName: 'Queue', width: 96, minWidth: 90, flex: 0, type: 'rightAligned',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<span class="pf-num">${esc(p.data?.queueDepth ?? 0)}</span>` },
+        (r) => r.queueDepth ?? 0, 'right'),
     ];
     if (manage) {
-      cols.push({ colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 224 : 124, minWidth: web ? 224 : 124, flex: 0, cellClass: 'pf-brd-actcell',
+      cols.push(actionCol<BridgeAnalyzerRow>({ colId: 'actions', headerName: '', resizable: false, width: web ? 224 : 124, minWidth: web ? 224 : 124, flex: 0, cellClass: 'pf-brd-actcell',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<div class="pf-brd-acts">${
           btn('edit', 'Connection', 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z', p.data?.name ?? '')}${
-          btn('unassign', 'Remove', 'M18 6 6 18M6 6l12 12', p.data?.name ?? '')}</div>` });
+          btn('unassign', 'Remove', 'M18 6 6 18M6 6l12 12', p.data?.name ?? '')}</div>` }));
     }
     // Phones: the connection + link state ride the name cell's second line.
     if (this.isPhone) return cols.filter((c) => ['name', 'actions'].includes(c.colId ?? ''));

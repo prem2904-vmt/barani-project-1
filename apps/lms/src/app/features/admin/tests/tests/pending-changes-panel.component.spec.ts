@@ -12,6 +12,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { BranchSwitchService } from '../../../../core/services/branch-switch.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
+import { sortsAndFilters } from '../../../../shared/utils/work-grid';
 import type { TmProposal } from '../../../../shared/models/tm-proposal.model';
 
 /**
@@ -84,6 +85,16 @@ function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; 
 const flush = () => new Promise(r => setTimeout(r, 0));
 
 describe('PendingChangesPanelComponent', () => {
+  it('every data column sorts and filters on its real value', () => {
+    const { c } = render();
+    const cols = c.cols();
+    expect(cols.map(x => x.colId)).toEqual(['test', 'change', 'from', 'status', 'when']);
+    for (const col of cols) expect(sortsAndFilters(col as never), String(col.colId)).toBe(true);
+    const when = cols.find(x => x.colId === 'when')!;
+    const vg = when.valueGetter as (p: { data: TmProposal }) => number;
+    expect(vg({ data: P({ createdAt: '2026-01-01T00:00:00Z' }) })).toBe(Date.parse('2026-01-01T00:00:00Z'));
+  });
+
   it('lists every open change and opens the newest one — no checkbox, no select-all, no approve-all anywhere', () => {
     const { el, c, svc, q } = render();
     expect(svc.list).toHaveBeenCalledWith('review');

@@ -13,6 +13,7 @@ import { ExpenseBook, ExpenseEntry, ExpenseFilter } from '../../../shared/models
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { ND_GRID_PARAMS } from '../../../shared/utils/pf-grid-theme';
 
 /**
@@ -280,5 +281,21 @@ describe('ExpenseTrackerComponent', () => {
   it('labels IST days', () => {
     expect(dayLabel('2026-09-29')).toBe('Tue, 29 Sep');
     expect(dayLabel('2026-09-29', false)).toBe('29 Sep');
+  });
+
+  it('every data column of the entries and day grids sorts and filters on its real value', () => {
+    const { c } = render();
+    const check = (cols: any[]) => {
+      expect(cols.length).toBeGreaterThan(2);
+      for (const col of cols) {
+        if (col.colId === 'actions') { expect(col.sortable).toBe(false); continue; }
+        expect(sortsAndFilters(col), col.colId).toBe(true);
+      }
+    };
+    check(c.entryCols());
+    check(c.dayCols());
+    const amount = c.entryCols().find((col: any) => col.colId === 'amount');
+    expect(amount.valueGetter({ data: { kind: 'expense', amount: 40 } })).toBe(-40);
+    expect(amount.valueGetter({ data: { kind: 'cash_in', amount: 40 } })).toBe(40);
   });
 });
