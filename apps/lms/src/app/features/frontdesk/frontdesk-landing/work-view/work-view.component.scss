@@ -157,4 +157,4 @@
 
 
 /* Light mode: sections are part of the glass panel — never paint a solid card over it (owner 2026-11-21). */
-:host-context(:root.light.design-new) .fd-sec { background: transparent; }
+:host-context(.light.design-new) .fd-sec { background: transparent; }
