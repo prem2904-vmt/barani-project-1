@@ -19,12 +19,12 @@ import { OrderTest } from '../../../shared/models/order.model';
 import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { TatState, linePriority, tatDetail, tatInfo } from '../../../shared/utils/lab-priority';
 import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
-import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
-import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { criticalBadge, entryRangeText, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
 import { isInvalidNumericValue, liveRangeFlag, parseRangeValue, rangeAllowed, rangeKeyAllowed, rangePasteText, rangeValueFor } from '../../../shared/utils/result-value';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
@@ -3571,39 +3571,13 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
-    const r = this.rangeFor(p);
-    // The group's typed report text prints exactly as typed (simple model),
-    // line breaks included (the cells are white-space: pre-line), `{u}` →
-    // the value's unit.
-    const typed = normalizeReportText(fillUnit(r?.reportText, p.unit));
-    if (typed) return typed;
-    // Route through the shared formatter so one-sided bands ("< 200",
-    // "≤ 140") get a label too — they used to render blank here.
-    const text = formatRange(r);
-    if (r && text) {
-      const seg = r.segment ? this.prettySegment(r.segment) : '';
-      return `${text}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
-    }
+    // ONLY the patient's matching band, as the report prints it (one shared
+    // resolver); no match on merit -> every band.
+    const patient = this._ot()?.subOrder?.order?.patient;
+    const text = entryRangeText(p.referenceRanges, p.unit, normalizeSex(patient?.sex), bandAgeYears(patient), this._ot()?.profileCode);
+    if (text) return text;
     if (p.criticalLow !== undefined && p.criticalHigh !== undefined) return `${p.criticalLow}–${p.criticalHigh}`;
     return '';
-  }
-
-  /** Turn backend segment keys like "adult_male" into "Adult male" for display. */
-  private prettySegment(s: string): string {
-    return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  /**
-   * Pick the reference band that fits THIS patient's sex/age — mirrors the
-   * backend's selection so the entry preview matches the persisted/reported
-   * flag. Replaces the old "always referenceRanges[0]" shortcut that flagged
-   * every patient against whatever band happened to be first.
-   */
-  private rangeFor(p: TestParameter): ReferenceRange | undefined {
-    // DOB-derived fractional age — the server's band-pick metric.
-    const ageYears = bandAgeYears(this._ot()?.subOrder?.order?.patient);
-    const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
-    return selectReferenceRange(p.referenceRanges, sex, ageYears);
   }
 
   /** The bench chip. A value that is still the one SAVED with the result

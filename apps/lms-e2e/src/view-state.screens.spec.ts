@@ -182,6 +182,32 @@ test.describe('Frontdesk', () => {
     await expect(fdFind(page)).toHaveValue('');
   });
 
+  test('Bookings week strip keeps equal, non-overlapping day cells while Back to today shows', async ({ page }) => {
+    await openFrontdesk(page);
+    const side = page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+    const sw = side.locator('[data-testid="fd-side-view-btn"]');
+    if (await sw.count() && (await sw.getAttribute('data-view')) === 'who') await sw.click();
+    const pill = side.locator('[data-testid="fd-bookings-pills"] [role="radio"][data-value="appt"]');
+    if (await pill.count() && (await pill.getAttribute('aria-checked')) !== 'true') await pill.click();
+    await vis(page, 'button[aria-label="Next week"]').first().click();
+    const chip = vis(page, '[data-testid="back-to-today"]').first();
+    await expect(chip, 'another week is showing, so Back to today shows').toBeVisible();
+    const m = await page.evaluate(() => {
+      const strip = Array.from(document.querySelectorAll('.pf-daystrip')).find(e => (e as HTMLElement).offsetWidth > 0) as HTMLElement;
+      const days = Array.from(strip.querySelectorAll('.pf-daystrip__day')).map(d => d.getBoundingClientRect());
+      const c = document.querySelector('[data-testid="back-to-today"]')!.getBoundingClientRect();
+      const sr = strip.getBoundingClientRect();
+      return { widths: days.map(d => Math.round(d.width)), gaps: days.slice(1).map((d, i) => Math.round(d.left - days[i].right)),
+        chipInsideStrip: c.top < sr.bottom && c.bottom > sr.top && c.left < sr.right && c.right > sr.left,
+        labelsClipped: Array.from(strip.querySelectorAll('.fd-dow-l')).some(e => (e as HTMLElement).offsetWidth > 0 && (e as HTMLElement).scrollWidth > (e as HTMLElement).clientWidth + 1) };
+    });
+    expect(m.widths.length).toBeGreaterThanOrEqual(5);
+    expect(Math.max(...m.widths) - Math.min(...m.widths), `equal day cells ${m.widths}`).toBeLessThanOrEqual(2);
+    expect(Math.min(...m.gaps), `day cells overlap/collide ${m.gaps}`).toBeGreaterThanOrEqual(0);
+    expect(m.chipInsideStrip, 'Back to today never sits on the strip').toBe(false);
+    expect(m.labelsClipped, 'weekday labels fit').toBe(false);
+  });
+
   test('sign-out clears the kept state (signing back in starts fresh)', async ({ page }) => {
     await openFrontdesk(page);
     await fdFind(page).fill('Noor');

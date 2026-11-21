@@ -25,8 +25,8 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { finalize, firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
-import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
-import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
+import { normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
+import { criticalBadge, entryRangeText, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
 import { rangeValueFor } from '../../../shared/utils/result-value';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
@@ -1340,7 +1340,7 @@ export class ValidateResultComponent implements OnInit {
       const critHigh = r?.criticalHigh ?? p.criticalHigh ?? undefined;
       const saved = savedFlagOf(snap, p.name);
       const unit = (saved?.unit ?? p.unit) || undefined;
-      const rangeText = saved ? (saved.range ?? null) : (normalizeReportText(fillUnit(r?.reportText, unit)) || formatRange(r));
+      const rangeText = saved ? (saved.range ?? null) : entryRangeText(p.referenceRanges, unit, sex, ageYears, t.profileCode);
       return {
         name: p.name,
         title: p.title || p.name,

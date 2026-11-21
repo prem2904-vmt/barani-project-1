@@ -16,7 +16,9 @@
  * parameter criticals (strict), then the shared `flagAgainst` rule.
  */
 import type { TestParameter } from '../models/test.model';
-import { describeAllRanges, flagAgainst, selectReferenceRange, type RangeLike } from './reference-range';
+import {
+  bandReportText, describeAllRanges, flagAgainst, matchReferenceRange, selectReferenceRange, summarizeRanges, type RangeLike,
+} from './reference-range';
 import { parseParametersBlob, readParameters } from './test-parameters';
 import { familyValueText, isFamilyValue } from './option-family';
 
@@ -221,6 +223,28 @@ export function bandsForProfile<T extends RangeLike & { profileCode?: string | n
   }
   const scoped = all.filter(b => (b.profileCode ?? '').trim().toUpperCase() === pc);
   return scoped.length ? scoped : all.filter(b => !b.profileCode);
+}
+
+/**
+ * The reference range an ENTRY screen shows for one parameter: ONLY the
+ * patient's matching band (sex + age) — exactly what the report prints — via
+ * the ONE resolver (`matchReferenceRange`, over the same profile-scoped bands
+ * the live flag judges against). When no band matches on merit (unknown sex /
+ * age, or nothing fits) every band is listed, as the report does. Empty
+ * string when there is nothing to show. Never a second selector.
+ */
+export function entryRangeText(
+  ranges: readonly (RangeLike & { profileCode?: string | null })[] | null | undefined,
+  unit: string | null | undefined,
+  sex: 'M' | 'F' | 'O' | null,
+  ageYears: number | null,
+  profileCode?: string | null,
+): string {
+  const bands = bandsForProfile(ranges, profileCode);
+  if (!bands.length) return '';
+  const m = matchReferenceRange(bands, sex, ageYears);
+  if (m.isSpecific && m.range) return bandReportText(m.range, unit) ?? '';
+  return summarizeRanges(bands, unit, { keepLines: true });
 }
 
 export interface LiveFlag {
