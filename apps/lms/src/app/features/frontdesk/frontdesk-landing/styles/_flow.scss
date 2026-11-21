@@ -155,3 +155,10 @@
     .pf-work-find-phone--filters .pf-work-find__filter:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
   }
 }
+
+/* Below 1024px the work card is bounded and ONLY its list scrolls (owner 2026-11-21): the tab strip and the list head
+   (count · Sort · Filters) above it never scroll away. */
+@media (max-width: 1023px) {
+  :host-context(.design-new) .pf-appt-split__pane--work { overflow: hidden; min-height: 0; }
+  :host-context(.design-new) .pf-appt-split__pane--work > pf-outsourced-list { flex: 1 1 auto; min-height: 0; }
+}

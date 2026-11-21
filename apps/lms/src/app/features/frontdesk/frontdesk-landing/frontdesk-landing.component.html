@@ -1156,7 +1156,7 @@
                 Showing the first 1000 outsourced rows for this date range — narrow it to see the rest.
               </p>
               }
-              <pf-work-list class="pf-fd-list" data-testid="fd-list" label="Work" [items]="listItems()" [actionTpl]="fdListActs"
+              <pf-work-list class="pf-fd-list pf-wl-scroll" data-testid="fd-list" label="Work" [items]="listItems()" [actionTpl]="fdListActs"
                 [loading]="ordersSkel() && flowRows().length === 0 && (rightTab() !== 'billing' || billsSkel())"
                 [emptyTitle]="flowEmpty().title" [emptyBody]="flowEmpty().body" (open)="openFlowRow($any($event.data))" />
               <ng-template #fdListActs let-it><pf-fd-flow-next [item]="{ row: it.data, ctx: flowCtx }" /></ng-template>

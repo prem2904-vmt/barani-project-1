@@ -65,8 +65,9 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     @if (phone()) {
       <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — the same rows, facts in the grid's column
            order, status in words, the row's own primary + ⋯ (the grid's action cell) at the right edge. -->
+      <div class="mwg-listscroll pf-wl-scroll" data-testid="mw-list-scroll">
       @if (rows().length) {
-        <div class="mwg-listhead pf-wl-head">
+        <div class="mwg-listhead pf-wl-head pf-wl-head--sticky">
           <span class="mwg-listhead__n">{{ listItems().length }} {{ listItems().length === 1 ? 'row' : 'rows' }}</span>
           <pf-sort-chip [options]="sortOptions()" [value]="sortValue()" (pick)="pickSort($event)" />
         </div>
@@ -74,6 +75,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
       <pf-work-list class="mwg-list" data-testid="mw-list" label="Work list" [items]="listItems()" [loading]="loading()"
         [emptyTitle]="emptyTitle()" [actionTpl]="listActs" (open)="onItem($event)" />
       <ng-template #listActs let-it><ng-container [ngTemplateOutlet]="cActs" [ngTemplateOutletContext]="{ $implicit: it.data }" /></ng-template>
+      </div>
     } @else {
       <pf-data-grid class="mwg" data-testid="mw-grid" [rowData]="rows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
         [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
@@ -302,6 +304,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     @include wg.cells;
     :host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
     .mwg { flex: 1 1 auto; min-height: 0; }
+    .mwg-listscroll { display: block; }
     .mwg-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
     .mwg-listhead__n { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
     .mwg-empty { margin: 0; padding: 32px 16px; text-align: center; font-size: 13.5px; color: var(--text-tertiary); }

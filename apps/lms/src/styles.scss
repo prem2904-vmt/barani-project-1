@@ -3061,3 +3061,10 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
   .pf-seg__item { position: relative; }
   .pf-seg__item::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); min-width: 44px; }
 }
+
+/* ── Small screens: long lists scroll INSIDE their card (owner 2026-11-21, "the page scrolls away") ──
+   Below 1024px the band (search) and the tab strip stay put, the card head stays put, and ONLY the list scrolls:
+   `.pf-wl-scroll` = the one scroller (no page scroll, no double scrollbars, iOS momentum, no scroll chaining);
+   `.pf-wl-head--sticky` = a list head (count · Sort · Filters) that sits at the top of a scroller it lives in. */
+.pf-wl-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.pf-wl-head--sticky { position: sticky; top: 0; z-index: 3; background: var(--pf-card-bg, var(--bg-card-solid, #fff)); }

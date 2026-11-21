@@ -92,9 +92,15 @@
           @if (gridRows().length === 0 && !(loading() && items().length === 0 && filter() !== 'partial')) {
           <ng-container *ngTemplateOutlet="emptyTpl"></ng-container>
           } @else {
+          <div class="pf-rq2-listscroll pf-wl-scroll">
+          <div class="pf-rq2-listhead pf-wl-head pf-wl-head--sticky">
+            <span class="pf-rq2-listhead__n pf-num">{{ listItems().length }} {{ listItems().length === 1 ? 'report' : 'reports' }}</span>
+            <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
+          </div>
           <pf-work-list data-testid="rq-list" label="Reports" [items]="listItems()" [loading]="loading() && items().length === 0 && filter() !== 'partial'"
             (open)="openSheet($any($event.data))" (primary)="openSheet($any($event.data))" />
           <div #listEnd class="pf-rq2-listend" aria-hidden="true"></div>
+          </div>
           }
           } @else {
           <pf-data-grid #rqGrid class="pf-rq2-grid" data-testid="rq-grid" viewStateKey="reports.grid"
