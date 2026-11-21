@@ -175,7 +175,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     expect(drawerOf(f).querySelector('[data-testid="pour-drag-hint"]')).toBeNull();
   });
 
-  it('mouse: drag onto an eligible tube highlights it and the drop OPENS the sheet with that target — nothing poured yet', async () => {
+  it('mouse: drag onto a tube with another additive turns it soft rose ("Serum into Fluoride · check"); the drop asks INLINE — nothing poured yet, no sheet', async () => {
     const { f, c, api } = render();
     await open(f, c);
     pointAt(tubeEl(f, '26105'));
@@ -187,19 +187,17 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     expect(tubeEl(f, '26104').classList).toContain('pf-tube--pour-src');
     expect(tubeEl(f, '26105').classList).toContain('pf-tube--pour-ok');
     expect(tubeEl(f, '26105').classList).toContain('pf-tube--pour-over');
-    expect(tubeEl(f, '26105').querySelector('[data-testid="pour-drop-ok"]')!.textContent).toContain('Drop to pour in');
-    const ghost = drawerOf(f).querySelector('[data-testid="pour-ghost"]')!;
+    expect(tubeEl(f, '26105').classList).toContain('pf-tube--pour-warn');
+    expect(tubeEl(f, '26105').querySelector('[data-testid="drop-warn"]')!.textContent).toContain('Serum into Fluoride · check');
+    const ghost = document.body.querySelector('[data-testid="pour-ghost"]')!;
     expect(ghost.textContent).toContain('Red · 26104');
     expect(ghost.textContent).toContain('Pour into Grey · 26105');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 80, 20));
     await settle(f);
-    expect(c.pour()?.sourceId).toBe('red');
-    expect(c.pour()?.targetId).toBe('grey');
-    const sheet = sheetOf(f)!;
-    expect(sheet.querySelector('[data-testid="pour-warning"]')!.textContent).toContain('Serum test into a fluoride (gray) tube');
-    const go = sheet.querySelector<HTMLButtonElement>('[data-testid="pour-confirm"]')!;
-    expect(go.textContent).toContain('Pour into Grey · 26105');
-    // Never pours without the explicit confirm.
+    expect(c.pour()).toBeNull();
+    expect(c.inlineAsk()).toMatchObject({ kind: 'pour', srcId: 'red', targetId: 'grey', words: 'Serum into Fluoride' });
+    expect(tileOf(f, '26105').querySelector('[data-testid="inline-ask"]')).not.toBeNull();
+    // Never pours without the inline Pour.
     expect(api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge')).length).toBe(0);
   });
 
@@ -238,13 +236,13 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     const t = tubeEl(f, '26105');
     expect(t.classList).toContain('pf-tube--pour-no');
     expect(t.querySelector('[data-testid="pour-drop-reason"]')!.textContent).toContain('Already received');
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Can’t pour: Already received');
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Can’t pour: Already received');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 80, 20));
     await wait(260);
     await settle(f);
     expect(c.pour()).toBeNull();
     expect(c.dragSrc()).toBeNull();
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
     expect(c.activeGroup().samples.map((s: any) => s.id).sort()).toEqual(['grey', 'red']);
   });
@@ -256,7 +254,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     c.onVialDown(sampleOf(c, 'red'), ev(tubeEl(f, '26104'), 10, 10));
     c.pourDrag.move(ev(tubeEl(f, '26104'), 300, 500));
     await settle(f);
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Drop it on another tube');
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Drop it on another tube');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 300, 500));
     await wait(260);
     await settle(f);
@@ -265,7 +263,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
-  it('touch: a quick move is a scroll (no drag); hold ~300 ms then drag opens the sheet', async () => {
+  it('touch: a quick move is a scroll (no drag); hold ~260 ms then drag drops onto the target (inline ask)', async () => {
     const { f, c } = render();
     await open(f, c);
     pointAt(tubeEl(f, '26105'));
@@ -285,7 +283,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     c.pourDrag.move(ev(tubeEl(f, '26104'), 90, 30, 'touch'));
     c.pourDrag.up(ev(tubeEl(f, '26104'), 90, 30, 'touch'));
     await settle(f);
-    expect(c.pour()?.targetId).toBe('grey');
+    expect(c.inlineAsk()?.targetId ?? c.inlineAsk()?.keepId).toBe('grey');
   });
 
   it('the touch hold blocks the page scroll only while a tube is lifted', async () => {

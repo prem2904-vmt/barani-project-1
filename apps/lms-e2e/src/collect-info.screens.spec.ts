@@ -5,8 +5,8 @@ import * as path from 'node:path';
 
 /**
  * Collect — the right-side info panel can be shown / hidden (owner 2026-11-21).
- * >= 1280px: docked, shown by default, the VIALS-head toggle collapses it (the grid takes the width).
- * < 1280px: hidden by default; the toggle opens a right drawer over the vials (scrim, ✕, Esc; focus trapped and returned).
+ * Closed by default on every size (owner revision 2026-11-21); the chips show instead.
+ * >= 1280px: the VIALS-head toggle opens it docked (the grid gives up the width). < 1280px: the toggle opens a right drawer over the vials (scrim, ✕, Esc; focus trapped and returned).
  * While hidden: Urgent / Fasting / "N of M left" chips in the patient head. The choice survives a reload.
  * API mocked, demo data only. Screenshots under SHOTS_DIR/<project>/ (light + dark).
  */
@@ -115,49 +115,65 @@ test.beforeEach(async ({ page }) => {
   await backend(page);
 });
 
-test('desktop: panel docked by default; toggle collapses it (grid widens, chips show) and expands it; remembered', async ({ page }) => {
+test('desktop: closed by default with chips; toggle opens it DOCKED (grid narrows) and closes it; remembered', async ({ page }) => {
   await page.goto('/lab/collect');
   await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
   if (!docked(page)) test.skip(true, 'docked panel is for >= 1280px');
   const toggle = await openCollect(page);
   const panel = page.getByTestId('collect-info-panel');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(toggle).toHaveAttribute('aria-controls', 'pf-sc-info-panel');
-  await expect(toggle).toHaveAttribute('title', 'Hide details');
-  await expect(panel).toBeVisible();
-  // fasting reads "Required" + the series as a sorted short list
-  await expect(panel.locator('.pf-sc-fast')).toContainText('30 min · 60 min · 120 min · 180 min');
-  await expect(panel).toContainText('4 of 4');
-  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
-  const box = (await toggle.boundingBox())!;
-  expect(Math.round(box.width)).toBeGreaterThanOrEqual(44); expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
   const grid = page.locator('.pf-sc-vials');
-  const before = (await grid.boundingBox())!.width;
-  await shots(page, 'desktop-open');
-
-  await toggle.click();
+  // default = closed on desktop too: chips carry Urgent / Fasting / left
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-controls', 'pf-sc-info-panel');
   await expect(toggle).toHaveAttribute('title', 'Show details');
   await expect(panel).toBeHidden();
-  await expect.poll(async () => (await grid.boundingBox())!.width).toBeGreaterThan(before + 200);
+  const box = (await toggle.boundingBox())!;
+  expect(Math.round(box.width)).toBeGreaterThanOrEqual(44); expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
   const chips = page.getByTestId('collect-info-chips').filter({ visible: true });
   await expect(chips.getByTestId('chip-urgent')).toHaveText('Urgent');
   await expect(chips.getByTestId('chip-fasting')).toBeVisible();
   await expect(chips.getByTestId('chip-fasting')).toHaveAttribute('title', /OGTT 30 min · 60 min · 120 min · 180 min/);
   await expect(chips.getByTestId('chip-left')).toContainText('4 of 4 left');
+  const closedW = (await grid.boundingBox())!.width;
   await shots(page, 'desktop-collapsed');
   await chips.getByTestId('chip-fasting').click();
   await expect(chips.locator('.pf-sc-ichip__pop')).toBeVisible();
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${OUT}/desktop-fasting-pop-light.png` });
+  await chips.getByTestId('chip-fasting').click();
 
-  // remembered after reload
+  // open → docked beside the vials (never a drawer / scrim), grid gives up the width
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveAttribute('title', 'Hide details');
+  await expect(panel).toBeVisible();
+  await expect(page.locator('.pf-sc-side--drawer')).toHaveCount(0);
+  await expect(page.getByTestId('collect-info-scrim')).toHaveCount(0);
+  await expect(panel.locator('.pf-sc-fast')).toContainText('30 min · 60 min · 120 min · 180 min');
+  await expect(panel).toContainText('4 of 4');
+  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
+  await expect.poll(async () => (await grid.boundingBox())!.width).toBeLessThan(closedW - 200);
+  await shots(page, 'desktop-open');
+
+  // remembered after reload (the user's choice wins over the closed default)
+  await page.reload();
+  await expect(page.getByTestId('collect-info-toggle')).toHaveAttribute('aria-expanded', 'true', { timeout: 30_000 });
+  await expect(page.getByTestId('collect-info-panel')).toBeVisible();
+  await page.getByTestId('collect-info-toggle').click();
+  await expect(page.getByTestId('collect-info-panel')).toBeHidden();
+  await expect(page.getByTestId('collect-info-chips').filter({ visible: true })).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('collect-info-toggle')).toHaveAttribute('aria-expanded', 'false', { timeout: 30_000 });
-  await expect(page.getByTestId('collect-info-chips').filter({ visible: true })).toBeVisible();
-  await page.getByTestId('collect-info-toggle').click();
-  await expect(page.getByTestId('collect-info-panel')).toBeVisible();
-  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
+});
+
+test('desktop: a choice saved under the old key is ignored (default changed to closed)', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('pf-lms.collect.info.app-1.desktop', '1'); } catch { /* */ } });
+  await page.goto('/lab/collect');
+  await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
+  if (!docked(page)) test.skip(true, 'desktop only');
+  const toggle = await openCollect(page);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('collect-info-panel')).toBeHidden();
 });
 
 test('below 1280: hidden by default with chips; drawer opens, Esc / scrim / close shut it, focus returns; remembered', async ({ page }) => {
@@ -226,4 +242,67 @@ test('below 1280: hidden by default with chips; drawer opens, Esc / scrim / clos
   await expect(page.locator('.pf-sc-side--drawer')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.pf-sc-side--drawer')).toHaveCount(0);
+});
+
+// Owner bug 2026-11-21: press-and-hold on a tube showed the peek popover / pour ghost in the CENTRE of the screen.
+// They must sit next to the finger / pointer (top layer, offset, clamped to the viewport).
+const distTo = (b: { x: number; y: number; width: number; height: number }, x: number, y: number) =>
+  Math.hypot(Math.max(b.x - x, 0, x - (b.x + b.width)), Math.max(b.y - y, 0, y - (b.y + b.height)));
+async function fixedTraps(page: Page, sel: string) {
+  return page.evaluate(s => {
+    const out: string[] = [];
+    let el = document.querySelector(s)?.parentElement ?? null;
+    while (el) {
+      const c = getComputedStyle(el);
+      const trap = (c.transform !== 'none' && c.transform) || (c.filter !== 'none' && c.filter) || ((c as any).backdropFilter && (c as any).backdropFilter !== 'none' && (c as any).backdropFilter)
+        || (c.perspective !== 'none' && c.perspective) || (/(transform|filter|perspective)/.test(c.willChange) && c.willChange) || (/(paint|layout|strict|content)/.test(c.contain) && c.contain) || (c.containerType && c.containerType !== 'normal' && c.containerType);
+      if (trap) out.push(`${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 3).join('.')} → ${trap}`);
+      el = el.parentElement;
+    }
+    return out;
+  }, sel);
+}
+
+test('hold: the peek popover and the pour ghost sit next to the pointer (not the screen centre)', async ({ page }) => {
+  const toggle = await openCollect(page);
+  void toggle;
+  const tile = page.locator('.pf-sc-tile').first();
+  const tb = (await tile.boundingBox())!;
+  // press near the tile's top-left quarter, so the centre of the tile / screen is clearly elsewhere
+  const x = Math.round(tb.x + tb.width * 0.3), y = Math.round(tb.y + tb.height * 0.35);
+  const touch = (page.viewportSize()?.width ?? 0) < 1280 || !!test.info().project.use.hasTouch;
+  const cdp = touch ? await page.context().newCDPSession(page) : null;
+  const tStart = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: px, y: py }] });
+  const tMove = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: px, y: py }] });
+  const tEnd = () => cdp!.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  // 1) still hold ~2s → the tests popover, beside the pointer
+  if (touch) await tStart(x, y); else { await page.mouse.move(x, y); await page.mouse.down(); }
+  const pop = page.getByTestId('peek-pop');
+  await expect(pop).toBeVisible({ timeout: 6000 });
+  console.log('[hold] peek traps', JSON.stringify(await fixedTraps(page, '.pf-tube__peekpop')));
+  const pb = (await pop.boundingBox())!;
+  console.log('[hold] pointer', x, y, 'peek box', JSON.stringify(pb));
+  expect(distTo(pb, x, y)).toBeLessThanOrEqual(80);
+  expect(pb.x).toBeGreaterThanOrEqual(0); expect(pb.y).toBeGreaterThanOrEqual(0);
+  expect(pb.x + pb.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+  await page.screenshot({ path: `${OUT}/hold-peek-light.png` });
+  await theme(page, 'dark'); await page.screenshot({ path: `${OUT}/hold-peek-dark.png` }); await theme(page, 'light');
+  if (touch) await tEnd(); else await page.mouse.up();
+  await expect(pop).toHaveCount(0);
+  await page.waitForTimeout(400);
+
+  // 2) hold then drag → the pour ghost follows the pointer
+  if (touch) { await tStart(x, y); await page.waitForTimeout(450); } else { await page.mouse.move(x, y); await page.mouse.down(); }
+  let px = x, py = y;
+  for (let i = 1; i <= 10; i++) { px = x + i * 8; py = y + i * 5; if (touch) await tMove(px, py); else await page.mouse.move(px, py); await page.waitForTimeout(40); }
+  const ghost = page.getByTestId('pour-ghost');
+  await expect(ghost).toBeVisible({ timeout: 4000 });
+  console.log('[hold] ghost traps', JSON.stringify(await fixedTraps(page, '[data-testid="pour-ghost"]')));
+  const gb = (await ghost.boundingBox())!;
+  console.log('[hold] pointer', px, py, 'ghost box', JSON.stringify(gb));
+  expect(distTo(gb, px, py)).toBeLessThanOrEqual(80);
+  await page.screenshot({ path: `${OUT}/hold-drag-light.png` });
+  await theme(page, 'dark'); await page.screenshot({ path: `${OUT}/hold-drag-dark.png` }); await theme(page, 'light');
+  if (touch) await tEnd(); else await page.mouse.up();
 });

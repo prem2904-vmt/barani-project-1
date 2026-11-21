@@ -21,11 +21,11 @@ import type { MergeCandidate } from '../../../shared/utils/tube-merge';
 import { mergeShortReason } from '../../../shared/utils/tube-merge';
 
 /** Touch hold before a tube lifts (long enough for a scroll flick to win). */
-export const POUR_HOLD_MS = 300;
+export const POUR_HOLD_MS = 260;   // owner-approved mock tube-pour-v1
 /** Touch: finger travel that counts as a scroll (before lift) / a drag (after). */
 export const POUR_TOUCH_SLOP_PX = 10;
 /** Mouse: travel before the drag starts (a jittery click stays a click). */
-export const POUR_MOUSE_PX = 6;
+export const POUR_MOUSE_PX = 8;   // owner-approved mock tube-pour-v1
 /** A drop swallows only the click that arrives right after it. */
 export const POUR_CLICK_SWALLOW_MS = 600;
 

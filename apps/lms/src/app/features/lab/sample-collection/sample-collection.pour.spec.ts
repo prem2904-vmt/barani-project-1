@@ -47,12 +47,13 @@ const oldMerged = { ...red, id: 'gone', barcode: '26099', status: 'merged' };
 const keptAfter = {
   ...grey, status: 'collected',
   tests: [...grey.tests, ...red.tests],
-  metadata: JSON.stringify({ mergedFromBarcodes: ['26104'], manualMerge: [{ barcode: '26104', tubeColor: 'plain', by: 'u1', at: '2026-10-25T03:10:00Z' }] }),
+  metadata: JSON.stringify({ mergedFromBarcodes: ['26104'], manualMerge: [{ barcode: '26104', tubeColor: 'plain', by: 'u1', at: '2026-10-25T03:10:00Z', restore: { sampleId: 'red', drawn: false } }] }),
 };
 
 interface Opts {
   candidates?: unknown[];
   mergeFirst?: 'ok' | 'confirm' | 'refuse';
+  separate?: 'ok' | 'refuse';
   confirm?: boolean[];
   samples?: unknown[];
   manual?: boolean;
@@ -80,6 +81,10 @@ function render(opts: Opts = {}) {
             { warnings: [{ code: 'additive_mismatch', message: 'Serum test into a fluoride (gray) tube' }] }));
         return of({ sample: keptAfter, warnings: [], retired: ['26104'] });
       }
+      if (url.endsWith('/separate')) {
+        if (opts.separate === 'refuse') return throwError(() => new ApiError('', 'separate_dispatched'));
+        return of({ sample: { ...grey }, restored: { ...red } });
+      }
       return of({});
     }),
     patch: vi.fn(() => of({})),
@@ -89,7 +94,7 @@ function render(opts: Opts = {}) {
     printLabelData: vi.fn(async (_d?: any) => ({ ok: true, direct: true })),
   };
   const dialog = { confirm: vi.fn(async (_req?: any) => confirms.shift() ?? false) };
-  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), withAction: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -212,58 +217,120 @@ describe('Sample collection — pour one tube into another', () => {
     expect(c.pourRefusal()).toBe('Only draws taken at the same time can be poured together.');
   });
 
-  it('warning already shown on the sheet: ONE press sends confirmWarnings and no dialog opens (OPS-123)', async () => {
+  it('different additive: the sheet closes and the TARGET card asks inline (no dialog); Pour sends confirmWarnings once', async () => {
     const { f, c, api, dialog } = render({ mergeFirst: 'confirm' });
     await open(f, c);
     c.openPour(red);
     await settle(f);
-    expect(c.pourWarnings()).toEqual(['Serum test into a fluoride (gray) tube']);
     await c.confirmPour();
+    await settle(f);
+    expect(c.pour()).toBeNull();
+    expect(c.inlineAsk()).toEqual({ kind: 'pour', srcId: 'red', targetId: 'grey', words: 'Serum into Fluoride' });
+    const ask = tileOf(f, '26105').querySelector('[data-testid="inline-ask"]')!;
+    expect(ask.textContent).toContain('Serum into Fluoride. Different additive. Pour anyway?');
+    expect(api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'))).toEqual([]);
+    (ask.querySelector('[data-testid="inline-go"]') as HTMLButtonElement).click();
     await settle(f);
     const merges = api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'));
     expect(merges.map(([u, b]: any[]) => [u, b])).toEqual([
       ['/api/samples/grey/merge', { sampleIds: ['red'], confirmWarnings: true }],
     ]);
     expect(dialog.confirm).not.toHaveBeenCalled();
-    expect(c.pour()).toBeNull();
+    expect(document.querySelector('[role="dialog"].pf-pour')).toBeNull();
   });
 
-  it('a warning only the server knew goes ON the sheet (no dialog) and needs one more press', async () => {
-    const { f, c, api, dialog } = render({
-      mergeFirst: 'confirm',
-      candidates: [{ id: 'red', barcode: '26104', tubeColor: 'plain', eligible: true, warnings: [] }],
-    });
+  it('Keep apart changes nothing', async () => {
+    const { f, c, api } = render();
     await open(f, c);
     c.openPour(red);
     await settle(f);
     await c.confirmPour();
     await settle(f);
-    expect(c.pour()).not.toBeNull();
-    expect(c.pourWarnings()).toEqual(['Serum test into a fluoride (gray) tube']);
-    expect(dialog.confirm).not.toHaveBeenCalled();
+    (tileOf(f, '26105').querySelector('[data-testid="inline-no"]') as HTMLButtonElement).click();
+    await settle(f);
+    expect(c.inlineAsk()).toBeNull();
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['red', 'grey']);
+    expect(api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'))).toEqual([]);
+  });
+
+  it('a warning only the server knew: rolled back, asked inline, then one more press', async () => {
+    const red2 = { ...red, tubeColor: 'fluoride' };
+    const { f, c, api, dialog } = render({
+      mergeFirst: 'confirm', samples: [red2, grey],
+      candidates: [{ id: 'red', barcode: '26104', tubeColor: 'fluoride', eligible: true, warnings: [] }],
+    });
+    await open(f, c);
+    c.openPour(red2);
+    await settle(f);
     await c.confirmPour();
+    await settle(f);
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['red', 'grey']);   // rolled back
+    expect(c.inlineAsk()).toMatchObject({ kind: 'pour', words: 'Serum test into a fluoride (gray) tube' });
+    await c.confirmInlinePour();
     await settle(f);
     const merges = api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'));
     expect(merges.map(([, b]: any[]) => b.confirmWarnings)).toEqual([false, true]);
-    expect(c.pour()).toBeNull();
     expect(dialog.confirm).not.toHaveBeenCalled();
   });
 
-  it('after the pour: poured tube leaves, kept tube shows "+ Red (26104)" and is collected', async () => {
-    const { f, c, toasts } = render({ confirm: [false] });
+  it('after the pour: poured tube leaves, kept tube shows "+ Red · 26104", "2 tubes in one", toast with Undo — no refetch', async () => {
+    const { f, c, toasts, api } = render();
     await open(f, c);
+    const gets = api.get.mock.calls.filter(([u]: any[]) => String(u).includes('pending-collection')).length;
     c.openPour(red);
     await settle(f);
     await c.confirmPour();
+    await c.confirmInlinePour();
     await settle(f);
     const g = c.activeGroup();
     expect(g.samples.map((s: any) => s.id)).toEqual(['grey']);
     expect(g.samples[0].status).toBe('collected');
-    const chips = [...tileOf(f, '26105').querySelectorAll('.pf-sc-merge')].map(n => n.textContent!.trim());
-    expect(chips).toEqual(['+ Red (26104)']);
+    const chips = [...tileOf(f, '26105').querySelectorAll('[data-testid="merge-chip"]')].map(n => n.textContent!.trim());
+    expect(chips).toEqual(['+ Red · 26104']);
+    expect(tileOf(f, '26105').querySelector('[data-testid="tubes-in-one"]')!.textContent).toContain('2 tubes in one');
     expect(c.tubeTests(g.samples[0]).map((t: any) => t.name)).toEqual(['Glucose Fasting', 'Bilirubin Total']);
-    expect(toasts.success).toHaveBeenCalledWith('Poured into Grey · 26105 — 26104 still scans');
-    expect(c.pour()).toBeNull();
+    expect(toasts.withAction).toHaveBeenCalledWith('Merged Red 26104 into Grey 26105', expect.objectContaining({ label: 'Undo' }));
+    expect(api.get.mock.calls.filter(([u]: any[]) => String(u).includes('pending-collection')).length).toBe(gets);
+  });
+
+  it('Undo = Separate: the tube is back with its own ID', async () => {
+    const { f, c, toasts, api } = render();
+    await open(f, c);
+    c.openPour(red);
+    await settle(f);
+    await c.confirmPour();
+    await c.confirmInlinePour();
+    await settle(f);
+    const undo = toasts.withAction.mock.calls[0][1];
+    undo.run();
+    await settle(f); await settle(f);
+    expect(api.post).toHaveBeenCalledWith('/api/samples/grey/separate', { sampleId: 'red' });
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['grey', 'red']);
+    expect(toasts.withAction).toHaveBeenLastCalledWith('Red 26104 is its own tube again', expect.objectContaining({ label: 'Print label' }), 'success');
+  });
+
+  it('a refused Separate rolls back with a plain error', async () => {
+    const { f, c, toasts } = render({ separate: 'refuse', samples: [keptAfter] });
+    await open(f, c);
+    const chip = tileOf(f, '26105').querySelector<HTMLButtonElement>('[data-testid="merge-chip"]')!;
+    chip.click();
+    await settle(f);
+    expect(tileOf(f, '26105').querySelector('[data-testid="inline-ask"]')!.textContent).toContain('Take Red 26104 back out?');
+    await c.confirmSeparate();
+    await settle(f);
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['grey']);
+    expect(toasts.error).toHaveBeenCalledWith('This tube has left the counter, so it can’t be separated any more.');
+  });
+
+  it('after dispatch the chip is not tappable and says why', async () => {
+    const { f, c } = render({ samples: [{ ...keptAfter, status: 'dispatched' }] });
+    await open(f, c);
+    const chip = tileOf(f, '26105').querySelector<HTMLButtonElement>('[data-testid="merge-chip"]');
+    if (!chip) return;   // a dispatched tube may leave the pending list entirely
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    expect(chip.title).toMatch(/left the counter/);
+    chip.click();
+    expect(c.inlineAsk()).toBeNull();
   });
 
   it('after the pour NO relabel prompt appears - the kept tube keeps its ID (OPS-123)', async () => {
@@ -277,14 +344,16 @@ describe('Sample collection — pour one tube into another', () => {
     expect(printer.printLabelData).not.toHaveBeenCalled();
   });
 
-  it('a server refusal is toasted in plain words and the sheet stays open', async () => {
+  it('a server refusal rolls the screen back and is toasted in plain words', async () => {
     const { f, c, toasts } = render({ mergeFirst: 'refuse' });
     await open(f, c);
     c.openPour(red);
     await settle(f);
     await c.confirmPour();
+    await c.confirmInlinePour();
+    await settle(f);
     expect(toasts.error).toHaveBeenCalledWith('The lab has already received this tube.');
-    expect(c.pour()).not.toBeNull();
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['red', 'grey']);
   });
 
   it('several tubes into one: "Also pour" lists the other eligible candidates and posts them all', async () => {
