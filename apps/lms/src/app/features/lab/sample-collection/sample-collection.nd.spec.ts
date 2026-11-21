@@ -345,7 +345,7 @@ describe('Collect sample — symmetric tiles, lean COLLECTION panel', () => {
     expect(info).not.toBeNull();
     const text = info.textContent!.replace(/\s+/g, ' ');
     expect(text).toContain('Urgent');
-    expect(text).toContain('Required for Glucose Fasting');
+    expect(text).toContain('Required Glucose Fasting');
     expect(text).toContain('Dr. A. Sharma');
     expect(text).not.toContain('Hospital');
   });
