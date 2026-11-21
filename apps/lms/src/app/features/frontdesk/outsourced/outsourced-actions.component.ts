@@ -85,7 +85,7 @@ import {
   styles: [`
     :host { display: contents; }
     .pf-out-acts__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-    .pf-out-acts { display: flex; align-items: center; gap: 6px; }
+    .pf-out-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }   /* several actions wrap, never past the row */
   `],
 })
 export class OutsourcedActionsComponent {

@@ -1,7 +1,7 @@
 import type { Page, Request } from '@playwright/test';
 import { openEditorSection } from './support/test-editor-nav';
 import { test, expect, shotsDir, expectLayout, expectFitsWidth, projectName, isPhone } from './support/form-factor';
-import { deskTab } from './support/frontdesk';
+import { deskTab, dispatchDrawnItem, openRowMenu } from './support/frontdesk';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -230,17 +230,25 @@ test.describe('OPS-124 / 129 / 130 collection', () => {
   test('Done for now after the draw, then front desk Dispatch: the tube reaches the lab Intake', async ({ page }) => {
     samples[1].status = 'collected'; samples[1].collectedAt = iso(new Date());   // drawn at the 1 h mark
     await deskInProgress(page);
-    const dispatch = page.locator('button[aria-label="Dispatch drawn tubes"]').locator('visible=true').first();
-    await expect(dispatch).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('button[aria-label="Collect"], .pf-rowact__t:has-text("Collect")').locator('visible=true').first()).toBeVisible();
+    // Flow grid (approved 2026-11-19): Collect is the row's ONE Next button; Dispatch drawn tubes is in its ⋯ menu.
+    await expect(page.locator('button[aria-label="Collect"], .pf-rowact__t:has-text("Collect")').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await light(page);
     await expectLayout(page, 'front desk');
+    const dispatch = await dispatchDrawnItem(page, 'Nandini Rao');
+    await expect(dispatch).toBeVisible();
+    await expect(dispatch).toHaveText(/Dispatch/);
     await shot(page, '130-frontdesk-collect-dispatch');
     await dispatch.click();
     await expect.poll(() => requests.includes('PATCH /api/orders/os/dispatch')).toBe(true);
     expect(samples.filter(s => s.status === 'dispatched').map(s => s.id)).toEqual(['s0', 's1']);
     expect(samples.find(s => s.id === 's2')!.status).toBe('pending');
-    await expect(page.locator('button[aria-label="Dispatch drawn tubes"]').locator('visible=true')).toHaveCount(0, { timeout: 20_000 });
+    // Nothing drawn is left to send: the row's menu no longer offers Dispatch.
+    await expect.poll(async () => {
+      const menu = await openRowMenu(page, 'Nandini Rao');
+      const n = await menu.locator('[data-action="dispatch-drawn"]').count();
+      await page.keyboard.press('Escape');
+      return n;
+    }, { timeout: 20_000 }).toBe(0);
     // The lab Intake now lists the order.
     await page.goto('/lab/my-work');
     await page.getByText('Lab Intake', { exact: false }).locator('visible=true').first().click();
@@ -253,6 +261,8 @@ test.describe('OPS-124 / 129 / 130 collection', () => {
     await deskInProgress(page);
     await expect(page.getByText('Nandini Rao').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('button[aria-label="Dispatch drawn tubes"]').locator('visible=true')).toHaveCount(0);
+    const menu = await openRowMenu(page, 'Nandini Rao');
+    await expect(menu.locator('[data-action="dispatch-drawn"]')).toHaveCount(0);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { Page, Request } from '@playwright/test';
-import { test, expect, shotsDir } from './support/form-factor';
+import { test, expect, shotsDir, hasCdp } from './support/form-factor';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -148,6 +148,8 @@ async function openBaby(page: Page) {
 async function drag(page: Page, from: string, to: string, frames?: { name: string; at: number[] }) {
   const a = await center(page, from), b = await center(page, to);
   if (isTouch()) {
+    // The touch hold + move is driven through CDP touch events (Chromium only); webkit runs cover the mouse layouts.
+    test.skip(!hasCdp(), 'touch drag needs CDP touch events (Chromium only)');
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a.x, y: a.y }] });
     await page.waitForTimeout(330);

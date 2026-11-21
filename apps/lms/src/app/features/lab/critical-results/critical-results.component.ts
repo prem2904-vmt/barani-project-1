@@ -457,7 +457,7 @@ export class CriticalResultsComponent {
     if (!this.isPhone) return cols;
     const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
     const record: ColDef<CriticalResultEvent> = textCol<CriticalResultEvent>({
-      colId: 'record', headerName: 'Record', flex: 1, minWidth: 150,
+      colId: 'record', headerName: 'Record', flex: 1, minWidth: 146,
       cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const e = p.data; if (!e) return '';
         const st = criticalStatusWord(e.status);
@@ -470,7 +470,8 @@ export class CriticalResultsComponent {
     const detected = cols.find(c => c.colId === 'detectedAt');
     const actions = cols.find(c => c.colId === 'actions');
     return [
-      { ...detected, headerName: 'When', width: 92, minWidth: 92, cellRenderer: (p: { data?: CriticalResultEvent }) => {
+      { ...detected, headerName: 'When', width: 98, minWidth: 98,   // 'When' + its sort / filter icons, never ellipsised (headers never truncate)
+        cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const [d, t] = istStamp(p.data?.detectedAt).split(', ');
         return `<div class="pf-cr-cell"><span>${esc(d)}</span><span class="pf-cr-cell__sub">${esc(t ?? '')}</span></div>`;
       } },

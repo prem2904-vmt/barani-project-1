@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isTouch, projectName } from './support/form-factor';
+import { test, expect, isTouch, projectName, belowGrid } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, ME } from './support/neg-backend';
 
 /**
@@ -408,7 +408,7 @@ test.describe('small screens — one list family, grid ≥1024', () => {
   ];
   for (const [name, route, tab, headSel] of SCROLL) {
     test(`long list stays usable mid-scroll: ${name}`, async ({ page }) => {
-      test.skip(!['phone', 'tablet'].includes(projectName()), 'below 1024px only (wider = the grid, which scrolls inside its card already)');
+      test.skip(!belowGrid(), 'below 1024px only (wider = the grid, which scrolls inside its card already)');
       BIG = true;
       await go(page, route);
       await page.locator('pf-work-list .pf-wl__row').locator('visible=true').first().waitFor({ timeout: 45_000 }).catch(() => undefined);

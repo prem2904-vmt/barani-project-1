@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, inject } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, inject, viewChild } from '@angular/core';
 import type { IHeaderParams } from 'ag-grid-community';
-import { ActionsMenuComponent, PfAction } from '../../../../shared/components/actions-menu/actions-menu.component';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, PfAction } from '../../../../shared/components/actions-menu/actions-menu.component';
 import type { FlowGridContext } from './flow-cells';
 
 /** How a header behaves: the settings preview edits columns, the Frontdesk may let a person hide one. */
@@ -23,15 +23,18 @@ const GRIP = 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01';
  * The flow grid's INNER header (AG-Grid `headerComponentParams.innerHeaderComponent`: the grid keeps its own sort /
  * filter icons, this draws only the label part).
  *  - plain: the label, exactly as before.
- *  - staff (the admin lets staff hide columns): the label + ⋯ → "Hide column" (and "Show all columns" once some are
- *    hidden), saved for this person only.
+ *  - staff (the admin lets staff hide columns): "Hide column" (and "Show all columns" once some are hidden), saved for
+ *    this person only. A click on the label SORTS, exactly like every other grid (release gate 2026-11-21: the label
+ *    used to be the menu button too, so every sort click also opened the menu and its invisible backdrop swallowed the
+ *    next click). The Column menu opens on a right-click, a press-and-hold (touch) or the context-menu key /
+ *    Shift+F10 on the focused header.
  *  - edit (Settings › Work grid columns preview): grip + label + ✕ (lock for Token / Patient / Next); drag with a
  *    pointer (mouse or touch), Alt+← / Alt+→ on the focused header. The settings page owns the drag (ctx.columnEdit).
  */
 @Component({
   selector: 'pf-fd-flow-head',
   standalone: true,
-  imports: [ActionsMenuComponent],
+  imports: [ActionsMenuComponent, ActionsMenuTriggerDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.fd-hd-host--edit]': "p?.mode === 'edit'" },
   template: `
@@ -55,13 +58,14 @@ const GRIP = 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01';
           }
         </span>
       } @else {
-        <span class="fd-hd">
+        <span class="fd-hd" [attr.data-fd-menu]="h.mode === 'staff' && !h.locked ? h.fdId : null">
+          <span class="fd-hd__label">{{ h.label }}</span>
           @if (h.mode === 'staff' && !h.locked) {
-            <!-- The label IS the menu button (no extra icon: header widths stay as they were, labels are never cut). -->
-            <pf-actions-menu class="fd-hd__menu" [actions]="menu" heading="Column" [label]="h.label + ', column options'"
-              [triggerText]="h.label" labelClass="fd-hd__label" triggerClass="fd-hd__more" [attr.data-fd-menu]="h.fdId" (action)="pick($event)" />
-          } @else {
-            <span class="fd-hd__label">{{ h.label }}</span>
+            <!-- The label stays a plain label (a click sorts). The menu opens from contextmenu / press-and-hold / keys
+                 (see agInit); this zero-width anchor only places it, it never takes a click. -->
+            <pf-actions-menu class="fd-hd__menu" [actions]="menu" heading="Column" [label]="h.label + ', column options'" (action)="pick($event)">
+              <span pfActionsTrigger class="fd-hd__anchor" aria-hidden="true"></span>
+            </pf-actions-menu>
           }
         </span>
       }
@@ -82,22 +86,71 @@ const GRIP = 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01';
     .fd-hd__x:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
     /* Touch: a 44px hit area around the 22px ✕ (never 44px of width — labels keep their room). */
     @media (pointer: coarse) { .fd-hd__x::after { content: ''; position: absolute; inset: -11px; } }
-    /* The label as a button: no padding / margin of its own (the header width is exactly the plain label's). */
-    :host ::ng-deep .fd-hd__more { display: inline-flex; align-items: center; height: 24px; padding: 0; margin: 0; border: 0; border-radius: 4px;
-      background: transparent; color: inherit; font: inherit; cursor: pointer; position: relative; white-space: nowrap; min-width: 0; }
-    :host ::ng-deep .fd-hd__more .pf-am-trigger__i { display: none !important; }
-    :host ::ng-deep .fd-hd__more:hover, :host ::ng-deep .fd-hd__more:focus-visible { background: var(--pf-chip-bg); box-shadow: 0 0 0 3px var(--pf-chip-bg); color: var(--text-primary); }
-    :host ::ng-deep .fd-hd__more:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
-    /* Touch: 44px tall hit area (vertical only — the filter icon beside it keeps its own). */
-    @media (pointer: coarse) { :host ::ng-deep .fd-hd__more::after { content: ''; position: absolute; inset: -9px 0; } }
+    /* The menu's anchor: zero width (header widths stay exactly the plain label's), never hit-testable. */
+    .fd-hd__menu { display: inline-flex; width: 0; height: 24px; margin-left: -6px; overflow: visible; pointer-events: none; }
+    .fd-hd__anchor { display: block; width: 0; height: 24px; pointer-events: none; }
   `],
 })
 export class FlowHeadComponent {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly colMenu = viewChild(ActionsMenuComponent);
   p: P | null = null;
   menu: PfAction[] = [];
   readonly grip = GRIP;
+
+  constructor() {
+    // The Column menu (staff mode) opens from the WHOLE header cell: right-click, press-and-hold, ContextMenu / Shift+F10.
+    // A plain click is left to AG-Grid (sort). A hold that opened the menu swallows the click that follows it.
+    const destroy = inject(DestroyRef);
+    afterNextRender(() => {
+      const cell = this.el.nativeElement.closest('.ag-header-cell') as HTMLElement | null;
+      if (!cell) return;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let start: { x: number; y: number } | null = null;
+      const cancel = () => { if (timer) clearTimeout(timer); timer = null; start = null; };
+      const swallowNextClick = () => {
+        const stop = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
+        cell.addEventListener('click', stop, { capture: true, once: true });
+        setTimeout(() => cell.removeEventListener('click', stop, { capture: true }), 800);
+      };
+      const onContext = (e: MouseEvent) => {
+        if (!this.staffMenu() || (e.target as HTMLElement)?.closest('.ag-header-cell-filter-button')) return;
+        e.preventDefault();
+        this.openMenu();
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (!this.staffMenu() || !(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+        e.preventDefault(); e.stopPropagation();
+        this.openMenu();
+      };
+      const onDown = (e: PointerEvent) => {
+        if (!this.staffMenu() || e.pointerType === 'mouse' || (e.target as HTMLElement)?.closest('.ag-header-cell-filter-button')) return;
+        cancel();
+        start = { x: e.clientX, y: e.clientY };
+        timer = setTimeout(() => { timer = null; swallowNextClick(); this.openMenu(); }, 550);
+      };
+      const onMove = (e: PointerEvent) => { if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel(); };
+      cell.addEventListener('contextmenu', onContext);
+      cell.addEventListener('keydown', onKey);
+      cell.addEventListener('pointerdown', onDown);
+      cell.addEventListener('pointermove', onMove);
+      cell.addEventListener('pointerup', cancel);
+      cell.addEventListener('pointercancel', cancel);
+      destroy.onDestroy(() => {
+        cancel();
+        cell.removeEventListener('contextmenu', onContext);
+        cell.removeEventListener('keydown', onKey);
+        cell.removeEventListener('pointerdown', onDown);
+        cell.removeEventListener('pointermove', onMove);
+        cell.removeEventListener('pointerup', cancel);
+        cell.removeEventListener('pointercancel', cancel);
+      });
+    });
+  }
+
+  private staffMenu(): boolean { return this.p?.mode === 'staff' && !this.p.locked && !!this.colMenu(); }
+  private openMenu(): void { const m = this.colMenu(); if (m && !m.open()) m.show('first'); }
 
   agInit(p: P): void {
     this.p = p;

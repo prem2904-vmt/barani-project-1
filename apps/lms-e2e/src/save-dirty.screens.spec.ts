@@ -2,7 +2,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, isPhone, shotsDir } from './support/form-factor';
-import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
+import { neg, resetNeg, installNegBackend, go, toast } from './support/neg-backend';
 
 /**
  * SAVE ONLY WHEN SOMETHING CHANGED (owner 2026-11-19): every Save is DISABLED on load (the kit's disabled primary,
@@ -101,7 +101,12 @@ test.describe('Save only when something changed', () => {
     await sw.click();
     await save.click();
     await expect.poll(() => neg.calls.filter(c => c.path === '/api/config/billing').length).toBe(1);
+    // The failed save has ANSWERED (its reason is on screen) before the next try: the request is counted when the mock
+    // receives it, a beat before the page gets the 500 — a key press in that beat lands while the first save is still
+    // in flight, and the page rightly refuses a second save on top of it (release gate 2026-11-21).
+    await expect(toast(page, 'Down for a moment')).toBeVisible();
     await expectSaveOn(save);
+    await expect(save).toHaveText(/Save/);
 
     // A successful save (Ctrl/Cmd+S presses the enabled Save) → disabled again.
     resetHookToOk();

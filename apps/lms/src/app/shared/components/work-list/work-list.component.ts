@@ -85,14 +85,17 @@ import { WorkListItem, WorkListStatus, factsLine, statusLine } from './work-list
     .pf-wl { display: block; min-width: 0; }
     .pf-wl__list { list-style: none; margin: 0; padding: 0; }
     .pf-wl__row {
-      display: flex; align-items: center; gap: 8px 12px; min-height: 64px; padding: 10px 4px 10px 12px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 64px; padding: 10px 4px 10px 12px;
       border-bottom: 1px solid var(--pf-line, var(--glass-border));
     }
     .pf-wl__row:last-child { border-bottom: 0; }
     .pf-wl__row--sub { padding-left: 32px; }
     .pf-wl__row--on { background: var(--pf-sel-bg, color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent)); }
+    /* The text keeps at least ~12rem: a row with several actions (an Outsourced tube with a report: View · Detach ·
+       Mark completed · Replace) moves its actions to a line of their own instead of squeezing the name to one letter a
+       line (release gate 2026-11-21, phone). One action still sits beside the text. */
     .pf-wl__main {
-      flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; cursor: pointer; outline: none;
+      flex: 1 1 12rem; min-width: 0; display: flex; flex-direction: column; gap: 3px; cursor: pointer; outline: none;
       border-radius: var(--pf-radius-sm, 8px);
     }
     .pf-wl__main:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
@@ -112,7 +115,7 @@ import { WorkListItem, WorkListStatus, factsLine, statusLine } from './work-list
     .pf-wl__l3 .pf-sw__detail::before { content: '· '; }
     .pf-wl__time { flex: none; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
     .pf-wl__time--late { color: var(--pf-late-text, var(--red-text)); font-weight: 600; }
-    .pf-wl__act { flex: none; display: flex; align-items: center; gap: 6px; }
+    .pf-wl__act { flex: 0 1 auto; max-width: 100%; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
     .pf-wl .pf-wl__primary { height: 44px; min-height: 44px; padding: 0 14px; font-size: 13px; }
     .pf-wl .pf-wl__more { width: 44px; height: 44px; min-height: 44px; }
     /* The row's primary is a TEXT button on touch too (never icon-only): an icon-mode action handed in through

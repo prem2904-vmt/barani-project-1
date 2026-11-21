@@ -139,7 +139,7 @@ export function readAge(text: string): number | null {
        head, search and foot keep their height (flex: none); ONLY the list (or the new-patient fields) scrolls and takes
        what is left; the foot is its own band under a hairline, never on top of a row. Phone: a bottom sheet (the
        global auto-sheet rule styles .ps-card as the sheet panel). */
-    .ps-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-end; justify-content: center; }
+    .ps-root { position: fixed; inset: 0 0 var(--pf-nav-h, 0px) 0; z-index: 1000; display: flex; align-items: flex-end; justify-content: center; }   /* the sheet's foot clears the bottom nav */
     @media (min-width: 640px) { .ps-root { align-items: center; padding: 24px; } }
     .ps-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
     .ps-card {

@@ -1115,7 +1115,7 @@
                    [class.pf-sc-side--docked]="infoDocked()" [class.pf-sc-side--collapsed]="!infoOpen() && !actionsOpen()"
                    [class.pf-sc-side--drawer]="infoDrawerOpen()" data-testid="collect-info-panel"
                    [attr.role]="infoDrawerOpen() ? 'dialog' : null" [attr.aria-modal]="infoDrawerOpen() ? 'true' : null"
-                   [attr.inert]="infoDocked() && !infoOpen() && !actionsOpen() ? '' : null"
+                   [attr.inert]="hosted() && infoDocked() && !infoOpen() && !actionsOpen() ? '' : null"
                    (keydown)="onInfoKeydown($event)" (pointerdown)="onInfoPointerDown($event)" (pointerup)="onInfoPointerUp($event)"
                    aria-label="Collection">
               <span class="pf-sheet__handle" aria-hidden="true"></span>
