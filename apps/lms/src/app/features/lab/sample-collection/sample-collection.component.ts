@@ -1503,7 +1503,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       .filter((n): n is string => !!n);
     this.clearPress();
     const g = this.activeGroup();
-    if (g && this.canPour(s, g)) {
+    if (g && this.canPour(s, g) && !this.mergeBusy() && !this.inlineAsk()) {
       this._pourEl = ev.currentTarget as HTMLElement;
       this.pourDrag.down(s.id, ev);
     }
@@ -2403,7 +2403,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return this.dispatchSelect() === null && g.samples.some(s => this.canPour(s, g));
   }
 
+  /** Bumped on every lift, so a finishing merge motion never clears a NEWER gesture's ghost. */
+  private _gestureSeq = 0;
   private onPourLift(id: string): void {
+    this._gestureSeq++;
     if (this._exitTimer) { clearTimeout(this._exitTimer); this._exitTimer = null; }
     this.dragExit.set(null);
     this.dragSrc.set(id);
@@ -2504,8 +2507,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const a = this.inlineAsk();
     this.inlineAsk.set(null);
     if (a?.kind !== 'pour') return;
+    const seq = this._gestureSeq;
     await flyBack(this.ghostEl(), this.tileEl(a.srcId), this.reducedMotion());
-    this.releaseGhost(false);
+    if (seq === this._gestureSeq) this.releaseGhost(false);
   }
 
   /** Inline "Pour" (different additive accepted). */
@@ -2536,9 +2540,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const api = this.postMerge(targetId, [srcId], confirm)
       .then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e: ApiError.from(e) }));
     const target = this.tileEl(targetId);
+    const seq = this._gestureSeq;
     if (motion === 'slide') await slideIn(this.ghostEl(), target, reduced);
     else await pourIn(this.ghostEl(), target, this.container(src).fill ?? '#b91c1c', reduced);
-    this.releaseGhost(false);
+    if (seq === this._gestureSeq) this.releaseGhost(false);
     await foldAway(this.tileEl(srcId)?.closest<HTMLElement>('.pf-tube-wrap') ?? null, reduced);
     const grid = target?.closest('.pf-sc-grid') ?? null;
     const before = rectsOf(grid);
