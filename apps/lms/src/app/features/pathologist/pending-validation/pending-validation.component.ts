@@ -4,7 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
-import { GridFold, alignCol, dueCell, dueComparator, dueValue, fitFold, minWidthOf, minutesSince, numberFilterCol, setFilterCol, textFilterCol } from '../../../shared/utils/work-grid';
+import { GridFold, actionCol, dueCell, dueValue, durationCol, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 import { pvColumns, pvMeta, pvRows, pvWaiting } from './pending-validation.grid';
@@ -806,26 +806,26 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
       patient: { flex: 1, minWidth: fold === 'tight' ? 190 : 250 },
       status: { width: 168, minWidth: 168 },
       due: { width: 100, minWidth: 100 },
-      wait: { width: 110, minWidth: 110 },
+      wait: { width: 118, minWidth: 118 },
       acts: { width: acts, minWidth: acts },
     };
   }
-  /** Column rules shared by every work grid (shared/utils/work-grid.ts): alignment + Test Master's header filters. */
-  private colRules(): Record<string, ColDef<QueueTile>> {
+  /** Every column through the shared work-grid helpers (shared/utils/work-grid.ts): alignment + header filter + a
+   *  sort on the REAL value (minutes left / minutes waiting, the whole name), built together. */
+  private colRule(colId: string, def: ColDef<QueueTile>): ColDef<QueueTile> {
     const set = WorkSetFilterComponent;
-    return {
-      sample: { ...alignCol('left'), ...textFilterCol<QueueTile>(g => g.sampleLabel) } as ColDef<QueueTile>,
-      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<QueueTile>(g => {
+    const wrap = (d: ColDef<QueueTile>) => ({ ...d, cellClass: 'wg-c-wrap' });
+    switch (colId) {
+      case 'sample': return textCol<QueueTile>(def, g => g.sampleLabel);
+      case 'patient': return textCol<QueueTile>(wrap(def), g => {
         const p = g.items[0]?.subOrder?.order?.patient as { mrn?: string; phone?: string } | undefined;
         return [g.patientName, p?.mrn, p?.phone].filter(Boolean).join(' ');
-      }) } as ColDef<QueueTile>,
-      status: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<QueueTile>(g => this.status(g).label, set) } as ColDef<QueueTile>,
-      due: { ...alignCol('center'), ...numberFilterCol<QueueTile>(g => dueValue(g.remainingMin)),
-        sortable: true, sortingOrder: ['asc', 'desc', null], comparator: (_a: unknown, _b: unknown, na: { data?: QueueTile }, nb: { data?: QueueTile }) =>
-          dueComparator(dueValue(na.data?.remainingMin), dueValue(nb.data?.remainingMin)) } as ColDef<QueueTile>,
-      wait: { ...alignCol('center'), ...numberFilterCol<QueueTile>(g => minutesSince(g.items.map(i => i.resultedAt).filter(Boolean).sort().pop() ?? null)) } as ColDef<QueueTile>,
-      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<QueueTile>,
-    };
+      }, 'left', g => g.patientName);
+      case 'status': return valuesCol<QueueTile>(wrap(def), g => this.status(g).label, set, 'center');
+      case 'due': return durationCol<QueueTile>(def, g => dueValue(g.remainingMin), { kind: 'due' });
+      case 'wait': return durationCol<QueueTile>(def, g => minutesSince(g.items.map(i => i.resultedAt).filter(Boolean).sort().pop() ?? null), { kind: 'wait' });
+      default: return actionCol<QueueTile>({ ...def, cellClass: 'wg-c-acts' });
+    }
   }
   private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
   private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
@@ -842,9 +842,8 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
       due: this.dueTpl(), wait: this.waitTpl(), acts: this.actsColTpl(),
     };
     const size = this.sizes(this.fold());
-    const rules = this.colRules();
-    return pvColumns(this.fold()).map(c => ({
-      colId: c.colId, headerName: c.header, hide: c.hide, ...size[c.colId], ...rules[c.colId],
+    return pvColumns(this.fold()).map(c => this.colRule(c.colId, {
+      colId: c.colId, headerName: c.header, hide: c.hide, ...size[c.colId],
       cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[c.colId] },
     }));
   });

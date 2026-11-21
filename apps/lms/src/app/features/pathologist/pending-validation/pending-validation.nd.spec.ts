@@ -219,11 +219,19 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(by['wait'].filter).toBe('agNumberColumnFilter');
     expect(typeof by['status'].filter).toBe('function');
     expect(by['acts'].filter).toBe(false);
-    expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass])
+    expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass].map(h => [h].flat().join(' ')))
       .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-center', 'wg-h-right']);
+    // Every data column SORTS on its real value (owner 2026-11-21), asc → desc → none; the actions never.
+    for (const k of ['sample', 'patient', 'status', 'due', 'wait']) {
+      expect(by[k].sortable, k).toBe(true);
+      expect(by[k].sortingOrder, k).toEqual(['asc', 'desc', null]);
+      expect(typeof by[k].comparator, k).toBe('function');
+    }
+    expect(by['acts'].sortable).toBe(false);
+    expect(typeof by['wait'].valueGetter({ data: c.gridRows()[0] })).toBe('number');
     // Due (time left to TAT) instead of a journey ring: sortable, centred, rose once late.
     expect(by['due'].sortable).toBe(true);
-    expect(by['due'].headerClass).toBe('wg-h-center');
+    expect([by['due'].headerClass].flat().join(' ')).toBe('wg-h-center');
     expect(by['journey']).toBeUndefined();
     expect(el.querySelector('pf-journey-ring')).toBeNull();
     const due = Object.fromEntries(tilesOf(el).map(t => [t.querySelector('.pv-tile__id')!.textContent!.trim(), t.querySelector('.pv-due')!]));

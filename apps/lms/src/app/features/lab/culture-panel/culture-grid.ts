@@ -1,5 +1,5 @@
 import type { CultureCaseView, CultureStageView } from './culture-panel.component';
-import type { GridFold, WorkStatus } from '../../../shared/utils/work-grid';
+import { durationText, type GridFold, type WorkStatus } from '../../../shared/utils/work-grid';
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
 import { formatPatientMeta } from '../../../shared/models/patient.model';
 
@@ -72,7 +72,7 @@ export function readyIn(s: CultureStageView, now: number): string {
   const ms = u - now;
   if (ms <= 0) return 'now';
   const m = Math.floor(ms / 60_000);
-  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  return m < 60 ? `${m}m` : durationText(m);
 }
 
 /** Due = the next read (owner 2026-11-21: no journey ring on the lab screens): minutes until the plate is ready
@@ -98,6 +98,12 @@ export function nextStep(c: CultureCaseView, now: number): { label: string; tone
   const st = cultureStatus(c, now);
   const cur = currentStage(c);
   return { label: cur?.label ?? 'Sign-out', tone: st.tone, title: [st.label, stageSub(c, now, null)].filter(Boolean).join(' · ') };
+}
+/** The Next-step column's sort: how far the case is (index of the first not-done stage; sign-out = after the last). */
+export function cultureStageRank(c: CultureCaseView): number {
+  const st = c.stages ?? [];
+  const i = st.findIndex(x => x.state !== 'done');
+  return i < 0 ? st.length : i;
 }
 /** The Test column: "Urine · Bacterial Culture & Sensitivity · Microbiology". */
 export function cultureTest(c: CultureCaseView): string {

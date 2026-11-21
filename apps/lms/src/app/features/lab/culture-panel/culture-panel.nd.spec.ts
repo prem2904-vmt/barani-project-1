@@ -54,6 +54,20 @@ describe('Culture tiles — new design', () => {
     expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/lab/culture', 'ot-1']);
   });
 
+  it('every data column sorts AND filters on its real value (owner 2026-11-21); Open never', async () => {
+    render(true);
+    const c = (fixture as unknown as { componentInstance: CulturePanelComponent }).componentInstance;
+    const by = Object.fromEntries(c.cols().map(d => [d.colId, d]));
+    for (const k of ['sample', 'patient', 'test', 'day', 'next', 'due']) {
+      expect(by[k].sortable, k).toBe(true);
+      expect(by[k].sortingOrder, k).toEqual(['asc', 'desc', null]);
+      expect(typeof by[k].comparator, k).toBe('function');
+      expect(by[k].filter, k).toBeTruthy();
+    }
+    expect(by['acts'].sortable).toBe(false);
+    expect(by['due'].filter).toBe('agNumberColumnFilter');
+  });
+
   it('classic keeps its stripe and arrow', () => {
     const el = render(false);
     expect(el.querySelector('.pf-cc__cap')).toBeTruthy();

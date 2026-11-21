@@ -99,10 +99,20 @@ describe('My Work grid (rendered)', () => {
     sorts.set('work', 'default');
     const cols = grid.cols();
     const sortable = cols.filter(c => c.sortable).map(c => c.colId);
-    expect(sortable).toEqual(['sample', 'patient', 'due', 'wait']);
+    // EVERY data column sorts (owner 2026-11-21) on its real value, asc → desc → none; the actions never.
+    expect(sortable).toEqual(['sample', 'patient', 'priority', 'due', 'wait', 'status']);
+    for (const c of cols.filter(x => x.sortable)) {
+      expect(c.sortingOrder, c.colId).toEqual(['asc', 'desc', null]);
+      expect(typeof c.comparator, c.colId).toBe('function');
+      expect(c.filter, c.colId).toBeTruthy();
+    }
     // No journey ring on the lab screens (owner 2026-11-21): Due = time left to TAT.
     expect(cols.find(c => c.colId === 'journey')).toBeUndefined();
-    expect(cols.find(c => c.colId === 'due')!.sort).toBe('asc');   // the default order (Urgent first, then soonest due)
+    // The default order (Urgent first, then soonest due) is no header's: no arrow.
+    expect(cols.filter(c => c.sort).length).toBe(0);
+    // Waiting sorts on MINUTES, not the words.
+    const wait = cols.find(c => c.colId === 'wait')!;
+    expect(typeof (wait.valueGetter as (p: unknown) => unknown)({ data: sampleRowsOf([{ priority: 'normal', tubes: [tube()] }])[0] })).not.toBe('string');
     let onSort: () => void = () => undefined;
     const api = { addEventListener: (_: string, fn: () => void) => { onSort = fn; }, getColumnState: () => [{ colId: 'patient', sort: 'asc' }] };
     grid.onGridReady({ api } as never);
@@ -188,9 +198,10 @@ describe('My Work grid (rendered)', () => {
     expect(by['wait'].filter).toBe('agNumberColumnFilter');
     expect(by['acts'].filter).toBe(false);
     // Text stays left; short same-shape values centred; actions right — header matches cells.
-    expect([by['sample'].headerClass, by['patient'].headerClass]).toEqual(['wg-h-left', 'wg-h-left']);
-    for (const k of ['priority', 'due', 'wait', 'status']) expect(by[k].headerClass).toBe('wg-h-center');
-    expect(by['acts'].headerClass).toBe('wg-h-right');
+    const hc = (k: string) => [by[k].headerClass].flat().join(' ');
+    expect([hc('sample'), hc('patient')]).toEqual(['wg-h-left', 'wg-h-left']);
+    for (const k of ['priority', 'due', 'wait', 'status']) expect(hc(k)).toBe('wg-h-center');
+    expect(hc('acts')).toBe('wg-h-right');
     expect(by['patient'].cellClass).toContain('wg-c-left');
     expect(by['due'].cellClass).toContain('wg-c-center');
     // The patient text filter matches name, MRN and phone.

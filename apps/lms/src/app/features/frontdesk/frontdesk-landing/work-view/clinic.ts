@@ -1,4 +1,5 @@
 import type { ServiceId } from '../../../../core/services/service-shelf';
+import { durationText } from '../../../../shared/utils/work-grid';
 import type { FlowRow } from '../flow-grid/flow-row';
 import { stepOfRow } from '../who-is-where/who-is-where';
 import { sectionLabel } from './sections';
@@ -88,7 +89,8 @@ export function placeOf(r: FlowRow): Slot {
   return { key: `${s}:step:${step}`, title: step, rank: 3 };
 }
 
-const fmt = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+/** The shared work-grid duration ("2d 4h", never "1364h 20m"). */
+const fmt = (m: number) => durationText(m);
 
 /** The clinic: one block per service in `order` (then any other service that has rows), each with its places. */
 export function clinicServices(rows: readonly FlowRow[], order: readonly ServiceId[]): ClinicService[] {

@@ -2,6 +2,7 @@ import type { OpdVisitRow, PaymentDue } from '../../opd/frontdesk/desk.models';
 import { statusWord } from '../../opd/frontdesk/visit-status';
 import { opdVisitRingSteps } from '../../../shared/components/journey-ring/journey-ring';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { durationText } from '../../../shared/utils/work-grid';
 import type { WorkStatus } from './work-status-filter';
 import { LATE_AFTER_MIN, type FlowRow, type FlowTone } from './flow-grid/flow-row';
 
@@ -53,7 +54,7 @@ export function opdVisitFlowRow(v: OpdVisitRow, now: number, opts: { due?: numbe
     where: statusWord(v.status), whereSub: [v.doctorName, v.departmentName].filter(Boolean).join(' · '),
     tone: toneOf(v.status), journey: [], journeyLabel: '',
     ring: opdVisitRingSteps(v.status, { late, vitals: opts.vitals }),
-    waitMin, wait: waitMin === null ? '—' : waitMin < 1 ? 'Just now' : `${waitMin >= 60 ? `${Math.floor(waitMin / 60)}h ${waitMin % 60}m` : `${waitMin}m`}`,
+    waitMin, wait: waitMin === null ? '—' : waitMin < 1 ? 'Just now' : durationText(waitMin),
     late,
     pay, payDue: due > 0 || v.billStatus === 'pending' || v.billStatus === 'partial', due,
     createdMs: Date.parse(v.createdAt) || 0, dailyNo: null, dailyNoDay: null,

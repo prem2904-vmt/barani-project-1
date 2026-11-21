@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import { actionCol, alignCol, choiceFilterCol, numberCol, shapeCol, textCol, valuesCol } from './work-grid';
 import { WorkSetFilterComponent, valuesPass } from '../components/work-set-filter/work-set-filter.component';
-import { flowPatientText, flowPayValue, flowTokenText } from '../../features/frontdesk/frontdesk-landing/flow-grid/flow-grid.component';
+import { TestBed } from '@angular/core/testing';
+import { FlowGridComponent, flowPatientText, flowPayAmount, flowPayValue, flowSamples, flowTokenText, flowTokenValue } from '../../features/frontdesk/frontdesk-landing/flow-grid/flow-grid.component';
+import { sortsAndFilters, tokenValue } from './work-grid';
 import type { FlowRow } from '../../features/frontdesk/frontdesk-landing/flow-grid/flow-row';
 
 /**
@@ -111,8 +113,8 @@ describe('the shared set filter — both modes', () => {
 describe('the Frontdesk flow grid follows the rule', () => {
   const src = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/flow-grid/flow-grid.component.ts', 'utf8');
   it.each([
-    "textCol<FlowRow>({ colId: 'token'", "textCol<FlowRow>({ colId: 'patient'", "shapeCol<FlowRow>({ colId: 'journey'",
-    "valuesCol<FlowRow>({ colId: 'where'", "numberCol<FlowRow>({ colId: 'wait'", "valuesCol<FlowRow>({ colId: 'pay'", "actionCol<FlowRow>({ colId: 'next'",
+    "tokenCol<FlowRow>({ colId: 'token'", "textCol<FlowRow>({ colId: 'patient'", "shapeCol<FlowRow>({ colId: 'journey'",
+    "valuesCol<FlowRow>({ colId: 'where'", "durationCol<FlowRow>({ colId: 'wait'", "moneyCol<FlowRow>({ colId: 'pay'", "actionCol<FlowRow>({ colId: 'next'",
   ])('%s', head => expect(src).toContain(head));
 
   it('filter texts: token "#N"; patient = name + MRN + phone; one "Due" value for every amount due', () => {
@@ -127,5 +129,35 @@ describe('the Frontdesk flow grid follows the rule', () => {
     for (const k of ['.ag-cell.wg-c-center', '.ag-cell.wg-c-right', '.wg-h-center .ag-header-cell-label', '.wg-h-right .ag-header-cell-label', '.ag-header-cell-filtered']) {
       expect(css).toContain(k);
     }
+  });
+});
+
+describe('the Frontdesk flow grid — every data column sorts + filters on the real value (owner 2026-11-21)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  const colsAt = (width: number, service: string | null) => {
+    TestBed.configureTestingModule({ imports: [FlowGridComponent] });
+    const f = TestBed.createComponent(FlowGridComponent);
+    f.componentRef.setInput('context', {});
+    f.componentRef.setInput('service', service);
+    (f.componentInstance as unknown as { width: { set(n: number): void } }).width.set(width);
+    return f.componentInstance.cols();
+  };
+  it.each([[null], ['lab'], ['opd'], ['ipd'], ['er'], ['scan']])('service %s at 1400px: data columns sort + filter; sel / next / the ring picture never', svc => {
+    const cols = colsAt(1400, svc);
+    for (const c of cols) {
+      if (c.colId === 'sel' || c.colId === 'next' || c.colId === 'journey') { expect(c.sortable ?? false, c.colId).toBe(false); continue; }
+      expect(sortsAndFilters(c as never), c.colId).toBe(true);
+    }
+    expect(cols.find(c => c.colId === 'wait')?.filter ?? 'agNumberColumnFilter').toBe('agNumberColumnFilter');
+  });
+
+  it('Payment sorts on the rupees due, Token on day + number, Samples on drawn / total', () => {
+    const r = (o: Partial<FlowRow>) => ({ kind: 'order', due: 0, pay: 'Paid', journey: [], ...o }) as FlowRow;
+    expect(flowPayAmount(r({ due: 450, pay: '₹450.00 due' }))).toBe(450);
+    expect(flowPayAmount(r({ pay: 'Paid' }))).toBe(0);
+    expect(flowPayAmount(r({ pay: 'Not billed' }))).toBeNull();
+    expect(flowTokenValue(r({ order: { dailyNo: 2, dailyNoDay: '2026-10-01' } as never }))).toBe(tokenValue(2, '2026-10-01'));
+    expect(flowSamples(r({ order: { samples: [{ status: 'collected' }, { status: 'pending' }] } as never }))).toEqual({ done: 1, total: 2 });
+    expect(flowSamples(r({ kind: 'draft' }))).toBeNull();
   });
 });

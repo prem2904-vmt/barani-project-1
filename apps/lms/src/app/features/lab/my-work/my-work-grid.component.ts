@@ -12,12 +12,12 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { GridFold, alignCol, dateFilterCol, dueCell, fitFold, minWidthOf, minutesSince, numberFilterCol, setFilterCol, textFilterCol } from '../../../shared/utils/work-grid';
+import { GridFold, actionCol, dateCol, dueCell, durationCol, durationText, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import type { OrderTest } from '../../../shared/models/order.model';
 import {
   MwAction, MwDoneTube, MwMode, MwRow, MwRules, MwTube, doneMenu, donePrimary, doneStatus, groupPrimary,
-  groupStatus, mwColumns, sortColOf, sortKeyOf, tatCell, testNames, testsSummary, tubeMenu, tubePrimary, tubeStatus,
+  MwSortCol, groupStatus, mwColumns, sortColOf, sortKeyOf, tatCell, testNames, testsSummary, tubeMenu, tubePrimary, tubeStatus,
 } from './my-work.grid';
 
 /** What My Work hands its grid: its existing handlers and busy states (nothing new is decided here). */
@@ -134,7 +134,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
         [isFullWidthRow]="isDetail" [fullWidthCellRenderer]="detailRenderer" [fullWidthCellRendererParams]="detailParams()"
         [loading]="loading() && !rows().length" loadingLabel="Loading the queue…" [emptyTitle]="emptyTitle()"
-        [viewStateKey]="viewStateKey()" [viewStateSort]="false"
+        [viewStateKey]="viewStateKey()"
         (rowClicked)="onRow($event)" (gridReady)="onGridReady($event)" />
     }
 
@@ -410,7 +410,7 @@ export class MyWorkGridComponent implements AfterViewInit {
       // Wide enough for the header words + sort / filter icons (headers never ellipsise).
       priority: { width: 128, minWidth: 128 },
       due: { width: 108, minWidth: 104 },
-      wait: { width: 112, minWidth: 112 },
+      wait: { width: 118, minWidth: 118 },
       status: { width: 150, minWidth: 136 },
       when: { width: 160, minWidth: 160 },
       // One primary + ⋯ at their full size (touch: 44 tall, 8 apart) — columns fold before the buttons shrink.
@@ -418,19 +418,22 @@ export class MyWorkGridComponent implements AfterViewInit {
     };
   }
 
-  /** Column rules shared by every work grid (shared/utils/work-grid.ts): alignment + Test Master's header filters. */
-  private colRules(): Record<string, ColDef<MwRow>> {
+  /** Every column through the shared work-grid helpers (shared/utils/work-grid.ts): alignment + header filter + a
+   *  sort on the REAL value (minutes, epoch, Urgent-first), built together so no column filters without sorting. */
+  private colRule(colId: string, def: ColDef<MwRow>): ColDef<MwRow> {
     const set = WorkSetFilterComponent;
-    return {
-      sample: { ...alignCol('left'), ...textFilterCol<MwRow>(r => this.fSample(r)) } as ColDef<MwRow>,
-      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<MwRow>(r => this.fPatient(r)) } as ColDef<MwRow>,
-      priority: { ...alignCol('center'), ...setFilterCol<MwRow>(r => (r.kind === 'done' ? '' : r.priority === 'urgent' ? 'Urgent' : 'Normal'), set) } as ColDef<MwRow>,
-      due: { ...alignCol('center'), ...numberFilterCol<MwRow>(r => this.fDue(r)) } as ColDef<MwRow>,
-      wait: { ...alignCol('center'), ...numberFilterCol<MwRow>(r => this.fMinutes(r)) } as ColDef<MwRow>,
-      status: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<MwRow>(r => this.fStatus(r), set) } as ColDef<MwRow>,
-      when: { ...alignCol('center'), ...dateFilterCol<MwRow>(r => (r.kind === 'done' ? r.done.completedAt : null)) } as ColDef<MwRow>,
-      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<MwRow>,
-    };
+    const wrap = (d: ColDef<MwRow>) => ({ ...d, cellClass: 'wg-c-wrap' });
+    switch (colId) {
+      case 'sample': return textCol<MwRow>(def, r => this.fSample(r));
+      case 'patient': return textCol<MwRow>(wrap(def), r => this.fPatient(r), 'left', r => this.fName(r));
+      case 'priority': return valuesCol<MwRow>(def, r => (r.kind === 'done' ? '' : r.priority === 'urgent' ? 'Urgent' : 'Normal'), set, 'center',
+        r => (r.kind === 'done' ? null : r.priority === 'urgent' ? 0 : 1));
+      case 'due': return durationCol<MwRow>(def, r => this.fDue(r), { kind: 'due' });
+      case 'wait': return durationCol<MwRow>(def, r => this.fMinutes(r), { kind: 'wait' });
+      case 'status': return valuesCol<MwRow>(wrap(def), r => this.fStatus(r), set, 'center');
+      case 'when': return dateCol<MwRow>(def, r => (r.kind === 'done' ? r.done.completedAt : null));
+      default: return actionCol<MwRow>({ ...def, cellClass: 'wg-c-acts' });
+    }
   }
   // Filter values per row (a patient's inline tubes row answers like its patient row).
   private linesOf(r: MwRow): OrderTest[] { return r.kind === 'tube' ? r.tube.tests : r.kind === 'done' ? r.done.tests : r.group.items; }
@@ -443,6 +446,7 @@ export class MyWorkGridComponent implements AfterViewInit {
     const name = r.kind === 'tube' ? r.tube.patientName : r.kind === 'done' ? r.done.patientName : r.group.patientName;
     return [name, p?.mrn, p?.phone].filter(Boolean).join(' ');
   }
+  private fName(r: MwRow): string { return r.kind === 'tube' ? r.tube.patientName : r.kind === 'done' ? r.done.patientName : r.group.patientName; }
   private fStatus(r: MwRow): string {
     return r.kind === 'tube' ? this.tStatus(r.tube).label : r.kind === 'done' ? this.dStatus(r.done).label : this.gStatus(r.tubes).label;
   }
@@ -488,18 +492,13 @@ export class MyWorkGridComponent implements AfterViewInit {
       wait: this.waitTpl(), status: this.statusTpl(), when: this.whenTpl(), acts: this.actsTpl(),
     };
     const size = this.sizes(!this.web(), this.fold());
-    // Header sort = the lab's persisted sort (LabSortService, the old band picker): the server-side order is built
-    // by My Work (applyLabSort); the grid only shows the arrow, its own comparator keeps rows (and inline tubes) in order.
-    const on = sortColOf(this.mode(), this.sorts.keyFor(this.scope()));
-    const order: Record<string, ColDef<MwRow>['sortingOrder']> = {
-      sample: ['asc'], patient: ['asc'], due: ['asc'], wait: ['desc', 'asc'], when: ['desc', 'asc'],
-    };
-    const rules = this.colRules();
-    return mwColumns(this.mode(), this.fold()).map(p => ({
-      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId], ...rules[p.colId],
-      ...(order[p.colId] && !(this.mode() === 'patient' && p.colId === 'sample')
-        ? { sortable: true, sortingOrder: order[p.colId], comparator: () => 0, sort: on?.colId === p.colId ? on.sort : null }
-        : {}),
+    // The GRID sorts, on the real value (minutes / epoch / Urgent first), asc → desc → none; "none" = My Work's own
+    // default order (Urgent first, then soonest due). The header's sort is also saved as the lab's sort key
+    // (LabSortService, so phones and the next visit start from it) — see onGridReady.
+    const on = this.gridSort();
+    return mwColumns(this.mode(), this.fold()).map(p => this.colRule(p.colId, {
+      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId],
+      sort: on?.colId === p.colId ? on.sort : null,
       cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[p.colId] },
     }));
   });
@@ -533,15 +532,31 @@ export class MyWorkGridComponent implements AfterViewInit {
   tat(x: { remainingMin: number | null; dueAt: number | null }, lines: OrderTest[], done = false) {
     return { ...dueCell(x.remainingMin, { done }), sub: tatCell(x, lines, done).sub };
   }
-  waitWords(m: number): string { return m < 60 ? `${Math.max(1, m)}m` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`; }
+  /** The shared duration words ("2d 4h", never "1364h 20m"). */
+  waitWords(m: number): string { return durationText(m); }
   testsOf(lines: Array<{ test?: { name?: string } | null }>): string { return testNames(lines); }
   summary(lines: OrderTest[]): string { return testsSummary(lines); }
 
-  /** A header click saves the lab's sort key (persisted per user, same as the old picker); My Work re-orders. */
+  /** The header sort on screen: starts from the saved key; a header click replaces it (the grid sorts itself). */
+  private readonly picked = signal<{ mode: MwMode; sort: MwSortCol } | null>(null);
+  readonly gridSort = computed<MwSortCol>(() => {
+    const p = this.picked();
+    return p && p.mode === this.mode() ? p.sort : sortColOf(this.mode(), this.sorts.keyFor(this.scope()));
+  });
+  /** A header click sorts the grid and saves the lab's sort key (persisted per user, same as the old picker). */
   onGridReady(e: GridReadyEvent<MwRow>): void {
-    e.api.addEventListener('sortChanged', () => {
+    const sync = () => {
       const st = e.api.getColumnState().find(c => c.sort);
-      const key = sortKeyOf(this.mode(), st ? { colId: st.colId, sort: st.sort as 'asc' | 'desc' } : null);
+      const sort: MwSortCol = st ? { colId: st.colId, sort: st.sort as 'asc' | 'desc' } : null;
+      const cur = this.gridSort();
+      if (cur?.colId !== sort?.colId || cur?.sort !== sort?.sort) this.picked.set({ mode: this.mode(), sort });
+      return sort;
+    };
+    // The screen's kept view state (view-state, restored by pf-data-grid before this runs) may have brought a sort
+    // back — any column, Due / Status too: adopt it so the column defs keep it.
+    if (e.api.getColumnState().some(c => c.sort)) sync();
+    e.api.addEventListener('sortChanged', () => {
+      const key = sortKeyOf(this.mode(), sync());
       if (key !== this.sorts.keyFor(this.scope())) this.sorts.set(this.scope(), key);
     });
   }

@@ -7,7 +7,9 @@ import { FLOW_MIN, flowLayout, tokenWidth } from './flow-fold';
 import { dailyNoLabel } from '../../../../shared/utils/daily-no';
 import { DataGridComponent } from '../../../../shared/components/data-grid/data-grid.component';
 import type { FlowRow, JourneyState } from './flow-row';
-import { actionCol, numberCol, shapeCol, textCol, valuesCol } from '../../../../shared/utils/work-grid';
+import { actionCol, dateCol, durationCol, epochOf, moneyCol, ratioCol, shapeCol, textCol, tokenCol, tokenLabelValue, tokenValue, valuesCol } from '../../../../shared/utils/work-grid';
+import { LATE_AFTER_MIN } from './flow-row';
+import type { SectionColId } from '../work-view/sections';
 import { WorkSetFilterComponent } from '../../../../shared/components/work-set-filter/work-set-filter.component';
 
 /** Token column filter text: "#12". */
@@ -19,6 +21,24 @@ export function flowPatientText(r: FlowRow): string {
 }
 /** Payment column's set values: an amount due reads "Due" (one value, not one per amount). */
 export function flowPayValue(r: FlowRow): string { return r.payDue ? 'Due' : r.pay; }
+/** Payment's sort / filter number: the rupees due ("₹450 due" = 450, "Paid" = 0); "Not billed" / "—" = none. */
+export function flowPayAmount(r: FlowRow): number | null {
+  if (r.due > 0) return r.due;
+  return r.pay === 'Paid' || r.pay === 'No dues' ? 0 : null;
+}
+/** Token's sort number: the IST day then the daily number (an OPD token "R-5" = today's 5). */
+export function flowTokenValue(r: FlowRow): number | null {
+  if (r.visit) return tokenLabelValue(r.visit.tokenLabel);
+  return tokenValue(r.order?.dailyNo, r.order?.dailyNoDay);
+}
+/** Samples drawn of the order's tubes ("1 of 2 drawn") — the same rule as the cell (sections.ts samplesText). */
+export function flowSamples(r: FlowRow): { done: number; total: number } | null {
+  const list = r.kind === 'draft' ? [] : r.order?.samples ?? [];
+  if (!list.length) return null;
+  return { done: list.filter(x => x.status && x.status !== 'pending' && x.status !== 'rejected').length, total: list.length };
+}
+/** Triage order: Urgent before Normal. */
+export function flowUrgentRank(r: FlowRow): number { return r.urgent || r.cells?.triage?.text === 'Urgent' ? 0 : 1; }
 import {
   FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowRingCellComponent, FlowSelectCellComponent,
   FlowTokenCellComponent,
@@ -27,6 +47,16 @@ import {
 /** Escape for the plain (string) cell renderers. */
 export function esc(s: string | null | undefined): string {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+/** A per-service section's own column (work-view/sections.ts) with the sort + filter of what it says: counts as a
+ *  ratio, times as dates, Urgent before Normal, the rest as categories. */
+function sectionCol(id: SectionColId, def: ColDef<FlowRow>, align: 'left' | 'center'): ColDef<FlowRow> {
+  const text = (r: FlowRow) => r.cells?.[id]?.text ?? '';
+  if (id === 'samples') return ratioCol<FlowRow>(def, flowSamples, align);
+  if (id === 'admitted' || id === 'arrived') return dateCol<FlowRow>(def, r => epochOf(r.order?.createdAt as unknown as string), align);
+  if (id === 'triage') return valuesCol<FlowRow>(def, text, WorkSetFilterComponent, align, flowUrgentRank);
+  return valuesCol<FlowRow>(def, text, WorkSetFilterComponent, align);
 }
 
 const JOURNEY_STEPS = ['Billing', 'Sample', 'Dispatch', 'Result', 'Report'];
@@ -116,14 +146,14 @@ export class FlowGridComponent implements AfterViewInit {
       : '';
     const whereCol = (minW: number) => valuesCol<FlowRow>({ colId: 'where', headerName: tight ? 'Where' : 'Where now', headerTooltip: 'Where now', flex: 1,
       minWidth: tight ? W.whereTight : minW, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap', cellRenderer: whereCell }, r => r.where, WorkSetFilterComponent);
-    const waitCol = (): ColDef<FlowRow> => numberCol<FlowRow>({ colId: 'wait', headerName: 'Waiting', width: W.wait, minWidth: W.wait,
+    const waitCol = (): ColDef<FlowRow> => durationCol<FlowRow>({ colId: 'wait', headerName: 'Waiting', width: W.wait, minWidth: W.wait,
       cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
         ? `<span class="fd-flow__wait${p.data.late ? ' fd-flow__wait--late' : ''}"${p.data.late ? ' title="Waiting over 30 minutes"' : ''}>${esc(p.data.wait)}</span>` : '' },
-      r => r.waitMin);
-    const payCol = (): ColDef<FlowRow> => valuesCol<FlowRow>({ colId: 'pay', headerName: 'Payment', width: W.pay, minWidth: W.pay,
+      r => r.waitMin, { kind: 'wait', lateAfter: LATE_AFTER_MIN });
+    const payCol = (): ColDef<FlowRow> => moneyCol<FlowRow>({ colId: 'pay', headerName: 'Payment', width: W.pay, minWidth: W.pay,
       cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
         ? `<span class="fd-flow__pay${p.data.payDue ? ' fd-flow__pay--due' : ''}">${esc(p.data.pay)}</span>` : '' },
-      r => flowPayValue(r), WorkSetFilterComponent, 'center');
+      r => flowPayAmount(r), 'center');
 
     let mid: ColDef<FlowRow>[];
     if (!own) {
@@ -144,8 +174,7 @@ export class FlowGridComponent implements AfterViewInit {
             return c.id === carrier && p.data ? `<span class="fd-flow__where">${txt}${waitLine(p.data)}</span>` : txt;
           },
         };
-        const get = (r: FlowRow) => r.cells?.[c.id]?.text ?? '';
-        return c.align === 'center' ? valuesCol<FlowRow>(def, get, WorkSetFilterComponent, 'center') : valuesCol<FlowRow>(def, get, WorkSetFilterComponent);
+        return sectionCol(c.id, def, c.align);
       });
     }
     return [
@@ -153,11 +182,12 @@ export class FlowGridComponent implements AfterViewInit {
         cellClass: 'fd-flow__c-sel' },
       // Work-grid column rule (shared/utils/work-grid): filters like Test Master on every data column, text
       // LEFT, short same-shape values CENTRED, the action column RIGHT. They AND with the head's pill / search / filters.
-      textCol<FlowRow>({ colId: 'token', headerName: 'Token', hide: fold.has('token'), width: this.tokenW(), minWidth: this.tokenW(), cellRenderer: FlowTokenCellComponent },
-        r => flowTokenText(r), 'center'),
+      tokenCol<FlowRow>({ colId: 'token', headerName: 'Token', hide: fold.has('token'), width: this.tokenW(), minWidth: this.tokenW(), cellRenderer: FlowTokenCellComponent },
+        r => flowTokenText(r), r => flowTokenValue(r), 'center'),
       textCol<FlowRow>({ colId: 'patient', headerName: 'Patient', flex: 1.6, minWidth: tight ? W.patientTight : W.patient, wrapText: true, autoHeight: true,
-        cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' }, r => flowPatientText(r)),
-      // Journey (owner 2026-11-20): ONE ring per row — inner disc = the service, outer ring = the row's own steps.
+        cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' }, r => flowPatientText(r), 'left', r => r.name),
+      // Journey (owner 2026-11-20): ONE ring per row — inner disc = the service, outer ring = the row's own steps. A
+      // picture, not a value: no sort / filter (Where now carries the step); its 80px column has no room for both icons.
       // Always has its header; a narrow grid shrinks the ring to 32px (owner 2026-11-21).
       shapeCol<FlowRow>({ colId: 'journey', headerName: 'Journey', headerTooltip: 'Journey', headerClass: ringSmall ? 'fd-flow__h-ring' : undefined,
         width: ringSmall ? W.ringSmall : W.ring, minWidth: ringSmall ? W.ringSmall : W.ring, maxWidth: ringSmall ? W.ringSmall : W.ring + 16,
