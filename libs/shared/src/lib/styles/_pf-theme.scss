@@ -327,7 +327,7 @@
    /* pf-kit surfaces. --pf-card-bg stays OPAQUE (sticky headers, popovers, inputs sit on it);
       the frosted panel is its own token, applied to the outer panels only. */
    --pf-card-bg: #ffffff;
-   --pf-panel-bg: rgba(255, 255, 255, 0.66);
+   --pf-panel-bg: rgba(255, 255, 255, 0.5);
    --pf-panel-blur: blur(18px) saturate(140%);
    --pf-panel-edge: rgba(124, 58, 237, 0.08);
    --pf-panel-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 8px 28px rgba(76, 29, 149, 0.08), 0 1px 3px rgba(76, 29, 149, 0.06);

@@ -289,10 +289,10 @@ import { DOCUMENT } from '@angular/common';
        sits on a busy area. Dark and the classic design keep the flow above. */
     :host-context(.light.design-new) .wash {
       background:
-        radial-gradient(38% 46% at 12% 18%, rgba(246, 207, 233, 0.55), transparent 70%),
-        radial-gradient(34% 40% at 88% 12%, rgba(205, 193, 250, 0.5), transparent 70%),
-        radial-gradient(40% 50% at 70% 92%, rgba(186, 220, 246, 0.4), transparent 70%),
-        radial-gradient(30% 36% at 30% 85%, rgba(233, 213, 252, 0.45), transparent 70%),
+        radial-gradient(38% 46% at 12% 18%, rgba(246, 207, 233, 0.85), transparent 72%),
+        radial-gradient(34% 40% at 88% 12%, rgba(205, 193, 250, 0.8), transparent 72%),
+        radial-gradient(40% 50% at 70% 92%, rgba(186, 220, 246, 0.7), transparent 72%),
+        radial-gradient(30% 36% at 30% 85%, rgba(233, 213, 252, 0.7), transparent 72%),
         #f4f0fa;
     }
     :host-context(.light.design-new) .dna-flow,
