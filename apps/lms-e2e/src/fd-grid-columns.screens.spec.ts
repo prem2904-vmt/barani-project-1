@@ -128,6 +128,13 @@ async function headOrder(page: Page, scope: string): Promise<string[]> {
     .filter(c => c.w > 0 && c.id !== 'sel').sort((a, b) => a.x - b.x).map(c => c.id));
 }
 const DESK = 'pf-fd-work-view';
+/** Shown preview columns (in order) + the folded chips = the saved order; the folded ones are the right-most movable. */
+async function expectPreviewCovers(page: Page, order: string[]) {
+  const shown = (await headOrder(page, PREVIEW)).map(id => FD_OF[id] ?? id);
+  const folded = await page.locator('[data-fd-folded]').evaluateAll(els => els.map(e => e.getAttribute('data-fd-folded') ?? ''));
+  expect(shown).toEqual(order.filter(id => !folded.includes(id)));
+  expect([...shown, ...folded].sort()).toEqual([...order].sort());
+}
 /** The preview shows EVERY column inside its box (scaled to fit) — nothing clipped, no sideways scroll. */
 async function expectPreviewFits(page: Page, tag: string) {
   await page.waitForTimeout(300);
@@ -136,8 +143,11 @@ async function expectPreviewFits(page: Page, tag: string) {
     const cells = Array.from(document.querySelectorAll<HTMLElement>(`${sel} .ag-header-cell[col-id]`)).filter(c => c.getBoundingClientRect().width > 0);
     return { n: cells.length, out: cells.filter(c => { const b = c.getBoundingClientRect(); return b.right > box.right + 1 || b.left < box.left - 1; }).map(c => c.getAttribute('col-id')) };
   }, PREVIEW);
-  expect(r.n, `${tag}: header cells`).toBeGreaterThan(5);
+  expect(r.n, `${tag}: header cells`).toBeGreaterThanOrEqual(5);
   expect(r.out, `${tag}: preview columns clipped at ${projectName()}`).toEqual([]);
+  // Readable: never shrunk below 85% (beyond that the right-most columns fold, like the real Frontdesk).
+  const scale = Number(await page.locator('.fdgc__fit').getAttribute('data-fd-scale'));
+  expect(scale, `${tag}: preview scale at ${projectName()}`).toBeGreaterThanOrEqual(0.85);
 }
 /** The preview's column list (catalogue ids) as the page holds it. */
 const previewOrder = (page: Page) => page.locator('.fdgc[data-fd-order]').getAttribute('data-fd-order').then(v => (v ?? '').split(','));
@@ -207,7 +217,8 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     await expect(bandSave(page)).toBeDisabled();
     await expect(page.locator('[data-testid="fdgc-reset"]').locator('visible=true').first()).toBeDisabled();
     expect(await previewOrder(page)).toEqual(['token', 'patient', 'where', 'samples', 'payment', 'waiting', 'next']);
-    expect(await headOrder(page, PREVIEW)).toEqual(['token', 'patient', 'where', 'samples', 'pay', 'wait', 'next']);
+    // The preview shows what fits at ≥85%; the rest is listed as folded (right-most first) — together, every column.
+    await expectPreviewCovers(page, ['token', 'patient', 'where', 'samples', 'payment', 'waiting', 'next']);
     await expectPreviewFits(page, 'default');
     // Where now (ring + words) and Waiting are fixed: no ✕, no Journey column.
     await expect(page.locator(`${PREVIEW} [data-fd-remove="waiting"], ${PREVIEW} [data-fd-remove="where"]`)).toHaveCount(0);
@@ -223,15 +234,37 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     await expect(page.locator('[data-fd-item="priority"]')).toHaveCount(0);
     await expect(bandSave(page)).toBeEnabled();
     await expectPreviewFits(page, 'after drag-in');
+    // The column just added always stays on show (its neighbours fold instead), folded ones are listed with the note.
+    await expect(page.locator(`${PREVIEW} .ag-header-cell[col-id="priority"]`)).toBeVisible();
+    const folded = page.locator('[data-testid="fdgc-folded"]');
+    if (await folded.count()) await expect(folded).toContainText('Narrow screens fold these into the patient line');
     await shots(page, '02-settings-dragged-in');
 
-    // Drag a header to move it: Samples in front of Priority.
-    await drag(page, await centre(page, `${PREVIEW} .ag-header-cell[col-id="samples"] .fd-hd__label`), await beforeHead(page, 'priority'));
-    await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'samples', 'priority', 'payment', 'waiting', 'next']);
-    await shots(page, '02b-settings-header-moved');
-    // Keyboard: Alt+→ on Samples puts it back after Priority.
-    await page.locator(`${PREVIEW} [data-fd-head="samples"]`).focus();
+    // Keyboard: Alt+→ on the Priority header moves it one step right, Alt+← back.
+    await page.locator(`${PREVIEW} [data-fd-head="priority"]`).focus();
     await page.keyboard.press('Alt+ArrowRight');
+    await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'samples', 'priority', 'payment', 'waiting', 'next']);
+    await page.locator(`${PREVIEW} [data-fd-head="priority"]`).focus();
+    await page.keyboard.press('Alt+ArrowLeft');
+    await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'priority', 'samples', 'payment', 'waiting', 'next']);
+    // Drag the header back to AVAILABLE = remove; + adds it again (before Waiting · Next), Alt+← twice puts it back.
+    await drag(page, await centre(page, `${PREVIEW} .ag-header-cell[col-id="priority"] .fd-hd__label`), await centre(page, '[data-fd-item="refdoc"]'));
+    await expect.poll(() => previewOrder(page)).not.toContain('priority');
+    await shots(page, '02b-settings-header-dragged-out');
+    await page.locator('[data-fd-add="priority"]').click();
+    await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'samples', 'payment', 'priority', 'waiting', 'next']);
+    // Just added: it stays on show even where its neighbours fold.
+    await expect(page.locator(`${PREVIEW} .ag-header-cell[col-id="priority"]`)).toBeVisible();
+    await expectPreviewFits(page, 'after +');
+    for (const want of [
+      ['token', 'patient', 'where', 'samples', 'priority', 'payment', 'waiting', 'next'],
+      ['token', 'patient', 'where', 'priority', 'samples', 'payment', 'waiting', 'next'],
+    ]) {
+      await page.locator(`${PREVIEW} [data-fd-head="priority"]`).focus();
+      await page.keyboard.press('Alt+ArrowLeft');
+      await expect.poll(() => previewOrder(page)).toEqual(want);
+      await page.waitForTimeout(150);   // the header re-renders, then takes focus back
+    }
     await expect.poll(() => previewOrder(page)).toEqual(['token', 'patient', 'where', 'priority', 'samples', 'payment', 'waiting', 'next']);
 
     await bandSave(page).click();
@@ -253,7 +286,9 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     // ✕ removes Samples (back on the settings page), Save → gone from the Frontdesk; reload persists.
     await openSettings(page);
     expect(await previewOrder(page)).toContain('priority');
-    await page.locator(`${PREVIEW} [data-fd-remove="samples"]`).click({ force: true });
+    // ✕ on its header, or on its chip when the preview folded it (right-most first).
+    const x = page.locator(`${PREVIEW} [data-fd-remove="samples"], [data-fd-folded="samples"] button`).first();
+    await x.click({ force: true });
     await expect.poll(() => previewOrder(page)).not.toContain('samples');
     await expect(page.locator('[data-fd-item="samples"]')).toBeVisible();
     await bandSave(page).click();

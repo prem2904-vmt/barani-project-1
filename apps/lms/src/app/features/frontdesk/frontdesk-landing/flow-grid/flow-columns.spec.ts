@@ -1,7 +1,7 @@
 import type { Order } from '../../../../shared/models/order.model';
 import type { FlowRow } from './flow-row';
 import { FLOW_MIN, FLOW_SLACK, OWN_FLOOR } from './flow-fold';
-import { agColsOf, fdCell, fdCellCtx, fdFlowLayout, fdIdOfAgCol, labVisitType } from './flow-columns';
+import { agColsOf, fdCell, fdCellCtx, fdFlowLayout, fdIdOfAgCol, fdPreviewMin, fdPreviewPlan, labVisitType } from './flow-columns';
 import { defaultFdColumns } from '../../../../shared/utils/fd-grid-columns';
 
 /** The flow grid draws the admin's Work grid columns (owner 2026-11-21). Fake data only. */
@@ -75,6 +75,27 @@ describe('fold — a section: fixed columns by width alone (same x in every sect
         expect(l.need + FLOW_SLACK, `@${w} section=${sec}`).toBeLessThanOrEqual(w);
       }
     }
+  });
+});
+
+describe('settings preview: readable (≥85%), folds the right-most, keeps the pinned column', () => {
+  const all = ['token', 'patient', 'where', 'priority', 'samples', 'payment', 'refdoc', 'waiting', 'next'];
+  const est = (ids: string[], tight: boolean) => ids.reduce((n, id) => n + fdPreviewMin('lab', id, tight), 4);
+  it('a wide box shows every column', () => {
+    expect(fdPreviewPlan('lab', all, 3000)).toEqual({ shown: all, folded: [], tight: false });
+  });
+  it('a narrow box folds the right-most movable columns first and fits at ≥85%', () => {
+    const p = fdPreviewPlan('lab', all, 735);
+    expect(p.tight).toBe(true);
+    expect(p.folded[p.folded.length - 1]).toBe('refdoc');
+    expect(est(p.shown, true)).toBeLessThanOrEqual(735 / 0.85);
+    for (const id of ['token', 'patient', 'where', 'waiting', 'next']) expect(p.shown).toContain(id);
+    expect([...p.shown.filter(id => !p.folded.includes(id))]).toEqual(p.shown);
+  });
+  it('the pinned column (dragged / just added / hovered) stays; a neighbour folds instead', () => {
+    const p = fdPreviewPlan('lab', all, 735, { pin: 'refdoc' });
+    expect(p.shown).toContain('refdoc');
+    expect(p.folded).not.toContain('refdoc');
   });
 });
 
