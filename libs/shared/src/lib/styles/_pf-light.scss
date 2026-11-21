@@ -94,6 +94,8 @@ $pf-ag-pinned-head: '.ag-pinned-left-header, .ag-pinned-right-header, .ag-header
   background-color: var(--pf-head-glass);
   color: var(--pf-head-text);
 }
+/* The header is FROSTED (near-opaque + blur) like pinned cells: rows scrolling under it must never show through (owner 2026-11-21). */
+:root.light.design-new .ag-header { -webkit-backdrop-filter: var(--pf-frost-blur); backdrop-filter: var(--pf-frost-blur); position: relative; z-index: 2; }
 /* Header rows sit on the header's own tint: only the header box paints it (no double tint on its rows). */
 :root.light.design-new :is(.ag-header-viewport, .ag-header-row, .ag-header-container, .ag-floating-filter, .ag-header-row-column-filter) { background-color: transparent; }
 :root.light.design-new :is(#{$pf-ag-pinned-head}) {
