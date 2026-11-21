@@ -635,7 +635,7 @@ const COUNTERS: CounterSpec[] = [
             </div>
             <p class="pf-mw-pane__meta" aria-live="polite">
               @if (tab() === 'culture') {
-                {{ plural(cultureCount(), 'case') }}
+                {{ theme.isNewDesign() ? cultureCountLabel() : plural(cultureCount(), 'case') }}
               } @else if (theme.isNewDesign()) {
                 {{ mwCountLabel() }}
               } @else {
@@ -645,6 +645,32 @@ const COUNTERS: CounterSpec[] = [
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
+            @if (theme.isNewDesign() && tab() === 'culture') {
+              <!-- Culture: the same head tools over the culture cases (search · status · Filters → department). -->
+              <label class="mw-find" (click)="$event.stopPropagation()">
+                <svg class="mw-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input class="pf-input mw-find__input" type="search" data-testid="cg-find" [value]="cultureFilter().q"
+                       placeholder="Sample ID, patient, test" aria-label="Search culture cases" (input)="setCultureQuery(asInput($event))" />
+              </label>
+              <pf-segmented class="mw-headpill" data-testid="cg-pill" size="sm" [options]="cultureHead().options" [value]="cultureFilter().status"
+                            aria-label="Filter by culture status" (valueChange)="setCultureStatus($any($event))"></pf-segmented>
+              <span class="mw-filterwrap">
+                <button type="button" class="pf-btn pf-btn--secondary mw-filterbtn press" data-testid="cg-filter-btn"
+                        [class.mw-filterbtn--on]="!!cultureFilter().dept" aria-haspopup="dialog" [attr.aria-expanded]="mwFiltersOpen()"
+                        [attr.aria-label]="'Filters' + (cultureFilter().dept ? ' (on)' : '')" (click)="mwFiltersOpen.set(!mwFiltersOpen())">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                  <span class="mw-filterbtn__t">Filters</span>
+                </button>
+                @if (mwFiltersOpen()) {
+                  <pf-mw-filters [filter]="$any({ q: cultureFilter().q, status: cultureFilter().status, priority: 'all', dept: cultureFilter().dept })"
+                                 [depts]="cultureHead().depts" [showPriority]="false" [showSort]="false"
+                                 (filterChange)="cultureFilter.set({ q: $event.q, status: $event.status, dept: $event.dept })"
+                                 (closed)="mwFiltersOpen.set(false)" />
+                }
+              </span>
+            }
             @if (theme.isNewDesign() && tab() !== 'culture') {
               <!-- The list's own filters, at the head's RIGHT end, one row (owner 2026-11-20): search (folds to a 44px
                    magnifier when tight), the status pill (collapses to its menu), Filters (priority, department, window). -->
@@ -679,7 +705,8 @@ const COUNTERS: CounterSpec[] = [
            tab pill even while another tab is showing. -->
       @if (cultureAsTab()) {
         <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
-          <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+          <pf-culture-panel [filter]="cultureFilter()" [phone]="isPhone()" (headChange)="cultureHead.set($event)"
+                            (countChange)="cultureCount.set($event)"></pf-culture-panel>
         </div>
       }
       @if (tab() !== 'culture') {
@@ -2821,6 +2848,7 @@ const COUNTERS: CounterSpec[] = [
        scrolls inside it (phones: the card rows scroll in the body). The head stays ONE row; its pill collapses. */
     .pf-mw-pane__body:has(> .pf-mw-gridhost) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
     .pf-mw-gridhost { flex: 1 1 auto; min-height: 0; }
+    :host-context(.design-new) .pf-mw-pane__body:has(> .pf-mw-culturetab:not(.pf-mw-culturetab--off)) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
     .pf-mw-pane__hdr--tabs:has(> pf-segmented) { flex-wrap: nowrap; position: relative; container-type: inline-size; container-name: mwhead; }
     .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { white-space: nowrap; min-width: 0; overflow: hidden; }
     /* Head tools at the RIGHT end: search · status pill · Filters (owner 2026-11-20 — Frontdesk's work head). */
@@ -2862,10 +2890,13 @@ const COUNTERS: CounterSpec[] = [
     }
     @media (max-width: 640px) {
       .pf-mw-pane__body:has(> .pf-mw-gridhost) { overflow-y: auto; }
+      :host-context(.design-new) .pf-mw-pane__body:has(> .pf-mw-culturetab:not(.pf-mw-culturetab--off)) { overflow-y: auto; }
       /* Phones hide the in-pane head (the tab strip above names the list) — the new design keeps it for the list's
          own tools: search · status pill · Filters. */
       :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) { display: flex !important; padding: 6px 10px; gap: 8px; }
-      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-tabs { display: none; }
+      /* (styles.scss forces [role='tablist'] to flex !important on phones — this title block must still go.) */
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-tabs { display: none !important; }
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { display: none; }
       :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .mw-headpill { margin-right: auto; }
     }
   `]
@@ -3608,6 +3639,13 @@ export class MyWorkComponent implements OnInit {
     return countLabel(shown, all.length, unit) + (rej > 0 ? ` · ${rej} rejected` : '');
   });
   setMwQuery(q: string) { this.mwFilter.update(f => ({ ...f, q })); }
+  /** Culture tab: the same head over the culture cases (the panel filters; it reports options + counts back). */
+  readonly cultureFilter = signal<{ q: string; status: string; dept: string | null }>({ q: '', status: 'all', dept: null });
+  readonly cultureHead = signal<{ options: Array<{ value: string; label: string; count: number }>; depts: Array<{ id: string; name: string }>; shown: number; total: number }>(
+    { options: [{ value: 'all', label: 'All', count: 0 }], depts: [], shown: 0, total: 0 });
+  readonly cultureCountLabel = computed(() => countLabel(this.cultureHead().shown, this.cultureHead().total, 'case'));
+  setCultureQuery(q: string) { this.cultureFilter.update(f => ({ ...f, q })); }
+  setCultureStatus(s: string) { this.cultureFilter.update(f => ({ ...f, status: s })); }
   setMwStatus(s: MwStatusKey) { this.mwFilter.update(f => ({ ...f, status: s })); }
 
   /** Empty states keep their copy. */

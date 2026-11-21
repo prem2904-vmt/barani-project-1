@@ -211,7 +211,7 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(el.textContent).not.toMatch(/\bHigh\b/);
   });
 
-  it('header filters on every data column (not the actions) + the shared alignment; the journey cell is the shared ring', async () => {
+  it('header filters on every data column (not the actions) + the shared alignment; Due instead of a journey ring', async () => {
     const { c, el } = await render();
     const by = Object.fromEntries(c.cols().map((d: any) => [d.colId, d]));
     expect(by['sample'].filter).toBe('agTextColumnFilter');
@@ -221,8 +221,15 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(by['acts'].filter).toBe(false);
     expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass])
       .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-center', 'wg-h-right']);
-    expect(el.querySelector('.ag-row pf-journey-ring')).not.toBeNull();
-    expect(el.querySelector('pf-work-journey')).toBeNull();
+    // Due (time left to TAT) instead of a journey ring: sortable, centred, rose once late.
+    expect(by['due'].sortable).toBe(true);
+    expect(by['due'].headerClass).toBe('wg-h-center');
+    expect(by['journey']).toBeUndefined();
+    expect(el.querySelector('pf-journey-ring')).toBeNull();
+    const due = Object.fromEntries(tilesOf(el).map(t => [t.querySelector('.pv-tile__id')!.textContent!.trim(), t.querySelector('.pv-due')!]));
+    expect(due['0126118'].textContent!.trim()).toMatch(/late$/);
+    expect(due['0126118'].classList).toContain('wg-tat--late');
+    expect(due['0126117'].textContent!.trim()).toMatch(/^in /);
   });
 
   it('row action: ONE text "Review" (44px tall on touch, never icon-only); a tap anywhere on the row opens the review', async () => {

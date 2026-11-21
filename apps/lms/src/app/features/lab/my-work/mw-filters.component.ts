@@ -55,7 +55,7 @@ import { MwFilter, NO_MW_FILTER } from './my-work.grid';
               (valueChange)="windowChange.emit($any($event))" />
           </div>
         }
-        @if (sheet()) {
+        @if (sheet() && showSort()) {
           <div class="mwf__field">
             <span class="mwf__label">Sort</span>
             <pf-lab-sort class="mwf__sort" [scope]="sortScope()" />
@@ -106,6 +106,8 @@ export class MwFiltersComponent {
   readonly windowValue = input<string | null>(null);
   readonly windowOptions = input<SegmentedOption<string>[]>([]);
   readonly sortScope = input<'work' | 'completed'>('work');
+  /** Phones' Sort (the lists that have the lab sort). */
+  readonly showSort = input(true);
 
   readonly filterChange = output<MwFilter>();
   readonly windowChange = output<string>();

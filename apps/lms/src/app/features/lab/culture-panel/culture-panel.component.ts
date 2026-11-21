@@ -1,4 +1,16 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, output, signal, inject } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, NgZone, OnDestroy, OnInit, TemplateRef, computed, effect, input, output, signal, inject, viewChild } from '@angular/core';
+import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
+import {
+  GridFold, alignCol, dueCell, dueComparator, dueValue, fitFold, minWidthOf, numberFilterCol, setFilterCol, textFilterCol,
+} from '../../../shared/utils/work-grid';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import {
+  CultureFilter, cultureColumns, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep,
+  cultureStatusOptions, currentStage, filterCultures, readDue, stageSub,
+} from './culture-grid';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -78,9 +90,10 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective],
+  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective, DataGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (!theme.isNewDesign()) {
     @if (loading() && cases().length === 0) {
       <div class="flex flex-col gap-3">
         @for (i of [0,1,2]; track i) {
@@ -148,8 +161,94 @@ export interface CultureCaseView {
         }
       </ul>
     }
+    } @else if (phone()) {
+      <!-- New design, phones: card rows (Results' phone pattern) — the card opens the bench. -->
+      @if (loading() && cases().length === 0) {
+        <ul class="wg-cards" aria-busy="true">
+          @for (i of [0, 1, 2]; track i) {
+            <li class="wg-card wg-card--skel">
+              <span class="wg-card__l1"><pf-skeleton variant="line" width="45%"></pf-skeleton><pf-skeleton variant="line" width="72px"></pf-skeleton></span>
+              <pf-skeleton variant="line" width="75%" height="10px"></pf-skeleton>
+              <span class="wg-card__foot"><span class="wg-acts"><pf-skeleton variant="block" width="112px" height="44px"></pf-skeleton></span></span>
+            </li>
+          }
+        </ul>
+      } @else if (!shown().length) {
+        <p class="cg-empty">{{ cases().length ? 'Nothing matches these filters.' : 'No culture cases in progress.' }}</p>
+      } @else {
+        <ul class="wg-cards" data-testid="cg-cards">
+          @for (c of shown(); track c.orderTestId) {
+            @let st = next(c);
+            <li class="wg-card" role="button" tabindex="0" [pfZoomSource]="[c.orderTestId, c.sampleId]" [attr.aria-label]="primary(c).aria"
+                (click)="onCard(c, $event)" (keydown.enter)="open(c)" (keydown.space)="$event.preventDefault(); open(c)">
+              <span class="wg-card__l1">
+                <span class="wg-id">{{ c.barcode || c.sampleId || '—' }}</span>
+                <span class="wg-pill" [attr.data-tone]="st.tone" [attr.title]="st.title"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
+              </span>
+              <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
+                <span class="wg-who__meta">{{ meta(c) }}</span></span>
+              <span class="wg-card__foot">
+                <span class="wg-tat" [class.wg-tat--late]="dueOf(c).late">Day {{ day(c) }} · {{ dueOf(c).text }}</span>
+                <span class="wg-acts"><button type="button" class="pf-rowact wg-act" data-action="bench" [attr.aria-label]="primary(c).aria" (click)="$event.stopPropagation(); open(c)">{{ primary(c).label }}</button></span>
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    } @else {
+      <!-- New design: the work GRID (owner 2026-11-20) — same head, columns, touch sizing as the other My Work lists. -->
+      <pf-data-grid class="cg" data-testid="cg-grid" [rowData]="shown()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
+        [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
+        [loading]="loading() && cases().length === 0" loadingLabel="Loading culture cases…"
+        [emptyTitle]="cases().length ? 'Nothing matches these filters.' : 'No culture cases in progress.'" (rowClicked)="onRow($event)" />
+    }
+
+    <!-- ── Grid cell templates (the page's own nodes) ── -->
+    <ng-template #cSample let-c>
+      <span class="wg-cell" [pfZoomSource]="[c.orderTestId, c.sampleId]">
+        <span class="wg-id wg-link" role="link" tabindex="0" [attr.aria-label]="primary(c).aria" (keydown.enter)="key(c, $event)">{{ c.barcode || c.sampleId || '—' }}</span>
+      </span>
+    </ng-template>
+    <ng-template #cPatient let-c>
+      <span class="wg-who">
+        @if (fold() === 'tight') { <span class="wg-id">{{ c.barcode || c.sampleId || '—' }}</span> }
+        <span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
+        @if (c.specimen) { <span class="wg-who__meta">{{ c.specimen }}</span> }
+        @if (fold() !== 'full') { <span class="wg-who__meta">{{ test(c) }}</span> }
+        @if (fold() === 'tight') {
+          @let n = next(c);
+          <span class="wg-who__fold">
+            <span class="wg-pill" [attr.data-tone]="n.tone" [attr.title]="n.title"><span class="wg-dot" aria-hidden="true"></span>{{ n.label }}</span>
+            <span class="wg-sub" [class.wg-note]="due(c)">Day {{ day(c) }}</span>
+          </span>
+        }
+      </span>
+    </ng-template>
+    <ng-template #cTest let-c>
+      <span class="wg-cell"><span class="wg-tests">{{ test(c) }}</span></span>
+    </ng-template>
+    <ng-template #cDay let-c>
+      <span class="wg-cell"><span class="wg-tat" [class.wg-tat--late]="due(c)" [attr.title]="due(c) ? 'The plate is ready: the read is due' : null">Day {{ day(c) }}</span></span>
+    </ng-template>
+    <ng-template #cNext let-c>
+      @let n = next(c);
+      <span class="wg-cell"><span class="wg-pill cg-next" [attr.data-tone]="n.tone" [attr.title]="n.title"><span class="wg-dot" aria-hidden="true"></span>{{ n.label }}</span></span>
+    </ng-template>
+    <!-- Due: the next read (owner 2026-11-21 — no journey ring on the lab screens). -->
+    <ng-template #cDue let-c>
+      @let d = dueOf(c);
+      <span class="wg-cell"><span class="wg-tat cg-due" [class.wg-tat--late]="d.late" [attr.title]="d.detail">{{ d.text }}</span></span>
+    </ng-template>
+    <ng-template #cActs let-c>
+      <span class="wg-acts"><button type="button" class="pf-rowact wg-act" data-action="bench" [attr.aria-label]="primary(c).aria" (click)="$event.stopPropagation(); open(c)">{{ primary(c).label }}</button></span>
+    </ng-template>
   `,
   styles: [`
+    @use '../../../shared/styles/work-grid' as wg;
+    @include wg.cells;
+    :host-context(.design-new) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+    .cg { flex: 1 1 auto; min-height: 0; }
+    .cg-empty { margin: 0; padding: 32px 16px; text-align: center; font-size: 13.5px; color: var(--text-tertiary); }
     /* The card is a container; its header toggles expand/collapse. */
     .pf-cc { position: relative; display: block; width: 100%; border-radius: 14px; overflow: hidden;
       background: var(--bg-card, var(--glass-bg)); border: 1px solid var(--glass-border);
@@ -209,7 +308,7 @@ export interface CultureCaseView {
     .pf-cc--nd:hover .pf-cc__chev { color: var(--text-secondary); transform: translateX(2px); }
 `],
 })
-export class CulturePanelComponent implements OnInit, OnDestroy {
+export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -225,6 +324,103 @@ export class CulturePanelComponent implements OnInit, OnDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   /** Emits the live case count so the parent can label the Culture pill. */
   readonly countChange = output<number>();
+
+  // ── New design: the work grid (owner 2026-11-20: "Culture is not following that grid in the lab") ──
+  /** The card head's search / status / department (owned by My Work's head, like the other lists). */
+  readonly filter = input<CultureFilter>({ q: '', status: 'all', dept: null });
+  readonly phone = input(false);
+  /** What the head shows: the status pill options, departments, and "n of m". */
+  readonly headChange = output<{ options: Array<{ value: string; label: string; count: number }>; depts: Array<{ id: string; name: string }>; shown: number; total: number }>();
+  readonly web = webPointerSignal();
+  readonly shown = computed(() => filterCultures(this.cases(), this.filter(), this.now()));
+  private readonly headFx = effect(() => this.headChange.emit({
+    options: cultureStatusOptions(this.cases(), this.filter(), this.now()), depts: cultureDepts(this.cases()),
+    shown: this.shown().length, total: this.cases().length,
+  }));
+  status(c: CultureCaseView) { return cultureStatus(c, this.now()); }
+  meta(c: CultureCaseView) { return cultureMeta(c); }
+  day(c: CultureCaseView) { return cultureDay(c, this.now()); }
+  due(c: CultureCaseView) { return !!readDue(c, this.now()); }
+  stage(c: CultureCaseView) { return currentStage(c)?.label ?? ''; }
+  sub(c: CultureCaseView) { return stageSub(c, this.now(), this.auth.user()?.id); }
+  primary(c: CultureCaseView) { return culturePrimary(c, this.now()); }
+  /** "in 1h 30m" until the plate is ready; rose "40m late" once the read is due. */
+  dueOf(c: CultureCaseView) { return dueCell(cultureDueMin(c, this.now())); }
+  next(c: CultureCaseView) { return nextStep(c, this.now()); }
+  test(c: CultureCaseView) { return cultureTest(c); }
+  onRow(e: RowClickedEvent<CultureCaseView>): void {
+    if ((e.event?.target as HTMLElement | null)?.closest?.('button, a, [role="menu"]')) return;
+    if (e.data) this.open(e.data);
+  }
+  onCard(c: CultureCaseView, ev: Event): void { if (!(ev.target as HTMLElement | null)?.closest?.('button')) this.open(c); }
+  key(c: CultureCaseView, ev: Event): void { ev.preventDefault(); ev.stopPropagation(); this.open(c); }
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly zone = inject(NgZone);
+  private readonly width = signal(1200);
+  readonly fold = computed<GridFold>(() => this.foldFor(this.width()));
+  private foldFor(w: number): GridFold {
+    const mins = (f: GridFold) => Object.fromEntries(Object.entries(this.sizes(f)).map(([k, v]) => [k, v.width ?? v.minWidth ?? 0]));
+    return fitFold(w, f => minWidthOf(cultureColumns(f), mins(f)));
+  }
+  private sizes(fold: GridFold): Record<string, ColDef<CultureCaseView>> {
+    const touch = !this.web();
+    return {
+      sample: { width: 124, minWidth: 124 }, patient: { flex: 1.3, minWidth: fold === 'tight' ? 200 : 210 },
+      test: { flex: 1, minWidth: 180 }, day: { width: 100, minWidth: 100 }, next: { width: 176, minWidth: 176 },
+      due: { width: 108, minWidth: 108 }, acts: { width: touch ? 112 : 100, minWidth: touch ? 112 : 100 },
+    };
+  }
+  private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
+  private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
+  private readonly dayTpl = viewChild<TemplateRef<unknown>>('cDay');
+  private readonly testTpl = viewChild<TemplateRef<unknown>>('cTest');
+  private readonly nextTpl = viewChild<TemplateRef<unknown>>('cNext');
+  private readonly dueTpl = viewChild<TemplateRef<unknown>>('cDue');
+  private readonly actsTpl = viewChild<TemplateRef<unknown>>('cActs');
+  readonly defaultCol: ColDef<CultureCaseView> = { sortable: false, resizable: false, filter: false, suppressMovable: true, wrapText: true, autoHeight: true, minWidth: 60 };
+  readonly rowId = (p: GetRowIdParams<CultureCaseView>) => p.data.orderTestId;
+  readonly rowClass = (p: RowClassParams<CultureCaseView>) => (p.data && readDue(p.data, this.now()) ? ['cg-row', 'wg-row--urgent'] : ['cg-row']);
+  readonly cols = computed<ColDef<CultureCaseView>[]>(() => {
+    const tpl: Record<string, TemplateRef<unknown> | undefined> = {
+      sample: this.sampleTpl(), patient: this.patientTpl(), test: this.testTpl(), day: this.dayTpl(), next: this.nextTpl(),
+      due: this.dueTpl(), acts: this.actsTpl(),
+    };
+    const size = this.sizes(this.fold());
+    const set = WorkSetFilterComponent;
+    // Shared column rules: text left (IDs, patient, the stage + its sub-line), short values centred, actions right;
+    // Test Master's header filter on every data column.
+    const rules: Record<string, ColDef<CultureCaseView>> = {
+      sample: { ...alignCol('left'), ...textFilterCol<CultureCaseView>(c => [c.barcode, c.sampleId].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
+      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<CultureCaseView>(c => [c.patientName, c.testName, c.specimen].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
+      test: { ...alignCol('left', 'wg-c-wrap'), ...setFilterCol<CultureCaseView>(c => this.test(c), set) } as ColDef<CultureCaseView>,
+      day: { ...alignCol('center'), ...numberFilterCol<CultureCaseView>(c => this.day(c)),
+        sortable: true, sortingOrder: ['desc', 'asc', null], comparator: (_a: unknown, _b: unknown, na: { data?: CultureCaseView }, nb: { data?: CultureCaseView }) =>
+          (na.data ? this.day(na.data) : 0) - (nb.data ? this.day(nb.data) : 0) } as ColDef<CultureCaseView>,
+      next: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<CultureCaseView>(c => this.next(c).label, set) } as ColDef<CultureCaseView>,
+      due: { ...alignCol('center'), ...numberFilterCol<CultureCaseView>(c => dueValue(cultureDueMin(c, this.now()))),
+        sortable: true, sortingOrder: ['asc', 'desc', null], comparator: (_a: unknown, _b: unknown, na: { data?: CultureCaseView }, nb: { data?: CultureCaseView }) =>
+          dueComparator(na.data ? dueValue(cultureDueMin(na.data, this.now())) : null, nb.data ? dueValue(cultureDueMin(nb.data, this.now())) : null) } as ColDef<CultureCaseView>,
+      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<CultureCaseView>,
+    };
+    return cultureColumns(this.fold()).map(p => ({
+      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId], ...rules[p.colId],
+      cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[p.colId] },
+    }));
+  });
+  ngAfterViewInit(): void {
+    if (typeof ResizeObserver === 'undefined') return;
+    const el = this.host.nativeElement;
+    this.zone.runOutsideAngular(() => {
+      const ro = new ResizeObserver(entries => {
+        const w = Math.round(entries[0]?.contentRect.width ?? el.clientWidth);
+        if (w <= 0) return;
+        if (this.foldFor(w) !== this.foldFor(this.width())) this.zone.run(() => this.width.set(w)); else this.width.set(w);
+      });
+      ro.observe(el);
+      this.destroyRef.onDestroy(() => ro.disconnect());
+    });
+  }
 
   ngOnInit() {
     this.refresh();

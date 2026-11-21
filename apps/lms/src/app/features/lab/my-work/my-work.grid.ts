@@ -5,8 +5,6 @@ import type { LabSortKey } from '../../../shared/utils/lab-sort';
 import type { OrderPriority } from '../../../shared/utils/lab-priority';
 import { tatDetail, tatLabel, tatStateFor } from '../../../shared/utils/lab-priority';
 import { GridFold, WorkStatus, waitText } from '../../../shared/utils/work-grid';
-import type { RingStep } from '../../../shared/components/journey-ring/journey-ring';
-import { labLineRing } from '../../../shared/utils/lab-line-journey';
 import type { WorkLine } from './my-work.priority';
 
 /**
@@ -109,21 +107,11 @@ export function doneStatus(d: Pick<MwDoneTube, 'status' | 'openLines'>): WorkSta
   return { label: 'Submitted', tone: 'violet' };
 }
 
-// ── Journey: the shared ring's lab line (Billing · Sample · Dispatch · Result entry · Validation) ─────────
+// ── Due: time left to TAT (owner 2026-11-21 — no journey ring on the lab screens) ─────────────────────────
 
-/** A tube is late when it is past its TAT with something still to enter (the TAT column's rose rule). */
+/** A tube is late when it is past its TAT with something still to enter (the Due column's rose rule). */
 export function tubeLate(t: Pick<MwTube, 'allDone' | 'remainingMin'>): boolean {
   return !t.allDone && t.remainingMin != null && t.remainingMin <= 0;
-}
-export function tubeRing(t: Pick<MwTube, 'tests' | 'allDone' | 'remainingMin'>): RingStep[] {
-  return labLineRing(t.tests, tubeLate(t));
-}
-/** A patient row: all their lines; late when any tube is. */
-export function groupRing(tubes: MwTube[], lines: OrderTest[]): RingStep[] {
-  return labLineRing(lines, tubes.some(tubeLate));
-}
-export function doneRing(d: Pick<MwDoneTube, 'tests'>): RingStep[] {
-  return labLineRing(d.tests, false);
 }
 
 // ── TAT: the clock word, rose only when overdue; "in lab 40m" under it ──────────
@@ -203,20 +191,22 @@ export interface MwColPlan { colId: string; header: string; hide: boolean }
 
 /**
  * No Tests column (owner 2026-11-20: long test lists blew rows up to 6–8 lines): the department + test count ride the
- * patient's meta line, the full names stay in the tooltip / press-and-hold peek.
+ * patient's meta line, the full names stay in the tooltip / press-and-hold peek. No Journey ring (owner 2026-11-21:
+ * every row here is at the same step) — DUE (time left to TAT) instead; Waiting = time in the lab.
  * full  : every column.
- * fold  : Priority + Status fold under the patient / sample cell; Journey stays; the actions keep full size.
- * tight : Journey folds too — Sample / Patient · TAT · actions.
+ * fold  : Priority + Status fold under the patient / sample cell; the actions keep full size.
+ * tight : Sample ID and Waiting fold into the patient cell — Patient · Due · actions: the grid never scrolls
+ *         sideways down to a 520px card (owner 2026-11-21).
  */
 export function mwColumns(mode: MwMode, fold: GridFold): MwColPlan[] {
   const f = fold !== 'full', t = fold === 'tight';
   const c = (colId: string, header: string, hide = false): MwColPlan => ({ colId, header, hide });
   if (mode === 'done') return [
-    c('sample', 'Sample ID'), c('patient', 'Patient'), c('journey', 'Journey', f), c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
+    c('sample', 'Sample ID', t), c('patient', 'Patient'), c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
   ];
   return [
-    ...(mode === 'sample' ? [c('sample', 'Sample ID')] : []),
-    c('patient', 'Patient'), c('priority', 'Priority', f), c('journey', 'Journey', t), c('tat', 'TAT'), c('status', 'Status', f), c('acts', ''),
+    ...(mode === 'sample' ? [c('sample', 'Sample ID', t)] : []),
+    c('patient', 'Patient'), c('priority', 'Priority', f), c('due', 'Due'), c('wait', 'Waiting', t), c('status', 'Status', f), c('acts', ''),
   ];
 }
 
@@ -321,12 +311,13 @@ export function countLabel(shown: number, total: number, unit: string): string {
 // ── Header sort = the lab's persisted sort key (the old band "Priority" picker) ───────
 
 export type MwSortCol = { colId: string; sort: 'asc' | 'desc' } | null;
-/** A column header's sort → LabSortService key. Priority (or no header) = the default order (Urgent first, then TAT). */
+/** A column header's sort → LabSortService key. Due (or no header) = the default order (Urgent first, then soonest
+ *  due); Waiting = longest in the lab first (desc) / newest (asc). */
 export function sortKeyOf(mode: MwMode, s: MwSortCol): LabSortKey {
   if (!s) return 'default';
   if (s.colId === 'sample') return 'sample';
   if (s.colId === 'patient') return 'patient';
-  if (s.colId === 'tat') return s.sort === 'asc' ? 'oldest' : 'newest';
+  if (s.colId === 'wait') return s.sort === 'desc' ? 'oldest' : 'newest';
   if (s.colId === 'when') return s.sort === 'asc' ? 'oldest' : 'default';
   return 'default';
 }
@@ -335,7 +326,7 @@ export function sortColOf(mode: MwMode, key: LabSortKey): MwSortCol {
   if (key === 'sample') return mode === 'patient' ? null : { colId: 'sample', sort: 'asc' };
   if (key === 'patient') return { colId: 'patient', sort: 'asc' };
   if (mode === 'done') return { colId: 'when', sort: key === 'oldest' ? 'asc' : 'desc' };
-  if (key === 'oldest') return { colId: 'tat', sort: 'asc' };
-  if (key === 'newest') return { colId: 'tat', sort: 'desc' };
-  return { colId: 'priority', sort: 'asc' };   // the default order: Urgent first, then soonest due
+  if (key === 'oldest') return { colId: 'wait', sort: 'desc' };
+  if (key === 'newest') return { colId: 'wait', sort: 'asc' };
+  return { colId: 'due', sort: 'asc' };   // the default order: Urgent first, then soonest due
 }

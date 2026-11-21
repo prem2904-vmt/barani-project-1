@@ -20,7 +20,7 @@ import { CriticalResultEvent } from '../../../shared/models/critical-result.mode
 /**
  * Pathologist queue × the NABL critical-result record: after the queue loads
  * the screen looks up the open records of its lines (a GET); a tile whose
- * critical value THIS user has not acknowledged reads "Critical · not
+ * critical value THIS user has not acknowledged reads "Critical" + "Not
  * acknowledged" and carries an Acknowledge row action (via
  * 'pathologist_queue'); once acknowledged the tile is plain "Critical" again.
  */
@@ -104,7 +104,9 @@ describe('Pathologist queue — critical acknowledgement', () => {
     expect(lookups[0]).toContain('orderTestIds=l1');
     expect(lookups[0]).toContain('l2');
     const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
-    expect(statuses).toContain('Critical · not acknowledged');
+    // ONE status pill ("Critical", never wraps) + the rose words "Not acknowledged" beside it (owner review 2026-11-20).
+    expect(statuses).toContain('Critical');
+    expect([...el.querySelectorAll('.ag-row .pv-unack')].map(s => s.textContent?.trim())).toEqual(['Not acknowledged']);
     expect(el.querySelectorAll('.pv-ack').length).toBe(1);
     expect(el.querySelector('.pv-ack')?.classList.contains('pf-rowact')).toBe(true);
   });
@@ -117,7 +119,7 @@ describe('Pathologist queue — critical acknowledgement', () => {
     expect(api.post).toHaveBeenCalledWith('/api/critical-results/e1/acknowledge', { via: 'pathologist_queue' });
     const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical');
-    expect(statuses).not.toContain('Critical · not acknowledged');
+    expect(el.querySelector('.ag-row .pv-unack')).toBeNull();
     expect(el.querySelector('.pv-ack')).toBeNull();
   });
 
