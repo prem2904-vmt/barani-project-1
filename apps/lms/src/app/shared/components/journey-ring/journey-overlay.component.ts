@@ -50,7 +50,7 @@ export const JOURNEY_FLIP_MS = 550;
         <div class="pf-jov__ph">
           <h3 class="pf-jov__pt">Journey · Step {{ st.k }} of {{ st.n }}</h3>
           @if (d.action; as a) {
-            <button type="button" class="pf-btn pf-btn--primary pf-jov__act" [attr.aria-label]="a.aria || a.label" (click)="runAction()">{{ a.label }}</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-jov__act" [attr.aria-label]="a.aria || a.label" (click)="runAction()">{{ a.label }}</button>
           }
         </div>
         @if (d.inClinicMin != null) {

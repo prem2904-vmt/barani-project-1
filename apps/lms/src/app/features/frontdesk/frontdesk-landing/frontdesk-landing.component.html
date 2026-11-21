@@ -840,6 +840,46 @@
               </ul>
               }
               }
+
+              <!-- PROCEDURES TO BOOK (OPD on; owner 2026-11-21 — moved here from /opd/desk/classic): what the doctor
+                   ordered "for later" — pick a date (today … 90 days), Book; the price is collected on the day. -->
+              @if (leftTab() === 'proc') {
+              @if (procsToBook().length === 0) {
+              <div class="pf-empty-tile pf-empty" data-empty="proc">
+                <span class="pf-empty__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M10 16h4" />
+                  </svg>
+                </span>
+                <p class="pf-empty__title">Nothing to book</p>
+                <p class="pf-empty__body">When a doctor orders a procedure "for later", it appears here to book a date.</p>
+              </div>
+              } @else {
+              <ul class="pf-side-list pf-side-list--split fd-vrows fd-procs" data-testid="fd-proc-rows">
+                @for (r of procsToBook(); track r.id) {
+                <li>
+                  <div class="pf-side-item fd-vrow fd-proc" [attr.data-tobook]="r.id">
+                    <span class="fd-vrow__body">
+                      <span class="fd-vrow__name">{{ r.patientName }}</span>
+                      <span class="fd-vrow__meta">@if (r.mrn) { {{ r.mrn }} · }Ordered by {{ r.doctorName || 'the doctor' }} · {{ procDay(r.orderedAt) }}</span>
+                      <span class="fd-proc__what">{{ r.procedureName }}</span>
+                      <span class="fd-vrow__meta">{{ r.preferredWithin || 'No preferred window' }}@if (r.prepNote) { · {{ r.prepNote }} }</span>
+                      <span class="fd-vrow__meta"><b class="pf-num">{{ r.price | inr }}</b> · {{ toBookPriceText(r) }} · collect on the day</span>
+                      <span class="fd-proc__act">
+                        <pf-date [value]="procBookDate()[r.id] ?? null" [min]="procToday" [max]="procMaxDate" label="Procedure date"
+                          (valueChange)="setProcDate(r.id, $event)"></pf-date>
+                        <button type="button" class="pf-btn pf-btn--secondary fd-proc__book" [disabled]="!procBookDate()[r.id] || procBooking() === r.id"
+                          [attr.aria-label]="'Book ' + r.procedureName + ' for ' + r.patientName" (click)="bookProcedure(r)">
+                          {{ procBooking() === r.id ? 'Booking…' : 'Book' }}
+                        </button>
+                      </span>
+                    </span>
+                  </div>
+                </li>
+                }
+              </ul>
+              }
+              }
             </section>
 
             <!-- Splitter: the new design uses the SHARED pf-pane-splitter (drag / ←→ / Home or double-click resets,
@@ -1093,7 +1133,7 @@
                 [loading]="ordersSkel() && flowRows().length === 0 && (rightTab() !== 'billing' || billsSkel())"
                 [selecting]="workSelectable()" [emptyTitle]="flowEmpty().title" [emptyBody]="flowEmpty().body"
                 [split]="workSplit()" [services]="shelfServiceIds()" [orderKey]="sectionOrderKey()" [view]="workView()"
-                (opened)="openFlowRow($event)" (moreFor)="clinicMore($event)" />
+                [board]="opdBoard()" (opened)="openFlowRow($event)" (moreFor)="clinicMore($event)" (doctor)="showDoctor($event)" />
               }
 
               @if (!flowMode()) {

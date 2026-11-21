@@ -115,6 +115,15 @@ type Tab = 'mine' | 'all';
               </svg>
               <span class="pv-refresh__t">Refresh</span>
             </button>
+            <!-- The screen's ONE violet primary, in the band (owner 2026-11-21: moved from the side card's foot). -->
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press pv-next" data-cta data-testid="pv-review-next"
+                    [disabled]="!next()" (click)="reviewNext()"
+                    [attr.aria-label]="next() ? 'Review next: ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue' : 'Nothing to review')"
+                    [attr.title]="next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+              <span>{{ statsSkel() && !next() ? 'Loading…' : 'Review next' }}</span>
+            </button>
           </ng-container>
         </pf-hero-band>
       </header>
@@ -302,13 +311,6 @@ type Tab = 'mine' | 'all';
             </dl>
             <p class="pv-side__note">Open a sample to review every test on the tube, then validate, reject, reassign or send it back for correction.</p>
           </div>
-          <footer class="pf-card__foot">
-            <button type="button" class="pf-btn pf-span pv-next"
-                    [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
-                    [disabled]="!next()" (click)="reviewNext()">
-              {{ next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review') }}
-            </button>
-          </footer>
         </aside>
       </div>
 
@@ -320,9 +322,6 @@ type Tab = 'mine' | 'all';
           @if (stats().overdue) { · <span class="pv-bottombar__warn pf-num">{{ stats().overdue }} overdue</span> }
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
         </button>
-        <button type="button" class="pf-btn pv-next pv-next--bar"
-                [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
-                [disabled]="!next()" (click)="reviewNext()">Review next</button>
       </div>
     </section>
     } @else {

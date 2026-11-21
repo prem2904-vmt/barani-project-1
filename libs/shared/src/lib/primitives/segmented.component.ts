@@ -290,6 +290,13 @@ export type SegmentedFitMode = 'auto' | 'off';
     .seg-compact:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--pf-card-bg, #fff)); }
     .seg-compact:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .seg-compact[aria-expanded='true'] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent); }
+    /* Touch (owner 2026-11-21: "44px on touch everywhere"): every pill and the collapsed pill are 44px targets; desktop
+       keeps the slim capsule. */
+    @media (pointer: coarse) {
+      .bar, .bar.sz-sm, .bar.sz-md { height: 46px; padding: 0 1px; }
+      .seg-item, .sz-sm .seg-item, .sz-md .seg-item { height: 44px; max-height: 44px; min-height: 44px !important; min-width: 44px !important; }
+      .seg-compact, .seg-compact.sz-md { height: 44px; min-height: 44px !important; min-width: 44px; }
+    }
     .seg-compact .seg-ico, .seg-compact .seg-count { color: inherit; }
     .seg-compact .seg-count { opacity: 0.9; }
     .seg-chev { flex: none; color: var(--text-tertiary, #94a3b8); transition: transform 0.18s ease; }

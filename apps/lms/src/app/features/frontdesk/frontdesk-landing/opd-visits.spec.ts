@@ -64,11 +64,12 @@ describe('enabled / disabled', () => {
   const proto = FrontdeskLandingComponent.prototype as any;
   const host = (on: boolean) => {
     const h = Object.create(proto);
-    const api = { visits: vi.fn(() => of([visit()])), paymentsDue: vi.fn(() => of([])), desk: vi.fn(() => of({ config: { workflow: { vitals: 'desk' } } })) };
+    const api = { visits: vi.fn(() => of([visit()])), paymentsDue: vi.fn(() => of([])), desk: vi.fn(() => of({ config: { workflow: { vitals: 'desk' } } })),
+      board: vi.fn(() => of([{ id: 'd1', name: 'Dr. Rao', waiting: 2, vitals: 0, inConsult: 0, done: 0 }])), proceduresToBook: vi.fn(() => of([{ id: 'pb1' }])) };
     Object.assign(h, {
       opdOn: signal(on), opdApi: api, opdCfgLoaded: false,
       workBounds: signal({ start: new Date(2026, 10, 20).getTime(), end: new Date(2026, 10, 21).getTime(), isToday: true }),
-      _opdVisits: signal([]), _opdDues: signal([]), _opdVitals: signal(true),
+      _opdVisits: signal([]), _opdDues: signal([]), _opdVitals: signal(true), _opdBoard: signal([]), _toBook: signal(null),
     });
     return { h, api };
   };
@@ -79,6 +80,8 @@ describe('enabled / disabled', () => {
     expect(api.visits).not.toHaveBeenCalled();
     expect(api.paymentsDue).not.toHaveBeenCalled();
     expect(api.desk).not.toHaveBeenCalled();
+    expect(api.board).not.toHaveBeenCalled();
+    expect(api.proceduresToBook).not.toHaveBeenCalled();
   });
 
   it('OPD on: the OPD desk\'s own feeds for the chosen day (desk config once)', () => {
@@ -89,6 +92,11 @@ describe('enabled / disabled', () => {
     expect(api.paymentsDue).toHaveBeenCalledTimes(2);
     expect(api.desk).toHaveBeenCalledTimes(1);
     expect(h._opdVisits().length).toBe(1);
+    // The doctors board (Clinic view) and Procedures to book (Bookings pill), moved in from /opd/desk/classic.
+    expect(api.board).toHaveBeenCalledTimes(2);
+    expect(api.proceduresToBook).toHaveBeenCalledTimes(2);
+    expect(h._opdBoard().length).toBe(1);
+    expect(h._toBook().length).toBe(1);
   });
 
   it('the landing: OPD = the shelf\'s own rule; rows join every list, the counts, the chart and the shelf; a row opens the visit', () => {

@@ -503,7 +503,7 @@ test.describe('side card at narrow / default / wide widths', () => {
         });
         expect(spill, `${w} ${tab}: spills`).toEqual([]);
         const head = (await sideCard(page).locator('.pf-appt-split__hdr').boundingBox())!;
-        expect(head.height, `${w} ${tab}: head stays one row`).toBeLessThan(64);
+        expect(head.height, `${w} ${tab}: head stays one row`).toBeLessThan(isTouch() ? 76 : 64);   // touch: 44px controls (owner 2026-11-21)
         await expectNoPageScroll(page, `side ${w}`);
         await shots(page, `11-side-${w}-${tab}`);
       }
@@ -525,11 +525,13 @@ test.describe('work grid column filters + alignment', () => {
     for (const [col, cls] of [['token', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
       if (col === 'pay' && !payShown) continue;                        // iPad folds Payment into the Patient line
       if (col === 'wait' && !waitShown) continue;
+      if (col === 'token' && !(await grid.locator('.ag-header-cell[col-id="token"]').count())) continue;   // folded into the Patient line
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`wg-h-${cls}`));
       await expect(grid.locator(`.ag-cell[col-id="${col}"]`).first()).toHaveClass(new RegExp(`wg-c-${cls}`));
     }
     // Every data column has a filter button; the action column and the ring don't.
-    for (const col of ['token', 'patient', 'where', ...(waitShown ? ['wait'] : []), ...(payShown ? ['pay'] : [])]) {
+    const tokenShown = await grid.locator('.ag-header-cell[col-id="token"]').count() > 0;
+    for (const col of [...(tokenShown ? ['token'] : []), 'patient', 'where', ...(waitShown ? ['wait'] : []), ...(payShown ? ['pay'] : [])]) {
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"] .ag-header-cell-filter-button`)).toHaveCount(1);
     }
     await expect(grid.locator('.ag-header-cell[col-id="next"] .ag-header-cell-filter-button')).toHaveCount(0);
