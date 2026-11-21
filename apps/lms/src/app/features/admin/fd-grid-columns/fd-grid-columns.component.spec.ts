@@ -132,6 +132,28 @@ describe('Work grid columns — Save only when something changed', () => {
     // The Frontdesk (same session) sees it at once.
     expect(TestBed.inject(FdGridColumnsService).configFor('lab').columns).toContain('priority');
   });
+  it('a server without the endpoint yet (404): defaults load, Save says so plainly and stays on', async () => {
+    TestBed.resetTestingModule();
+    const nf = Object.assign(new Error('Not found'), { status: 404 });
+    const api = { get: vi.fn(() => throwError(() => nf)), put: vi.fn(() => throwError(() => nf)) };
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [FdGridColumnsComponent],
+      providers: [{ provide: ApiService, useValue: api }, { provide: ToastService, useValue: toast },
+        { provide: OpdDeskApi, useValue: { visits: () => of([]) } },
+        { provide: AuthService, useValue: { user: signal({ id: 'u1', tenantId: 't1' }), activeBranchId: signal(null) } }],
+    });
+    await TestBed.compileComponents();
+    const f = TestBed.createComponent(FdGridColumnsComponent);
+    f.componentRef.setInput('module', 'lab');
+    f.detectChanges();
+    const c = f.componentInstance;
+    expect(c.order()).toEqual(defaultFdColumns('lab'));
+    c.add('priority');
+    expect(await c.saveChanges()).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/not available on this server yet/));
+    expect(c.dirty()).toBe(true);
+  });
   it('a failed save keeps Save enabled', async () => {
     const { c, toast } = await setup({ putFails: true });
     c.add('priority');

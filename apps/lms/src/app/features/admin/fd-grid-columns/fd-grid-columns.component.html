@@ -1,5 +1,7 @@
 <div class="fdgc" [class.fdgc--dragging]="drag()?.on" [attr.data-fd-module]="module()" [attr.data-fd-order]="order().join(',')">
-  <div class="fdgc__hint">
+  <!-- The shared settings row (pf-setting-row, stacked): its padding is the settings panel's, never a one-off. -->
+  <pf-setting-row class="fdgc__row" label="Columns on the Frontdesk list" [stack]="true">
+  <div row-hint class="fdgc__hint">
     <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>Drag a column into the grid header</span>
     <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M3 12h18" /></svg>Drag a header to move it</span>
     <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>Drag it back, or ✕, to remove</span>
@@ -45,7 +47,7 @@
         <span class="fdgc__pt">PREVIEW · {{ moduleLabel().toUpperCase() }}</span><span class="fdgc__sp"></span>
         @if (!loading()) { <span class="fdgc__cs" data-testid="fdgc-gcount">{{ countLabel() }}</span> }
       </div>
-      <div class="fdgc__gbox" #zone [class.fdgc__gbox--hot]="drag()?.on && drag()?.idx !== null" data-testid="fdgc-preview">
+      <div class="fdgc__gbox" #zone [style.height.px]="fitH()"  [class.fdgc__gbox--hot]="drag()?.on && drag()?.idx !== null" data-testid="fdgc-preview">
         <ng-template #skel>
           <div class="fdgc__skelgrid" aria-hidden="true">
             @for (r of [0, 1, 2, 3]; track r) { <div class="fdgc__skelrow" [class.fdgc__skelrow--head]="r === 0"><pf-skeleton variant="line" width="62%" height="11px"></pf-skeleton></div> }
@@ -56,8 +58,11 @@
         } @else {
           <!-- The real Frontdesk grid (its chunk loads once the page is idle; the skeleton holds its place). -->
           @defer (on idle) {
-            <pf-fd-flow-grid class="pf-fd-flow fdgc__grid" [rows]="rows()" [columns]="order()" [module]="module()" [editing]="true" [noFold]="true"
-              [auto]="true" [context]="ctx" />
+            <!-- Every column on show, scaled to fit the box (never clipped, never a sideways scroll). -->
+            <div class="fdgc__fit" #fit [style.width.px]="fitW()" [style.transform]="fitScale() < 1 ? 'scale(' + fitScale() + ')' : null">
+              <pf-fd-flow-grid class="pf-fd-flow fdgc__grid" [rows]="rows()" [columns]="order()" [module]="module()" [editing]="true" [noFold]="true"
+                [auto]="true" [context]="ctx" />
+            </div>
           } @placeholder { <ng-container [ngTemplateOutlet]="skel" /> }
         }
         @if (drag()?.on && drag()?.idx !== null) { <div class="fdgc__bar" aria-hidden="true" [style.left.px]="drag()!.barLeft"></div> }
@@ -66,11 +71,11 @@
     </div>
   </div>
 
-  <div class="fdgc__foot">
-    <span class="fdgc__foot-label" id="fdgc-perm">Staff may hide columns for themselves</span>
+  </pf-setting-row>
+
+  <pf-setting-row label="Staff may hide columns for themselves" hint="Their choice stays on their browser. This page sets the default for everyone.">
     <pf-setting-toggle [value]="staffMayHide()" (valueChange)="staffMayHide.set($event)" label="Staff may hide columns for themselves" [disabled]="loading()" data-testid="fdgc-staff-hide" />
-    <span class="fdgc__foot-note">Their choice stays on their browser. This page sets the default for everyone.</span>
-  </div>
+  </pf-setting-row>
 
   <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" [canSave]="!loading()" saveTestId="fdgc-save" (save)="save()" (discard)="discard()" />
   <span class="fdgc__sr" aria-live="polite" role="status">{{ announce() }}</span>

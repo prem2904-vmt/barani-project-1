@@ -249,6 +249,9 @@ export class FlowGridComponent implements AfterViewInit {
     });
   });
 
+  /** The visible columns' minimum widths summed (the settings preview scales the grid to fit its box by it). */
+  readonly minTotal = computed(() => this.cols().filter(c => !c.hide).reduce((n, c) => n + (c.minWidth ?? c.width ?? 0), 0));
+
   onReady(e: GridReadyEvent<FlowRow>): void {
     if (this.auto()) e.api.setGridOption('domLayout', 'autoHeight');
   }
