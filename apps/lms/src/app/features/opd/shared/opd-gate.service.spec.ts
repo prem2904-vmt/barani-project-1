@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ModuleScopeService } from '../../../core/services/module-scope.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { environment } from '../../../../environments/environment';
 import { OPD_FLAG_KEY } from './opd-gate';
 import { OpdGateService } from './opd-gate.service';
 
@@ -129,5 +130,24 @@ describe('New order with OPD hidden = today\'s lab flow', () => {
     await TestBed.inject(OrderEntryService).startConsult('p9');
     expect(confirm).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(['/opd/visit/new'], { queryParams: { patientId: 'p9' } });
+  });
+});
+
+describe('OpdGateService — dev only', () => {
+  const devUrl = environment.auth.supabaseUrl;
+  afterEach(() => { environment.auth.supabaseUrl = devUrl; });
+
+  it('dev: the console flag opens OPD', () => {
+    setup({ flag: true });
+    expect(TestBed.inject(OpdGateService).visible()).toBe(true);
+  });
+
+  it('off dev: a leftover flag is ignored; entitlement still works', () => {
+    environment.auth.supabaseUrl = 'https://prod-project.supabase.co';
+    setup({ flag: true });
+    expect(TestBed.inject(OpdGateService).visible()).toBe(false);
+    expect(TestBed.inject(OpdGateService).consolePreview()).toBe(false);
+    setup({ flag: true, opdEntitled: true });
+    expect(TestBed.inject(OpdGateService).visible()).toBe(true);
   });
 });

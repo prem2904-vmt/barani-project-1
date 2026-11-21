@@ -1,3 +1,6 @@
+import { environment } from '../../../../environments/environment';
+import { isDevEnvironment } from '../../../core/beta/beta-gate';
+
 /**
  * OPD DARK BUILD — the ONE visibility rule for every OPD surface (pure, DOM-free).
  *
@@ -6,7 +9,10 @@
  *     tenant's ModulesJson opd.enabled === true — the "no module row ⇒ every
  *     module on" default never counts) — the go-live path, OR
  *   - the person typed `pf.opd()` in the browser console (localStorage
- *     `pf.opd` === '1'). ANY signed-in user may; there is no allowlist. While
+ *     `pf.opd` === '1') — ON THE DEV DEPLOYMENT ONLY (owner 2026-11-21; the same
+ *     dev check the beta switches use, `isDevEnvironment`). Off dev a leftover
+ *     flag is ignored, no header is sent and `pf.opd()` just prints a note.
+ *     ANY signed-in user may on dev; there is no allowlist. While
  *     the flag is set every API call carries `X-PF-OPD: 1`
  *     (opd-preview.interceptor.ts) and the server admits OPD calls for it.
  *
@@ -51,7 +57,15 @@ export interface FlagStorage {
   removeItem(k: string): void;
 }
 
-export function readOpdFlag(storage: FlagStorage | null | undefined): boolean {
+/** Is this the dev deployment? The beta gate's check (dev Supabase project), read lazily so the runtime config has merged. */
+export function opdIsDev(): boolean { return isDevEnvironment(environment); }
+
+/** Note printed by `pf.opd()` off dev. */
+export const OPD_DEV_ONLY_NOTE = 'OPD preview is available on dev only';
+
+/** The console flag, honoured on dev only (off dev a stored '1' is ignored). */
+export function readOpdFlag(storage: FlagStorage | null | undefined, isDev: boolean = opdIsDev()): boolean {
+  if (!isDev) return false;
   try { return storage?.getItem(OPD_FLAG_KEY) === '1'; } catch { return false; }
 }
 
@@ -59,15 +73,19 @@ export function readOpdFlag(storage: FlagStorage | null | undefined): boolean {
  * Install `window.pf.opd(on = true)` SILENTLY: merges into any existing
  * `window.pf` object (never replaces it), prints nothing, returns nothing
  * useful. Setting / clearing the flag reloads so every surface re-evaluates.
+ * Off dev nothing is stored or reloaded: it prints {@link OPD_DEV_ONLY_NOTE}.
  * Idempotent.
  */
 export function installPfOpd(
   win: { pf?: Record<string, unknown> } & Record<string, unknown>,
   storage: FlagStorage,
   reload: () => void,
+  isDev: boolean = opdIsDev(),
+  note: (msg: string) => void = m => console.info(m),
 ): void {
   const pf = (win.pf && typeof win.pf === 'object') ? win.pf : {};
   pf['opd'] = (on: unknown = true): void => {
+    if (!isDev) { note(OPD_DEV_ONLY_NOTE); return; }
     try {
       if (on === false || on === 0 || on === 'off') storage.removeItem(OPD_FLAG_KEY);
       else storage.setItem(OPD_FLAG_KEY, '1');
@@ -84,6 +102,6 @@ export function safeLocalStorage(): FlagStorage | null {
 
 /** Extra headers for a raw `fetch` to our API (the /me bootstrap bypasses the
  *  HttpClient interceptors): `{ 'X-PF-OPD': '1' }` while the flag is set. */
-export function opdPreviewHeaders(storage: FlagStorage | null | undefined = safeLocalStorage()): Record<string, string> {
-  return readOpdFlag(storage) ? { [OPD_PREVIEW_HEADER]: '1' } : {};
+export function opdPreviewHeaders(storage: FlagStorage | null | undefined = safeLocalStorage(), isDev: boolean = opdIsDev()): Record<string, string> {
+  return readOpdFlag(storage, isDev) ? { [OPD_PREVIEW_HEADER]: '1' } : {};
 }
