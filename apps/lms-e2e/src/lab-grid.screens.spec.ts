@@ -360,8 +360,17 @@ for (const dark of [false, true]) {
         for (const [k, v] of [['flex', `0 0 ${w}px`], ['width', `${w}px`], ['max-width', `${w}px`], ['min-width', `${w}px`], ['justify-self', 'start']])
           el.style.setProperty(k, v, 'important');
       }, [cardSel, w] as const);
+      // The grid re-tiers its columns after the resize (ResizeObserver → column fit): wait for the FINAL layout —
+      // read again until it is clean, up to 8s (slow engines under load need more than one 700ms beat). A real
+      // overflow stays and fails with its list.
       await page.waitForTimeout(700);
-      return page.evaluate(([cardSel, gridSel, w]) => {
+      let found: string[] = [];
+      for (const t0 = Date.now(); ; await page.waitForTimeout(250)) {
+        found = await read(cardSel, gridSel, w);
+        if (!found.length || Date.now() - t0 > 8000) return found;
+      }
+    };
+    const read = (cardSel: string, gridSel: string, w: number) => page.evaluate(([cardSel, gridSel, w]) => {
         const out: string[] = [];
         const card = document.querySelector<HTMLElement>(cardSel as string)!.getBoundingClientRect();
         if (Math.abs(card.width - (w as number)) > 2) out.push(`card is ${Math.round(card.width)}px, not ${w}px`);
@@ -375,7 +384,6 @@ for (const dark of [false, true]) {
         }
         return out;
       }, [cardSel, gridSel, w] as const);
-    };
     const widths = [520, 600, 720, 900, 1200];
     // My Work (sample focus is the widest plan).
     focus = 'sample';

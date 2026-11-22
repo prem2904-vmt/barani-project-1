@@ -99,7 +99,12 @@ const docked = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1280;
 
 /** Opens the first patient's collection (wide: auto-selected in the main card; narrow: tap the queue card). */
 async function openCollect(page: Page) {
-  await page.goto('/lab/collect');
+  // WebKit can fail a navigation under heavy load with "WebKit encountered an internal error" (an engine fault,
+  // not the page): try that one error once more; anything else still fails.
+  await page.goto('/lab/collect').catch(async e => {
+    if (!/internal error/i.test(String(e))) throw e;
+    await page.goto('/lab/collect');
+  });
   const toggle = page.getByTestId('collect-info-toggle');
   const card = page.locator('.pf-sc__pcard').first();
   await expect(toggle.or(card).first()).toBeVisible({ timeout: 30_000 });
