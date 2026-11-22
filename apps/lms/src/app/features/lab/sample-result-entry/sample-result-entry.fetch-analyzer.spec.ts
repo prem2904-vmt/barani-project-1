@@ -117,6 +117,10 @@ describe('Sample result entry — Fetch from analyzer', () => {
   it('is offered in normal entry; queries unmatched messages for THIS tube\'s barcode and attaches them', async () => {
     const { c, el, api, toasts } = await render({ unmatched: [{ id: 'm1' }, { id: 'm2' }] });
     expect(el.querySelector('.pf-sre-fetch')).not.toBeNull();
+    // Owner 2026-11-22: it sits at the right end of the FIRST results card's head — once, not a bar above the cards.
+    expect(el.querySelectorAll('.pf-sre-fetch').length).toBe(1);
+    const head = el.querySelector('.pf-sre__test > .pf-card__head')!;
+    expect(head.lastElementChild?.classList.contains('pf-sre-fetch')).toBe(true);
     await c.fetchFromAnalyzer();
     expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/instruments/messages?'));
     expect(api.post).toHaveBeenCalledWith('/api/instruments/messages/m1/attach', { barcode: '26123' });
