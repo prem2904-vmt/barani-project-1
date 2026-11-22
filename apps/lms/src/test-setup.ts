@@ -1,5 +1,6 @@
 import { afterEach } from 'vitest';
 import { setPrefetchLoadsForTests } from './app/shared/utils/prefetch';
+import { setBackgroundReportLoadsForTests } from './app/shared/utils/background-report-loads';
 
 /**
  * Unit-test setup (project.json → test.options.setupFiles), run before every spec file.
@@ -13,6 +14,9 @@ import { setPrefetchLoadsForTests } from './app/shared/utils/prefetch';
  *    twin of the per-file restores), so a stubbed "reduce" / "pointer: coarse" can't flip rules in the next file.
  */
 setPrefetchLoadsForTests(false);
+// 3. No background report renders (prestore after validation, archive before WhatsApp): same teardown failure,
+//    via report-blob's lazy imports (sample-result-entry / report-actions, release gate 2026-11-22).
+setBackgroundReportLoadsForTests(false);
 
 const realMatchMedia = window.matchMedia;
 afterEach(() => {
