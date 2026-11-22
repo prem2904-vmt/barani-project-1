@@ -148,7 +148,10 @@ async function reopen(page: Page) {
 test.describe('One day-close', () => {
   test('closing from Expenses shows as closed in Finance', async ({ page }) => {
     const errors: string[] = [];
-    page.on('pageerror', e => errors.push(e.message));
+    // WebKit reports a fetch that a navigation cancelled (the chat list / sync still in flight when the spec moves from Expenses to
+    // Finance) as a page error "…/api/chat/… due to access control checks"; Chromium / Firefox stay silent. That is the
+    // browser's cancel notice, not an app error (the chat service catches both calls) — every other uncaught error still fails.
+    page.on('pageerror', e => { if (!/\/api\/chat\/.+ due to access control checks\.?$/.test(e.message)) errors.push(e.message); });
     await openFromExpenses(page);
     await expect(vis(page, '[data-testid="closing-state"]')).toHaveText(/Open/);
     // The expected cash takes the staff cash expenses and top-ups; the cashier sees who spent what.
