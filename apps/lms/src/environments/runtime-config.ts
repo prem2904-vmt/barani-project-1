@@ -20,6 +20,8 @@ import { isBareDomain } from '../app/core/auth/passkey-webauthn';
 
 export interface RuntimeConfigTarget {
   runtimeConfig?: boolean;
+  /** Whether analyzer simulation (virtual COM ports, protocol frame streaming, and simulated runs) is enabled. */
+  enableAnalyzerSimulation?: boolean;
   /** Hosts where the baked-in values are valid (dev + local). Elsewhere a failed load blocks bootstrap. */
   fallbackHosts?: readonly string[];
   apiUrl: string;
@@ -64,6 +66,7 @@ export function mergeRuntimeConfig(target: RuntimeConfigTarget, raw: unknown): n
   let applied = 0;
   if (isSafeUrl(raw['apiUrl'])) { target.apiUrl = raw['apiUrl']; applied++; }
   if (isSafeUrl(raw['reportPublicBaseUrl'])) { target.reportPublicBaseUrl = raw['reportPublicBaseUrl']; applied++; }
+  if (typeof raw['enableAnalyzerSimulation'] === 'boolean') { target.enableAnalyzerSimulation = raw['enableAnalyzerSimulation']; applied++; }
   const auth = raw['auth'];
   if (isRecord(auth)) {
     if (isSafeUrl(auth['supabaseUrl'])) { target.auth.supabaseUrl = auth['supabaseUrl']; applied++; }

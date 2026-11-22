@@ -301,6 +301,10 @@
                   <p class="pf-empty__body">Open Prefrontal on the lab PC the analyzer is cabled to, then come back to this step there.</p>
                 </div>
               } @else {
+                @if (bridge.isSimulated) {
+                  <pf-instrument-simulator [instrumentId]="id()" [maps]="maps()" [protocol]="form().protocol" />
+                }
+
                 <div class="pf-ie-listen-bar">
                   @if (sessionId()) {
                     <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="listenBusy()" [pfBusy]="listenBusy()" pfBusyLabel="Stopping…" (click)="stopListen()">

@@ -7,6 +7,7 @@ export const environment = {
   // Native / local builds keep their baked-in settings; only the web production
   // build fetches /config.json at startup (see runtime-config.ts).
   runtimeConfig: false,
+  enableAnalyzerSimulation: true,
   // Local dev server → local backend (dotnet run on :5270). Point this back
   // at the deployed API only if you intentionally want the dev UI to drive prod.
   apiUrl: "https://med-fetch-dev.prefrontal.health",

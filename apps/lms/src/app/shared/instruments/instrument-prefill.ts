@@ -149,12 +149,14 @@ export function planPrefill(args: {
   lines: readonly PrefillLine[];
   current: (orderTestId: string, paramName: string) => unknown;
   previous?: AppliedMap | null;
+  force?: boolean;
 }): PrefillPlan {
   const prev = args.previous ?? {};
   const next = args.runs ? valuesForRuns(args.runs, args.lines) : valuesForRun(args.run, args.lines);
   const writes: PrefillWrite[] = [];
   const kept: string[] = [];
-  const untouched = (key: string, cur: unknown) => !isFilledValue(cur) || (!!prev[key] && same(cur, prev[key].value));
+  const untouched = (key: string, cur: unknown) =>
+    args.force || !isFilledValue(cur) || String(cur).trim() === '0' || (!!prev[key] && same(cur, prev[key].value));
 
   for (const [key, v] of Object.entries(next)) {
     const cur = args.current(v.orderTestId, v.paramName);

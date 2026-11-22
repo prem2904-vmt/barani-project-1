@@ -68,7 +68,7 @@ import {
 import { OrderTestComment } from "../../../shared/models/comment.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { CommentThreadComponent } from "../../../shared/components/comment-thread/comment-thread.component";
-import { SelectComponent } from "../../../shared/primitives/select.component";
+import { PfSelectOption, SelectComponent } from "../../../shared/primitives/select.component";
 import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, PfAction } from "../../../shared/components/actions-menu/actions-menu.component";
@@ -109,9 +109,11 @@ import { ReportPrestoreService } from '../../../core/services/report-prestore.se
 import { formatDate } from "@angular/common";
 import { LAB_TIME_ZONE } from "../../../shared/utils/lab-clock";
 import { InstrumentsApiService } from "../../../shared/instruments/instruments-api.service";
-import type { RunDto } from "../../../shared/instruments/instrument.models";
+import { AnalyzerSimulationService } from "../../../shared/instruments/analyzer-simulation.service";
+import type { MappedValue, ParserType, RunDto } from "../../../shared/instruments/instrument.models";
+import { SampleResultSimulatorComponent } from "../../../shared/instruments/mock-simulator/sample-result-simulator.component";
 import { ReportLayoutService } from "../../../core/services/report-layout.service";
-import { KNOWN_ANALYZER_IMAGES, missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
+import { analyzerLabel, analyzerSampleAsset, KNOWN_ANALYZER_IMAGES, missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
 import { AnalyzerGraphsComponent, type AnalyzerGraph } from "./analyzer-graphs.component";
 import type { PageLayoutBox } from "../../../shared/models/report-layout.model";
 import {
@@ -192,6 +194,7 @@ function calcKey(testId: string, paramName: string): string {
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
     EditReferralDialogComponent,
+    SampleResultSimulatorComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -222,6 +225,7 @@ export class SampleResultEntryComponent {
   private readonly draftShelf = inject(DraftShelfService);
   private readonly criticalSvc = inject(CriticalResultsService);
   private readonly instrumentsApi = inject(InstrumentsApiService);
+  private readonly simulationService = inject(AnalyzerSimulationService);
   private readonly layoutSvc = inject(ReportLayoutService);
 
   // ── New-design frame (docs/PF-PATTERN.md → "Result entry") ──────────
@@ -1768,7 +1772,7 @@ export class SampleResultEntryComponent {
   }
 
   /** The writable lines on screen and the fields an analyzer value may take. */
-  private analyzerLines(): PrefillLine[] {
+  protected analyzerLines(): PrefillLine[] {
     const out: PrefillLine[] = [];
     const s = this._sample();
     const skip = new Set(["boolean", "checkbox", "toggle", "yesno"]);
@@ -1843,7 +1847,53 @@ export class SampleResultEntryComponent {
   // tube's barcode (a timing miss at ingest) — attaching those, then
   // reloading. Never a device command.
   readonly fetchingAnalyzer = signal(false);
+  readonly simulationEnabled = computed(() => this.simulationService.enabled());
   showFetchFromAnalyzer(): boolean { return !this.validateMode() && !this.viewOnly(); }
+
+  /** Handles simulated run applied from pf-sample-result-simulator (dev only). */
+  onSimulatedRun(run: RunDto): void {
+    this.analyzerRuns.update((runs) => [run, ...runs.filter((r) => r.messageId !== run.messageId)]);
+    this.applyAnalyzerRun(run.messageId, true);
+
+    // Also attach simulated analyzer graphs for any expected profile layout boxes (clears missing analyzer warnings)
+    const s = this._sample();
+    const layouts = this._profileLayouts();
+    for (const { id: profileId } of this.profileBundlesOf(s)) {
+      const pl = layouts[profileId];
+      if (!pl?.enabled || !pl.boxes?.length) continue;
+      const targetTest = (s?.tests ?? []).find((t) => this.benchGroup(t)?.id === profileId);
+      if (!targetTest) continue;
+
+      const currentAttachments = this.attachmentsFor(targetTest);
+      const existingCodes = new Set(
+        currentAttachments
+          .filter((a) => a.param?.startsWith("instrument:"))
+          .map((a) => a.param!.slice("instrument:".length))
+      );
+
+      const toAdd: ResultAttachment[] = [];
+      for (const b of pl.boxes) {
+        if (b.kind === "analyzer" && b.ref && !existingCodes.has(b.ref)) {
+          toAdd.push({
+            id: `sim-graph-${b.ref}-${Date.now()}`,
+            url: analyzerSampleAsset(b.ref),
+            kind: "image",
+            show: true,
+            name: b.label ?? analyzerLabel(b.ref),
+            param: `instrument:${b.ref}`,
+          });
+        }
+      }
+
+      if (toAdd.length > 0) {
+        const nextList = [...currentAttachments, ...toAdd];
+        this._attach.update((m) => ({ ...m, [targetTest.id]: nextList }));
+        void this.saveAttachments(targetTest.id, nextList);
+      }
+    }
+
+    this.scheduleDraftSave();
+  }
 
   async fetchFromAnalyzer(): Promise<void> {
     const s = this._sample();
@@ -1861,9 +1911,16 @@ export class SampleResultEntryComponent {
           } catch { /* lost a race to another attach, or no longer unmatched — skip */ }
         }
       }
-      await this.load(s.id);
-      if (attached > 0) this.toasts.success(attached === 1 ? "1 new analyzer result attached." : `${attached} new analyzer results attached.`);
-      else this.toasts.info("No new analyzer results yet.");
+      if (attached > 0) {
+        await this.load(s.id);
+        this.toasts.success(attached === 1 ? "1 new analyzer result attached." : `${attached} new analyzer results attached.`);
+      } else {
+        if (this.analyzerRuns().length > 0) {
+          this.toasts.info("Simulated analyzer run is active on screen.");
+        } else {
+          this.toasts.info("No new analyzer results yet.");
+        }
+      }
     } catch {
       this.toasts.error("Could not reach the analyzer — try again.");
     } finally {
@@ -1887,7 +1944,7 @@ export class SampleResultEntryComponent {
   /** Apply one run, or LATEST_VALUES (each field's newest value across all
    *  runs — the default): fills empty fields and fields still equal to the
    *  previous prefill; typed values are never touched. */
-  applyAnalyzerRun(messageId: string | null) {
+  applyAnalyzerRun(messageId: string | null, force = false) {
     const merged = messageId === LATEST_VALUES;
     const run = merged ? null : this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
     if (!merged && !run) return;
@@ -1897,6 +1954,7 @@ export class SampleResultEntryComponent {
       lines: this.analyzerLines(),
       current: (ot, p) => this._values()[ot]?.[p],
       previous: this._analyzerApplied(),
+      force,
     });
     if (plan.writes.length) {
       this._values.update((all) => {

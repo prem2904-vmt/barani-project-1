@@ -11,6 +11,7 @@ export const environment = {
   // Native / local builds keep their baked-in settings; only the web production
   // build fetches /config.json at startup (see runtime-config.ts).
   runtimeConfig: false,
+  enableAnalyzerSimulation: true,
   isElectron: true,
   isMobile: false,
   apiUrl: 'http://localhost:5270',

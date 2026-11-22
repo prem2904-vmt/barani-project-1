@@ -19,6 +19,7 @@ import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.c
 import { plural } from '../../../shared/utils/plural';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
+import { InstrumentSimulatorComponent } from '../../../shared/instruments/mock-simulator/instrument-simulator.component';
 import {
   BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
@@ -27,7 +28,7 @@ import {
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
-  ConnectorStatus, DetectResult, Hl7SampleIdField, ImageCodeDto, InstrumentDto, InstrumentMessage, ListenEvent, LoincSuggestionDto,
+  ConnectorState, ConnectorStatus, DetectResult, Hl7SampleIdField, ImageCodeDto, InstrumentDto, InstrumentMessage, ListenEvent, LoincSuggestionDto,
   MessageSummaryDto, PairedInstrument, ParserType, RawLogEntry, TransportType,
 } from '../../../shared/instruments/instrument.models';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
@@ -68,7 +69,7 @@ interface TabDef { id: Tab; label: string }
 @Component({
   selector: 'pf-instrument-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent, AssistantButtonComponent, AssistantPanelComponent, TestMappingCardComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent, AssistantButtonComponent, AssistantPanelComponent, TestMappingCardComponent, InstrumentSimulatorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './instrument-editor.component.html',
   styleUrl: './instrument-editor.component.scss',
@@ -113,6 +114,7 @@ export class InstrumentEditorComponent {
   readonly defaultSinocareAck = DEFAULT_SINOCARE_ACK_JSON;
   readonly idToken = '{{id}}';
   readonly hl7FieldOptions: PfSelectOption<Hl7SampleIdField>[] = HL7_SAMPLE_ID_FIELDS;
+
 
   // ── Record ───────────────────────────────────────────────────────────
   readonly id = signal<string | null>(null);
@@ -778,6 +780,7 @@ export class InstrumentEditorComponent {
     this.toasts.success(`Protocol set to ${PROTOCOL_OPTIONS.find((o) => o.value === form.protocol)?.label ?? form.protocol}`);
   }
   confidencePct(d: DetectResult): number { return Math.round((d.confidence <= 1 ? d.confidence * 100 : d.confidence)); }
+
 
   // ── Device key + pairing ─────────────────────────────────────────────
   async generateKey(): Promise<string | null> {

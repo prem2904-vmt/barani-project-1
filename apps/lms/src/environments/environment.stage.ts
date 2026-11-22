@@ -3,6 +3,7 @@ export const environment = {
   // Native / local builds keep their baked-in settings; only the web production
   // build fetches /config.json at startup (see runtime-config.ts).
   runtimeConfig: false,
+  enableAnalyzerSimulation: false,
   apiUrl: 'https://med-fetch-stg.prefrontal.health',
   // Public web origin for patient-facing report links (window.location.origin is
   // capacitor://localhost in the native app, which can't be opened externally).

@@ -54,7 +54,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "2.5mb"
+              "maximumError": "2.8mb"
             },
             {
               "type": "anyComponentStyle",
@@ -187,7 +187,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "2.5mb"
+              "maximumError": "2.8mb"
             },
             {
               "type": "anyComponentStyle",
@@ -209,7 +209,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "2.5mb"
+              "maximumError": "2.8mb"
             },
             {
               "type": "anyComponentStyle",
@@ -230,7 +230,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "2.5mb"
+              "maximumError": "2.8mb"
             },
             {
               "type": "anyComponentStyle",

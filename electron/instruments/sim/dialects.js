@@ -100,12 +100,65 @@ function hl7ChemMessage(job) {
   return { text: segs.join('\r') + '\r', results, controlId: ctrl };
 }
 
+function lifedxHbproMessage(job) {
+  const d = job.at || new Date();
+  const sampleId = (job.sampleId || '26354').padEnd(16, ' ').slice(0, 16);
+  const patient = (job.patient || 'Prem Kumar K').padEnd(20, ' ').slice(0, 20);
+  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '/');
+  const timeStr = d.toTimeString().slice(0, 8);
+  const val = job.qc ? '5.3' : (job.variant === 'high' ? '13.8' : '7.2');
+  const valPad = val.padStart(6, ' ');
+
+  const STX = '\x02';
+  const ETX = '\x03';
+  const CR = '\r';
+  const LF = '\n';
+
+  let text = `${STX}S04${sampleId}${patient}${dateStr} ${timeStr}${CR}${LF}`;
+  text += `HbA1c  ${valPad} %   (4.0 - 6.0)   HPLC${CR}${LF}`;
+  text += `Peak A1a: 0.8%  Peak A1b: 1.2%  Peak F: 0.5%  Peak LA1c: 1.5%${CR}${LF}`;
+  text += `Peak A0: 88.8%  Peak Area: 124500 uV*s${CR}${LF}`;
+  text += `${ETX}${CR}${LF}`;
+
+  const results = [
+    { code: 'HBA1C', value: val, unit: '%', flag: parseFloat(val) > 6.4 ? 'H' : 'N' },
+  ];
+  return { text, results };
+}
+
+function sinocareFhirMessage(job) {
+  const d = job.at || new Date();
+  const sampleId = job.sampleId || '26354';
+  const fhirPayload = {
+    resourceType: 'Observation',
+    id: `sim-obs-${sampleId}`,
+    status: 'final',
+    code: {
+      coding: [{ system: 'http://loinc.org', code: '4548-4', display: 'Hemoglobin A1c/Hemoglobin.total in Blood' }],
+      text: 'HbA1c',
+    },
+    subject: { reference: `Patient/${sampleId}`, display: 'Prem Kumar K' },
+    effectiveDateTime: d.toISOString(),
+    valueQuantity: { value: 7.2, unit: '%', system: 'http://unitsofmeasure.org', code: '%' },
+    interpretation: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation', code: 'H', display: 'High' }] }],
+  };
+
+  const jsonStr = JSON.stringify(fhirPayload);
+  const text = `SN\x01\x00${String.fromCharCode(jsonStr.length & 0xff)}${jsonStr}\x04`;
+  const results = [
+    { code: 'HBA1C', value: '7.2', unit: '%', flag: 'H' },
+  ];
+  return { text, results };
+}
+
 const DIALECTS = {
   'astm-chem': { build: astmChemMessage, link: 'astm-e1381', protocol: 'astm' },
   'hl7-chem': { build: hl7ChemMessage, link: 'mllp', protocol: 'hl7' },
   'astm-5part': { build: astmMessage, link: 'astm-e1381', protocol: 'astm' },
   'hl7-5part': { build: hl7Message, link: 'mllp', protocol: 'hl7' },
+  'lifedx-hbpro': { build: lifedxHbproMessage, link: 'stx-etx', protocol: 'lifedx-hbpro' },
+  'sinocare-fhir': { build: sinocareFhirMessage, link: 'sn-frame', protocol: 'sinocare-fhir' },
   'text-3part': { build: textMessage, link: 'raw', protocol: 'text' },
 };
 
-module.exports = { DIALECTS, astmChemMessage, hl7ChemMessage, astmMessage, hl7Message, textMessage, LONG_COMMENT, ts };
+module.exports = { DIALECTS, astmChemMessage, hl7ChemMessage, astmMessage, hl7Message, lifedxHbproMessage, sinocareFhirMessage, textMessage, LONG_COMMENT, ts };

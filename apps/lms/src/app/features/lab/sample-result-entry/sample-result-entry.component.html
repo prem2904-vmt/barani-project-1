@@ -287,6 +287,10 @@
                     [disabled]="fetchingAnalyzer()" (click)="fetchFromAnalyzer()">
               {{ fetchingAnalyzer() ? 'Checking…' : 'Fetch from analyzer' }}
             </button>
+            @if (simulationEnabled()) {
+              <pf-sample-result-simulator [sample]="sample()" [lines]="analyzerLines()"
+                                          (appliedRun)="onSimulatedRun($event)"></pf-sample-result-simulator>
+            }
           </div>
         }
         @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0 || analyzerRuns().length > 1) {
