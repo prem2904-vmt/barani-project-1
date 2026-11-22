@@ -230,6 +230,13 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
     await page.mouse.move(s.x + s.width / 2 + 40, s.y + s.height / 2, { steps: 4 });
     await page.mouse.move(s.x + s.width / 2 + 90, s.y + s.height / 2, { steps: 4 });
     await page.mouse.up();
+    // The card eases to its new width after release; read it only once it has settled.
+    await expect.poll(async () => {
+      const a = (await side.boundingBox())!.width;
+      await page.waitForTimeout(120);
+      const b = (await side.boundingBox())!.width;
+      return Math.abs(a - b) < 1 ? b : -1;
+    }, { timeout: 5_000 }).toBeGreaterThan(0);
     const w1 = (await side.boundingBox())!.width;
     expect(w1 - w0, 'dragged ~90px wider').toBeGreaterThan(70);
     expect(Number(await sep.getAttribute('aria-valuenow'))).toBeCloseTo(w1, -1);
