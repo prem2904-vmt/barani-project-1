@@ -3,7 +3,7 @@ import { FieldDef } from '../../core/types';
 import { f, renderKind, unnamed, untouchable, vi } from '../../testing/render-kind';
 import { GRID_ADVANCE_MS, GridFill, fitsAsTable } from './grid.fill';
 import { GridConfig } from './grid-model';
-import { DENTAL } from './grid-model.spec';
+import { DENTAL } from './grid-model.spec-helpers';
 import { GRID_BUILD, gridSample } from './grid.build';
 
 const grid = (config: GridConfig, extra: Partial<FieldDef> = {}) => f('teeth', 'grid', { label: 'Dental chart', config: config as never, ...extra });
