@@ -378,6 +378,8 @@ test.describe('All = one screen split by service', () => {
     } else {
       await page.locator('.fd-sec[data-sec="opd"] .fd-sec__h').focus();
       await page.keyboard.press('Alt+ArrowUp');
+      // The move re-focuses the moved header a frame later; wait for it so the second press moves OPD again.
+      await expect(page.locator('.fd-sec[data-sec="opd"] .fd-sec__h')).toBeFocused();
       await page.keyboard.press('Alt+ArrowUp');
       await expect.poll(() => sectionIds(page)).toEqual(['opd', 'lab', 'ipd']);
     }
