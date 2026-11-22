@@ -543,8 +543,12 @@ test.describe('Frontdesk work grids', () => {
       await expect.poll(async () => (await columnTexts(grid, 'wait', '.fd-flow__wait')).every(t => (minutes(t) ?? 0) > 30)).toBe(true);
       expect((await columnTexts(grid, 'wait', '.fd-flow__wait')).length).toBeGreaterThan(0);
       await shot(page, 'frontdesk-wait-filter');
-      await page.locator('.ag-popup button:has-text("Reset")').locator('visible=true').first().click();
+      // The screenshot above can blur the page and close the filter popup (WebKit): reopen it, then Reset.
+      const reset = page.locator('.ag-popup button:has-text("Reset")').locator('visible=true').first();
+      if (!(await reset.isVisible().catch(() => false))) await header(grid, 'wait').locator('.ag-header-cell-filter-button').click();
+      await reset.click();
       await page.keyboard.press('Escape');
+      await expect.poll(async () => (await columnTexts(grid, 'wait', '.fd-flow__wait')).some(t => (minutes(t) ?? 0) <= 30), { message: 'Reset brings the short waits back' }).toBe(true);
     }
   });
 

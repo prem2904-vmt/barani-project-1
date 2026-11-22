@@ -14,13 +14,29 @@ export interface Toast {
 export class ToastService {
   private _seq = 1;
   private readonly _toasts = signal<Toast[]>([]);
+  /** Each live toast's dismiss timer and its length (a toast under the pointer / with focus is held, then released). */
+  private readonly _timers = new Map<number, { h: ReturnType<typeof setTimeout>; ms: number }>();
   readonly toasts = this._toasts.asReadonly();
 
   show(message: string, level: ToastLevel = 'info', timeoutMs = 4000, action?: ToastAction): number {
     const id = this._seq++;
     this._toasts.update(list => [...list, action ? { id, level, message, action } : { id, level, message }]);
-    setTimeout(() => this.dismiss(id), timeoutMs);
+    this._timers.set(id, { h: setTimeout(() => this.dismiss(id), timeoutMs), ms: timeoutMs });
     return id;
+  }
+
+  /** The pointer is over the toast or focus is inside it (Safari / keyboard users reaching for "Undo"): keep it on screen. */
+  hold(id: number): void {
+    const t = this._timers.get(id);
+    if (t) clearTimeout(t.h);
+  }
+
+  /** The pointer left / focus went away: give it a short grace, then dismiss as usual. */
+  release(id: number): void {
+    const t = this._timers.get(id);
+    if (!t) return;
+    clearTimeout(t.h);
+    t.h = setTimeout(() => this.dismiss(id), Math.min(t.ms, 3000));
   }
 
   /** A toast with one action button (e.g. Undo for 6 s). Returns the toast id. */
@@ -40,6 +56,8 @@ export class ToastService {
   warning(msg: string, ms?: number) { this.show(msg, 'warning', ms); }
 
   dismiss(id: number): void {
+    const t = this._timers.get(id);
+    if (t) { clearTimeout(t.h); this._timers.delete(id); }
     this._toasts.update(list => list.filter(t => t.id !== id));
   }
 }

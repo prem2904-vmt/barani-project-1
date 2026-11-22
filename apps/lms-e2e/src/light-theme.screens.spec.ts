@@ -18,7 +18,9 @@ const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/
 const SHOTS_ONLY = process.env['LT_SHOTS_ONLY'] === '1';
 
 // A fixed clock (page + data) so both runs render the same times and dates.
-const FIXED = new Date('2026-11-21T05:00:00Z');
+// The shared mock backend stamps its orders with the REAL now, and "Today" is the lab's IST day: the frozen clock is 10:30 IST
+// of the CURRENT IST day (a literal date went stale at midnight: every demo order fell out of "Today" and the grid was empty).
+const FIXED = new Date(`${new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)}T05:00:00Z`);
 const now = FIXED.getTime();
 const ago = (m: number) => new Date(now - m * 60000).toISOString();
 const today = ago(0).slice(0, 10);

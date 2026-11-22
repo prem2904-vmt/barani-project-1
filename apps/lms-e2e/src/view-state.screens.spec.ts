@@ -194,7 +194,7 @@ test.describe('Frontdesk', () => {
     await expect(chip, 'another week is showing, so Back to today shows').toBeVisible();
     const m = await page.evaluate(() => {
       const strip = Array.from(document.querySelectorAll('.pf-daystrip')).find(e => (e as HTMLElement).offsetWidth > 0) as HTMLElement;
-      const days = Array.from(strip.querySelectorAll('.pf-daystrip__day')).map(d => d.getBoundingClientRect());
+      const days = Array.from(strip.querySelectorAll('.pf-daystrip__day')).map(d => d.getBoundingClientRect()).filter(d => d.width > 0);   // a narrow side card hides the weekend cells (approved: < 340px shows the five weekdays)
       const c = document.querySelector('[data-testid="back-to-today"]')!.getBoundingClientRect();
       const sr = strip.getBoundingClientRect();
       return { widths: days.map(d => Math.round(d.width)), gaps: days.slice(1).map((d, i) => Math.round(d.left - days[i].right)),

@@ -1097,8 +1097,13 @@
 :host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-center { justify-content: center; text-align: center; }
 :host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-center .pf-rq2-status { align-items: center; }
 :host ::ng-deep .pf-rq2-grid .ag-header-cell.pf-rq2-hcenter .ag-header-cell-label { justify-content: center; }
-/* Generated: "Generated" + its sort arrow + the filter fit the 128px column (never cut, grid-sort 2026-11-21). */
-:host ::ng-deep .pf-rq2-grid .ag-header-cell[col-id='generated'] { padding-left: 6px; padding-right: 6px; }
+/* Generated: "Generated" + its sort arrow + the filter fit the 128px column on EVERY engine (never cut, grid-sort 2026-11-21).
+   Firefox sets the label ~3px wider than Chromium, so the header gives the words ~8px more: slimmer side padding and a
+   slimmer funnel box (pointer devices only — a touch funnel keeps its 44px target; the column is hidden below 1280px anyway). */
+:host ::ng-deep .pf-rq2-grid .ag-header-cell[col-id='generated'] { padding-left: 4px; padding-right: 4px; }
+@media (hover: hover) and (pointer: fine) {
+  :host ::ng-deep .pf-rq2-grid .ag-header-cell[col-id='generated'] .ag-header-cell-filter-button { min-width: 24px; }
+}
 :host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button {
   display: inline-flex; align-items: center; justify-content: center; flex: none; opacity: 1; color: var(--text-tertiary);
   min-width: 28px; min-height: 28px; border-radius: 8px;

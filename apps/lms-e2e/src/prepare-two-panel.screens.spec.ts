@@ -52,6 +52,14 @@ test.beforeEach(async ({ page, context }) => {
 const side = (page: Page) => page.locator('[data-testid="tp-nav"]').locator('visible=true').first();
 const main = (page: Page) => page.locator('[data-testid="tp-panel"]').locator('visible=true').first();
 
+/** Case sheets | Continue: the head's pill, or — on a tight card (tablet) — its collapsed selected-pill menu. */
+async function pickTab(page: Page, tab: 'sheets' | 'continue', label: RegExp) {
+  const t = main(page).locator(`.pf-tp__head [data-tab="${tab}"]`);
+  if (await t.locator('visible=true').count()) { await t.click(); return; }
+  await main(page).locator('.pf-tp__head [data-seg-compact]').locator('visible=true').first().click();
+  await page.getByRole('menuitemradio', { name: label }).locator('visible=true').first().click();
+}
+
 test.describe('Prepare two-panel', () => {
   test('wide: side card LEFT at the shared width, main card RIGHT, same height, no band-corner button, one scroll level', async ({ page }) => {
     test.skip(isPhone());
@@ -97,12 +105,12 @@ test.describe('Prepare two-panel', () => {
     await expect(main(page).locator('.dp__tile')).toHaveCount(2);
     await shot(page, 'prepare-wide');
     // Continue: the saved drafts as rows, with search + "This department only"
-    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await pickTab(page, 'continue', /^Continue/);
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Meenakshi Demo');
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Nose history');
     await expect(page.locator('[data-draft-search]')).toHaveCount(0);
     const bandInput = page.locator('pf-hero-band .pf-hb__input');
-    await expect(bandInput).toHaveAttribute('placeholder', /Search drafts/);
+    await expect(bandInput).toHaveAttribute('data-ph-full', /Search drafts/);
     await expect(main(page).locator('[data-only-dept]')).toBeVisible();
     await shot(page, 'prepare-continue');
     await bandInput.fill('zzz');
@@ -110,11 +118,11 @@ test.describe('Prepare two-panel', () => {
     await bandInput.fill('Nose');
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toBeVisible();
     // back on Case sheets the band searches departments again (the draft query does not leak)
-    await main(page).locator('.pf-tp__head [data-tab="sheets"]').click();
-    await expect(bandInput).toHaveAttribute('placeholder', /Search departments/);
+    await pickTab(page, 'sheets', /^Case sheets/);
+    await expect(bandInput).toHaveAttribute('data-ph-full', /Search departments/);
     await expect(bandInput).toHaveValue('');
     await expect(page.locator('[data-testid="tp-item-ENT"]')).toBeVisible();
-    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await pickTab(page, 'continue', /^Continue/);
     await expect(bandInput).toHaveValue('Nose');
     expect(errors).toEqual([]);
   });
@@ -132,7 +140,7 @@ test.describe('Prepare two-panel', () => {
     await expect(main(page).locator('.dp__tile')).toHaveCount(3);
     await expect(side(page)).toHaveCount(0);
     await shot(page, 'prepare-phone-dept');
-    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await pickTab(page, 'continue', /^Continue/);
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Meenakshi Demo');
     await shot(page, 'prepare-phone-continue');
   });

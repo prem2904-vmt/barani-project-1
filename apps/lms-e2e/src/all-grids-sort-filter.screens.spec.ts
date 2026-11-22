@@ -200,7 +200,14 @@ const GRIDS: Array<{ name: string; route: string; sort: string[]; before?: (p: P
   { name: 'referring-doctors', route: '/admin/referring-network', sort: ['name', 'department', 'phone', 'hospitals'] },
   { name: 'referring-hospitals', route: '/admin/referring-network', sort: ['name', 'doctors'],
     before: async p => {
-      await p.locator('pf-segmented [role="radio"]:has-text("Hospitals")').locator('visible=true').first().click();
+      // Wide head: the Doctors | Hospitals pill; a tight head (phone / tablet) collapses it to a selected-pill menu.
+      const radio = p.locator('pf-segmented [role="radio"]:has-text("Hospitals")').locator('visible=true').first();
+      await p.locator('pf-segmented [role="radio"], pf-segmented [data-seg-compact]').locator('visible=true').first().waitFor();
+      if (await radio.count()) await radio.click();
+      else {
+        await p.locator('pf-segmented [data-seg-compact]').locator('visible=true').first().click();
+        await p.getByRole('menuitemradio', { name: /^Hospitals/ }).locator('visible=true').first().click();
+      }
       await expect(p.locator('.ag-header-cell[col-id="doctors"], .ag-header-cell[col-id="name"]:has-text("Hospital")').locator('visible=true').first()).toBeVisible();
     } },
   { name: 'test-master', route: '/admin/tests', sort: ['name', 'price', 'tatHours', 'testCode'] },

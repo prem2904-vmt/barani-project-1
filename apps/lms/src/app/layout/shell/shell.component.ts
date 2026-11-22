@@ -227,6 +227,10 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
           <div
             class="pointer-events-auto toast-item flex items-center w-full max-w-xs p-4 rounded-lg shadow-lg"
             role="alert"
+            (mouseenter)="toasts.hold(t.id)"
+            (mouseleave)="toasts.release(t.id)"
+            (focusin)="toasts.hold(t.id)"
+            (focusout)="toasts.release(t.id)"
           >
             <!-- Icon badge -->
             <div

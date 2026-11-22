@@ -182,7 +182,7 @@ test.beforeEach(async ({ page }) => {
   test.skip(test.info().project.name.startsWith('phone'), 'desktop + tablet');
   test.setTimeout(120_000); OUT = shotsDir(OUT_BASE);
   withTimed = /timed/i.test(test.info().title); separateMode = /404/.test(test.info().title) ? '404' : 'ok';
-  mergeDelay = /still running/.test(test.info().title) ? 2500 : 250;
+  mergeDelay = /still running/.test(test.info().title) ? 6000 : 250;   // slow engines (WebKit) need the call to outlive the on-screen checks
   samples = fresh(); requests = []; pendingGets = 0; gone = {};
   await backend(page);
 });
@@ -198,6 +198,7 @@ test('not drawn: Gold slides into Red — chip, "2 tubes in one", toast with Und
   const toast = page.locator('.toast-item', { hasText: 'Merged Gold 26310 into Red 26311' });
   await expect(toast).toBeVisible();
   await expect(toast.getByTestId('toast-action')).toHaveText('Undo');
+  await toast.hover();   // the pointer on the toast holds it (6 s timer paused) — the screenshots below are slow on WebKit
   expect(requests).toContain('POST /api/samples/o1r/merge');
   await noDialogs(page);
   expect(pendingGets).toBe(gets);
@@ -335,7 +336,7 @@ test('Undo while the merge call is still running: undone on the screen at once, 
   await expect(tile(page, '26311').getByTestId('merge-chip')).toHaveCount(0);
   expect(requests.includes('POST /api/samples/o1r/separate')).toBe(false);
   // the merge then lands → the screen asks the server to take it back out
-  await expect.poll(() => requests.includes('POST /api/samples/o1r/separate'), { timeout: 8000 }).toBe(true);
+  await expect.poll(() => requests.includes('POST /api/samples/o1r/separate'), { timeout: 15_000 }).toBe(true);
   await expect(tile(page, '26310')).toBeVisible();
   await expect(page.locator('.toast-item', { hasText: 'Couldn’t undo' })).toHaveCount(0);
 });

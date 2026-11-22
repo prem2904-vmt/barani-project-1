@@ -230,7 +230,8 @@ for (const mode of ['light', 'dark'] as const) {
       await expect.poll(async () => vis(page, '[data-testid="nt-row"]').count()).toBeGreaterThanOrEqual(before);
       // Search (the band pill)
       const input = page.locator('.pf-hb__input').locator('visible=true').first();
-      await expect(input).toHaveAttribute('placeholder', 'Search notifications by patient, order or test…');
+      // the band shortens the placeholder on a narrow field (placeholder-fit, 2026-11-21); the full sentence stays in data-ph-full
+      await expect(input).toHaveAttribute('data-ph-full', 'Search notifications by patient, order or test…');
       await input.fill('Gowthami');
       await expect(vis(page, '[data-testid="nt-row"]')).toHaveCount(1);
       await input.fill('zzzz-nothing');

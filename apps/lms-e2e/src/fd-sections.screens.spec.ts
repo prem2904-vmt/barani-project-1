@@ -195,7 +195,7 @@ async function expectNoPageScroll(page: Page, tag: string) {
 
 /** Every work grid on screen: no sideways scroll; every pill / button inside its cell; no word broken mid-word. */
 async function expectGridsClean(page: Page, tag: string) {
-  const r = await page.evaluate(() => {
+  const measure = () => page.evaluate(() => {
     const out = { scroll: [] as string[], clipped: [] as string[], broken: [] as string[], grids: 0 };
     const grids = Array.from(document.querySelectorAll<HTMLElement>('.pf-fd-flow .ag-root-wrapper')).filter(g => g.getBoundingClientRect().width > 0);
     out.grids = grids.length;
@@ -236,6 +236,10 @@ async function expectGridsClean(page: Page, tag: string) {
     }
     return out;
   });
+  // A card resize re-lays the grids out over a few frames (ResizeObserver → fold → ag-grid re-flex); WebKit under load
+  // needs longer than a fixed wait, so the sideways check polls until the layout has settled (it still has to be clean).
+  await expect.poll(async () => (await measure()).scroll, { message: `${tag}: sideways scroll at ${projectName()}`, timeout: 8000, intervals: [150, 250, 500] }).toEqual([]);
+  const r = await measure();
   expect(r.grids, `${tag}: a grid on screen`).toBeGreaterThan(0);
   expect(r.scroll, `${tag}: sideways scroll at ${projectName()}`).toEqual([]);
   expect(r.clipped, `${tag}: clipped pills / buttons at ${projectName()}`).toEqual([]);
@@ -454,24 +458,31 @@ test.describe('Clinic view', () => {
     // The morph: one tile per patient flies from its list row into its room — capture a tile's box mid-flight.
     const frames = path.join(OUT, 'morph');
     fs.mkdirSync(frames, { recursive: true });
-    await sw.click();
-    const tile = page.locator('.fd-tile[data-tile="o1"]');
-    await tile.waitFor({ state: 'attached', timeout: 5000 });
-    // In-page: sample the tile's box every frame while it flies (screenshots are too slow to time this on iPad).
-    const moved = await tile.evaluate(el => new Promise<number>(res => {
-      const r0 = el.getBoundingClientRect();
-      let max = 0;
+    // In-page, BEFORE the click: follow tile o1 every frame from the moment it exists (screenshots / round trips are too slow
+    // to time this on iPad, WebKit and a busy box — the flight can be over before a later sampler starts).
+    await page.evaluate(() => {
+      const w = window as unknown as { __fly: { max: number; seen: boolean } };
+      w.__fly = { max: 0, seen: false };
+      let r0: DOMRect | null = null;
       const t = performance.now();
       const step = () => {
-        const r = el.isConnected ? el.getBoundingClientRect() : null;
-        if (r) max = Math.max(max, Math.hypot(r.left - r0.left, r.top - r0.top) + Math.abs(r.width - r0.width));
-        if (performance.now() - t < 500 && el.isConnected) requestAnimationFrame(step); else res(max);
+        const el = document.querySelector('.fd-tile[data-tile="o1"]');
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (!r0) r0 = r;
+          w.__fly.seen = true;
+          w.__fly.max = Math.max(w.__fly.max, Math.hypot(r.left - r0.left, r.top - r0.top) + Math.abs(r.width - r0.width));
+        }
+        if (performance.now() - t < 20_000) requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
-    }));
-    expect(moved, 'the tile flew from its row toward its room').toBeGreaterThan(20);
+    });
+    await sw.click();
+    const tile = page.locator('.fd-tile[data-tile="o1"]');
+    await tile.waitFor({ state: 'attached', timeout: 15_000 });
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __fly: { max: number } }).__fly.max), { message: 'the tile flew from its row toward its room', timeout: 10_000 }).toBeGreaterThan(20);
     // A frame sequence for the owner (the move is replayed: back to the list, then into the clinic again).
-    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });       // landed: the real clinic takes over
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 12_000 });       // landed: the real clinic takes over
     await expect(sw).toHaveAttribute('aria-pressed', 'true');
     await expect(sw).toHaveAttribute('aria-label', 'Show list');
     await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*clinic\s*$/i);
@@ -525,24 +536,24 @@ test.describe('Clinic view', () => {
     await page.keyboard.press('Escape');
     // Back to the list: the tiles fly out of the rooms into the rows.
     await vis(page, '[data-testid="fd-work-view-btn"]').click();
-    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 15_000 });
     for (const k of [1, 2, 3, 4]) { await page.screenshot({ path: `${frames}/to-list-${k}.png` }); await page.waitForTimeout(110); }
-    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 12_000 });
     await expect(vis(page, '.fd-sec').first()).toBeVisible();
     await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*work\s*$/i);
     // Frames for the owner: list → clinic at real speed, then once more in 4× slow motion (labelled "slowmo").
     if (!isTouch()) {
       await page.waitForTimeout(400);
       await vis(page, '[data-testid="fd-work-view-btn"]').click();
-      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 15_000 });
       for (const k of [1, 2, 3, 4]) { await page.screenshot({ path: `${frames}/to-clinic-${k}.png` }); await page.waitForTimeout(90); }
-      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
+      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 12_000 });
       await vis(page, '[data-testid="fd-work-view-btn"]').click();
-      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
+      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 12_000 });
       await page.waitForTimeout(400);
       await page.addStyleTag({ content: '.fd-tile, .fd-tile * { transition-duration: 1040ms !important; } .fd-tile { transition-delay: 0ms !important; }' });
       await vis(page, '[data-testid="fd-work-view-btn"]').click();
-      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 15_000 });
       for (const k of [1, 2, 3, 4, 5]) { await page.screenshot({ path: `${frames}/slowmo-to-clinic-${k}.png` }); await page.waitForTimeout(220); }
     }
   });
@@ -640,7 +651,7 @@ test.describe('OPD board + Procedures to book, moved in from /opd/desk/classic',
     await vis(page, '[data-testid="fd-work-view-btn"]').click();
     const clinic = vis(page, 'pf-fd-clinic');
     // Let the morph start and land (the tiles exist only while they fly).
-    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 }).catch(() => { /* reduced motion: no morph */ });
+    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 15_000 }).catch(() => { /* reduced motion: no morph */ });
     await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 8000 });
     await page.waitForTimeout(300);
     const shah = clinic.locator('.cv-room[data-place="opd:doc:d9"]');

@@ -256,7 +256,8 @@ test.describe('audit trail v2', () => {
   test('search finds a person, patient, order number or test; an empty result says so', async ({ page }) => {
     await open(page);
     const input = vis(page, 'pf-hero-band .pf-hb__input');
-    await expect(input).toHaveAttribute('placeholder', 'Search a person, patient, order number or test…');
+    // the band shortens the placeholder on a narrow field (placeholder-fit, 2026-11-21); the full sentence stays in data-ph-full
+    await expect(input).toHaveAttribute('data-ph-full', 'Search a person, patient, order number or test…');
     await input.fill('Kumar Prem');
     await expect.poll(() => logQueries.at(-1)?.get('q')).toBe('Kumar Prem');
     await expect(page.locator('[data-testid="audit-event"]')).toHaveCount(2);
