@@ -195,8 +195,13 @@ test.describe('Work steps — workflow redesign', () => {
     // peek is checked and the keyboard equivalent (Move to) is covered by its own test.
     if (engine() !== 'chromium') return;
     // Drag "Home Visits" out of the peek into Frontdesk's list (between rows, below the peek).
+    // The theme flip re-lays the page under the resting pointer, which can close the hover peek: hover again and
+    // wait for the row + the target to be on screen before measuring (boundingBox() is null for a closed peek).
+    await vis(page, '[data-testid="wf-area-homecoll"]').hover();
     const src = vis(page, '[data-testid="wf-peek"]').locator('.wf-peek__row', { hasText: 'Home Visits' });
     const target = vis(page, '[data-type="dispatch"]');
+    await expect(src).toBeVisible({ timeout: 5_000 });
+    await expect(target).toBeVisible();
     const a = (await src.boundingBox())!; const b = (await target.boundingBox())!;
     await page.mouse.move(a.x + 20, a.y + a.height / 2);
     await page.mouse.down();

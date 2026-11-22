@@ -294,11 +294,22 @@ test('hold: the peek popover and the pour ghost sit next to the pointer (not the
   await expect(pop).toHaveCount(0);
   await page.waitForTimeout(400);
 
-  // 2) hold then drag → the pour ghost follows the pointer
-  if (touch) { await tStart(x, y); await page.waitForTimeout(450); } else { await page.mouse.move(x, y); await page.mouse.down(); }
+  // 2) hold then drag → the pour ghost follows the pointer.
+  // The 2 s hold-to-peek timer runs from the press: on a starved runner (12 workers) the scripted moves can arrive
+  // after it, the peek takes the gesture and no ghost lifts. That is the test's timing, not the app's — so release
+  // and press again (max 3 tries); the ghost must still appear and sit next to the pointer.
   let px = x, py = y;
-  for (let i = 1; i <= 10; i++) { px = x + i * 8; py = y + i * 5; if (touch) await tMove(px, py); else await page.mouse.move(px, py); await page.waitForTimeout(40); }
   const ghost = page.getByTestId('pour-ghost');
+  for (let attempt = 1; ; attempt++) {
+    if (touch) { await tStart(x, y); await page.waitForTimeout(450); } else { await page.mouse.move(x, y); await page.mouse.down(); }
+    for (let i = 1; i <= 10; i++) { px = x + i * 8; py = y + i * 5; if (touch) await tMove(px, py); else await page.mouse.move(px, py); await page.waitForTimeout(40); }
+    const lifted = await ghost.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false);
+    if (lifted || attempt === 3) break;
+    if (touch) await tEnd(); else await page.mouse.up();
+    await page.keyboard.press('Escape');
+    await expect(pop).toHaveCount(0);
+    await page.waitForTimeout(400);
+  }
   await expect(ghost).toBeVisible({ timeout: 4000 });
   console.log('[hold] ghost traps', JSON.stringify(await fixedTraps(page, '[data-testid="pour-ghost"]')));
   const gb = (await ghost.boundingBox())!;

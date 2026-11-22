@@ -272,8 +272,9 @@ for (const mode of ['light', 'dark'] as const) {
       await row.locator('[data-testid="nt-ack"]').click();
       await expect.poll(() => acks.length).toBe(1);
       expect(acks).toEqual(['ot-9']);
+      // Both alerts are read — two PATCHes that land in either order (Edge under load: c2 a moment after c1).
       await expect.poll(() => patches.sort().join(',')).toContain('/api/notifications/c1/read');
-      expect(patches).toContain('/api/notifications/c2/read');
+      await expect.poll(() => patches.sort().join(',')).toContain('/api/notifications/c2/read');
       // The button is gone and the row reads as read.
       await expect(row.locator('[data-testid="nt-ack"]')).toHaveCount(0);
     });
