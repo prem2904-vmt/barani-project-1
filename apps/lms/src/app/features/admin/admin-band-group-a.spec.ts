@@ -103,10 +103,13 @@ describe('Admin band — Test Master', () => {
     p.f.detectChanges();
     const table = p.cmp.pricingTable();
     expect(table).toBeTruthy();
-    expect(p.el.querySelector('.pf-tm-pricesave')).toBeNull();
+    // Owner 2026-11-19: the price Save is there from the start, DISABLED until a price changed.
+    expect((p.el.querySelector('.pf-tm-pricesave') as HTMLButtonElement).disabled).toBe(true);
     table.setPrice('t1', 175);
     p.f.detectChanges();
-    const primaries = Array.from(p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary'));
+    expect((p.el.querySelector('.pf-tm-pricesave') as HTMLButtonElement).disabled).toBe(false);
+    // ONE primary that can act: the price Save (a disabled Save is the kit's inactive primary).
+    const primaries = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-hb-btn--primary, .pf-btn--primary')).filter(b => !b.disabled);
     expect(primaries.length).toBe(1);
     expect(primaries[0].classList.contains('pf-tm-pricesave')).toBe(true);
     expect(p.el.querySelector('pf-hero-band .pf-tm-pricediscard')).not.toBeNull();
@@ -115,7 +118,7 @@ describe('Admin band — Test Master', () => {
     expect(p.actions().find(b => b.getAttribute('aria-label') === 'Create')!.classList.contains('pf-hb-btn--ghost')).toBe(true);
     (p.el.querySelector('.pf-tm-pricediscard') as HTMLButtonElement).click();
     p.f.detectChanges();
-    expect(p.el.querySelector('.pf-tm-pricesave')).toBeNull();
+    expect((p.el.querySelector('.pf-tm-pricesave') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('band + fill body in the grid view; header and old tab bar are classic-only', () => {
@@ -128,13 +131,15 @@ describe('Admin band — Test Master', () => {
     expect(p.body()?.querySelector('.pf-tm-side')).not.toBeNull(); // the department rail stays
   });
 
-  it('band actions: Restore to default + Create; Save/Discard appear with dirty edits', () => {
+  it('band actions: Restore to default + Save changes (disabled until an edit) + Create; Discard appears with edits', () => {
     const p = renderTm();
     const labels = () => p.actions().map((b) => b.textContent?.trim());
-    expect(labels()).toEqual(['Restore to default', 'Create']);
-    p.cmp._dirty.set(new Map([['t1', { unit: 'x' }]]));
+    expect(labels()).toEqual(['Restore to default', 'Save changes', 'Create']);
+    expect((p.el.querySelector('[data-testid="tm-save"]') as HTMLButtonElement).disabled).toBe(true);
+    p.cmp._edits.set('t1', 'unit', 'g/dL', 'x');
     p.f.detectChanges();
     expect(labels()).toEqual(['Restore to default', 'Discard', 'Save changes (1)', 'Create']);
+    expect((p.el.querySelector('[data-testid="tm-save"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('the pill search drives the grid search', () => {
@@ -163,9 +168,10 @@ describe('Admin band — Test Master', () => {
 
   it('ONE primary: Create steps down while grid edits wait ("Save changes" is it)', () => {
     const p = renderTm();
-    const prim = () => Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary')).map(b => b.textContent?.trim());
+    // The primaries that can ACT (a Save with nothing to save is the kit's disabled primary).
+    const prim = () => Array.from(p.el.querySelectorAll<HTMLButtonElement>('pf-hero-band .pf-hb-btn--primary')).filter(b => !b.disabled).map(b => b.textContent?.trim());
     expect(prim()).toEqual(['Create']);
-    p.cmp._dirty.set(new Map([['t1', { unit: 'x' }]]));
+    p.cmp._edits.set('t1', 'unit', 'g/dL', 'x');
     p.f.detectChanges();
     expect(prim()).toEqual(['Save changes (1)']);
   });

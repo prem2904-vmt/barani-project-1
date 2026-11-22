@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
@@ -16,6 +17,7 @@ import { SegmentedComponent, type SegmentedOption } from '../../../shared/primit
 import { ToastService } from '../../../core/services/toast.service';
 import { addDays, labToday } from '../../../shared/utils/lab-clock';
 import { statusWord } from './visit-status';
+import { toBookPriceText } from './desk-rules';
 
 export type DeskFilter = 'all' | 'waiting' | 'in_consult' | 'done' | 'due' | 'tobook';
 
@@ -34,12 +36,7 @@ export function toBookFilter(rows: ProcedureToBook[], doctorId: string | null, q
     (!s || r.patientName.toLowerCase().includes(s) || (r.mrn ?? '').toLowerCase().includes(s) || r.procedureName.toLowerCase().includes(s)));
 }
 
-/** The price line the desk reads: "Set by Dr X (preset ₹Y) · reason" or "Preset price". Pure. */
-export function toBookPriceText(r: Pick<ProcedureToBook, 'price' | 'rulePrice' | 'doctorName' | 'priceReason'>): string {
-  if (r.price === r.rulePrice) return 'Preset price';
-  const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
-  return `Set by ${r.doctorName || 'the doctor'} (preset ${inr(r.rulePrice)})${r.priceReason?.trim() ? ' · ' + r.priceReason.trim() : ''}`;
-}
+export { toBookPriceText } from './desk-rules';
 
 /** "Consultation + 2 procedures" — what a due bill is for. */
 export function dueWhat(r: Pick<PaymentDue, 'lines'>): string {
@@ -176,4 +173,8 @@ export class OpdDeskPage {
   openDue(r: PaymentDue): void { void this.router.navigate(['/opd/visit', r.visitId]); }
   day(iso: string): string { return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
   time(iso: string): string { return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }); }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.desk', { filter: this.filter, doctorId: this.doctorId, query: this.query });
 }

@@ -11,7 +11,11 @@ import { ADMIN_PERMS, LAB_SETTINGS_HUB_PERMS, RouteAccess, RouteAccessCtx, canOp
 // generic; the FIRST route the user can open (same ROUTE_ACCESS table the guards
 // and nav use — perms, parents, mode-aware collect_sample, workflow actions,
 // module entitlements) wins. `perm` is kept as the historical "primary" permission for readers.
-export const LANDINGS: Array<{ perm: string; path: string; /** What admits this row when it differs from the route's own gate. */ gate?: RouteAccess }> = [
+export const LANDINGS: Array<{ perm: string; path: string; /** What admits this row when it differs from the route's own gate. */ gate?: RouteAccess; /** Also require the route's own gate (module + perms) on top of `gate`. */ andRoute?: boolean }> = [
+  // Owner 2026-11-19: the ADMIN home is Insights › Overview › This month (/insights defaults to
+  // section=overview & period=month). Admin perms AND Insights' own gate (reports module + analytics perms);
+  // a tenant without Insights falls through to the old /admin row below.
+  { perm: 'manage_tests', path: '/insights', gate: { perms: ADMIN_PERMS }, andRoute: true },
   // Settings now admits every settings role (SETTINGS_ENTRY_PERMS), but landing there stays what it was: the admin
   // perms first, a Test-Master / lab-settings-only role last — each row keeps its own old gate.
   { perm: 'manage_tests', path: '/admin', gate: { perms: ADMIN_PERMS } },
@@ -59,7 +63,8 @@ export interface LandingCtx extends RouteAccessCtx {
 export function pickLanding(ctx: LandingCtx): string {
   if (ctx.opdDoctor && ctx.opdOnlyDoctor) return '/opd/consult';
   for (const l of LANDINGS) {
-    if (l.gate ? canPassAccess(l.gate, ctx) : canOpenRoute(l.path, ctx)) return l.path;
+    const ok = l.gate ? canPassAccess(l.gate, ctx) && (!l.andRoute || canOpenRoute(l.path, ctx)) : canOpenRoute(l.path, ctx);
+    if (ok) return l.path;
   }
   return ctx.opdDoctor ? '/opd/consult' : '/403';
 }

@@ -47,6 +47,8 @@ import {
   ActionsMenuTriggerDirective,
 } from "../../shared/components/actions-menu/actions-menu.component";
 import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
+import { ServicesShelfComponent } from "./services-shelf.component";
+import { ServiceShelfService } from "../../core/services/service-shelf.service";
 import { NgTemplateOutlet } from "@angular/common";
 import { FormBarService } from "../../features/casesheets/data/form-bar/form-bar.service";
 import { NavActionsService } from "../nav-actions/nav-actions.service";
@@ -129,6 +131,7 @@ function readFlag(key: string): boolean {
     ActionsMenuTriggerDirective,
     NgTemplateOutlet,
     StartMenuComponent,
+    ServicesShelfComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -143,6 +146,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly navActions = inject(NavActionsService);
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
+  /** Frontdesk Services shelf (Frontdesk area, 2+ services only — service-shelf.service.ts). */
+  protected readonly serviceShelf = inject(ServiceShelfService);
+  protected readonly barWidth = computed(() => this.viewportW());
   private readonly zoom = inject(ZoomTransitionService);
   /** Viewport width — drives how many draft chips sit inline (draftCap). */
   private readonly viewportW = signal(typeof window !== "undefined" ? window.innerWidth : 1440);
@@ -157,6 +163,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly _draftFitReset = effect(() => {
     this.draftShelf.items();
     this.viewportW();
+    // The Frontdesk Services shelf shares the bar: when it appears / its chips change, drafts re-measure (and
+    // collapse to their "Drafts N" chip when both don't fit).
+    this.serviceShelf.visible();
+    this.serviceShelf.chips();
     untracked(() => {
       this.draftFit.set(null);
       this.fitDraftsSoon();
@@ -164,7 +174,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   });
   private fitDraftsSoon(): void {
     afterNextRender(() => {
-      const box = this.host.nativeElement.querySelector(".pf-draftshelf__scroll") as HTMLElement | null;
+      const box = this.host.nativeElement.querySelector(".pf-draftshelf:not(.pf-svcshelf) .pf-draftshelf__scroll") as HTMLElement | null;
       if (!box) return;
       const cap = this.draftSplit().shown.length;
       if (box.scrollWidth > box.clientWidth + 1 && cap > 0) {
@@ -203,7 +213,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   resumeDraft(id: string): void {
     const d = this.draftShelf.items().find((x) => x.id === id);
     if (!d || this.draftShelf.activeId() === id) return;
-    const more = this.host.nativeElement.querySelector(".pf-draftshelf__more") as HTMLElement | null;
+    const more = this.host.nativeElement.querySelector(".pf-draftshelf:not(.pf-svcshelf) .pf-draftshelf__more") as HTMLElement | null;
     if (more) this.zoom.tap(more, this.chipZoomKeys(d));
     const cmds = typeof d.link === "string" ? [d.link] : [...d.link];
     void this.router.navigate(cmds, { queryParams: d.queryParams ?? {}, state: this.draftShelf.swapState(d) });

@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
@@ -35,7 +36,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, BusyDirective, RouterLink, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
+  imports: [SkelSettingRowsComponent, SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, BusyDirective, RouterLink, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -124,7 +125,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
 
       <div class="pf-band-body" [class.pf-sgrid]="hosted">
       @if (!cfg()) {
-        <pf-skeleton-form [fields]="6" label="Loading appointment settings…"></pf-skeleton-form>
+        <pf-skel-setting-rows [rows]="6" label="Loading appointment settings…"></pf-skel-setting-rows>
       } @else {
         @if (showSec('mode')) {
         <pf-setting-group class="pf-ap-card" id="mode" label="Queue mode" scope="this branch" icon="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01">

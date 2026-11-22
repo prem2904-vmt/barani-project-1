@@ -4,6 +4,10 @@ import type { SegmentedOption } from '../primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../../features/admin/tests/tests/grid-theme';
 import { injectSettingsHosted } from '../utils/settings-host';
+import { activeWords } from '../utils/status-words';
+import { statusValuesCol } from '../components/status-words/status-words.component';
+import { valuesCol } from '../utils/work-grid';
+import { WorkSetFilterComponent } from '../components/work-set-filter/work-set-filter.component';
 
 /**
  * Settings list grids — ONE look for every list screen in Settings (owner
@@ -183,21 +187,23 @@ export function sgActionsCol<T>(web: boolean, texts: readonly string[], icons: n
   };
 }
 
-/** A neutral status pill: Active (violet dot) / Inactive (muted). */
+/** Plain-words Active / Inactive (no pill, no dot) for any non-Angular string cell. */
 export function sgActivePill(active: boolean): HTMLElement {
   const el = document.createElement('span');
-  el.className = 'pf-sg-pill' + (active ? ' pf-sg-pill--on' : '');
-  el.textContent = active ? 'Active' : 'Inactive';
+  el.className = 'pf-sw';
+  const now = document.createElement('span');
+  now.className = 'pf-sw__now';
+  now.textContent = active ? 'Active' : 'Inactive';
+  el.appendChild(now);
   return el;
 }
 
-/** Status column as a pill (sorted Active first). */
+/** Status column as two-line words (design D): Active / Inactive, sorted Active first. */
 export function sgPillCol<T>(isActive: (r: T) => boolean): ColDef<T> {
-  return {
-    headerName: 'Status', colId: 'status', width: 104, minWidth: 96, maxWidth: 120, flex: 0, wrapText: false, autoHeight: false,
-    valueGetter: (p) => (p.data && isActive(p.data) ? 'Active' : 'Inactive'),
-    cellRenderer: (p: ICellRendererParams<T>) => (p.data ? sgActivePill(isActive(p.data)) : document.createElement('span')),
-  };
+  // Sorts Active first (asc) and filters by the words present (Active / Inactive).
+  return statusValuesCol<T>({
+    headerName: 'Status', colId: 'status', width: 136, minWidth: 128, maxWidth: 160, flex: 0,
+  }, (r) => activeWords(isActive(r)), (r) => (isActive(r) ? 0 : 1));
 }
 
 /** "₹1,500" (2 decimals only when there are paise). */
@@ -208,10 +214,10 @@ export function sgInr(n: number | null | undefined, decimals = 2): string {
 
 /** The status column (Test Master's): the switch, sorted by Active/Inactive. */
 export function sgStatusCol<T>(isActive: (r: T) => boolean, name: (r: T) => string, toggle: (r: T) => void): ColDef<T> {
-  return {
-    headerName: 'Status', colId: 'status', minWidth: 95, maxWidth: 110, width: 100, flex: 0, editable: false,
+  // The switch cell; sorts Active first and filters by Active / Inactive (the shared set filter).
+  return valuesCol<T>({
+    headerName: 'Status', colId: 'status', minWidth: 128, maxWidth: 160, width: 136, flex: 0, editable: false,
     wrapText: false, autoHeight: false,
-    valueGetter: (p) => (p.data && isActive(p.data) ? 'Active' : 'Inactive'),
     cellRenderer: (p: ICellRendererParams<T>) => (p.data ? sgSwitch(isActive(p.data), name(p.data), () => toggle(p.data!)) : document.createElement('span')),
-  };
+  }, (r) => (isActive(r) ? 'Active' : 'Inactive'), WorkSetFilterComponent, 'left', (r) => (isActive(r) ? 0 : 1));
 }

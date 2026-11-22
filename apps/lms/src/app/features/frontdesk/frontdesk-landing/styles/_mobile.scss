@@ -424,6 +424,11 @@
   color: #fff;
 }
 .pf-mtab svg { flex-shrink: 0; }
+/* Icon tabs always say where you are (owner 2026-11-21): the ACTIVE tab shows its short label and takes the room
+   it needs; the others stay icon + count (aria-label names them). */
+.pf-mtab__label { display: none; white-space: nowrap; font-size: 12.5px; }
+.pf-mtab--on { flex: 2.4 1 0; }
+.pf-mtab--on .pf-mtab__label { display: inline; }
 
 .pf-mtab__count {
   font-size: 10px;

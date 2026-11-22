@@ -2,6 +2,7 @@ import type { Order, OrderSample, OrderTest } from '../../../shared/models/order
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { plural } from '../../../shared/utils/plural';
 import { isSignedOrSkipped, NOT_REPORTED } from '../../../shared/utils/line-status';
+import { type StatusWords, statusWords } from '../../../shared/utils/status-words';
 
 /**
  * Reports list — the PARTIAL tab's model (docs/PF-PATTERN.md → "Reports list").
@@ -64,6 +65,14 @@ export interface PrelimOrder {
   patientName: string;
   /** "29/M · AA0012 · Order LAB-2609-000089 · 6:37 PM" (never "|", never cut). */
   patientMeta: string;
+  /** "29/M · AA0012" — the grid's Patient cell second line. */
+  whoMeta: string;
+  /** The order number ("LAB-2609-000089"), or "#7920CD24" for a legacy order — the grid's Order cell. */
+  orderNo: string;
+  /** When the order was made (the grid's Generated cell for an order with no report yet). */
+  createdAt?: string;
+  /** The order's referring doctor (the Results "Referring doctor" filter). */
+  refDoctorName?: string | null;
   /** For the search box. */
   searchText: string;
   /** The order's daily patient number (on-screen only). */
@@ -252,6 +261,10 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       id: o.id,
       patientName: name,
       patientMeta: meta,
+      whoMeta: p ? formatPatientMeta(p) : '',
+      orderNo: o.orderNumber || `#${o.id.slice(0, 8).toUpperCase()}`,
+      createdAt: o.createdAt,
+      refDoctorName: o.refDoctorName ?? null,
       dailyNo: o.dailyNo ?? null,
       dailyNoDay: o.dailyNoDay ?? null,
       searchText: [name, p?.mrn, p?.phone, o.orderNumber, o.id].filter(Boolean).join(' ').toLowerCase(),
@@ -272,7 +285,7 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
  *  Tones are the Frontdesk rows' (`--<tone>-text` tokens). Priority:
  *    Failed (red) › Unpaid (red, only while not yet delivered) ›
  *    Delivered (green + check) › Preliminary (amber, a partial report is not
- *    final, so it REPLACES "Completed") › Completed (green).
+ *    final, so it REPLACES "Ready") › Ready (green).
  *  Whatever the status hides is returned as `extra` for the meta line. */
 export type ReportTone = 'green' | 'amber' | 'red';
 export interface ReportStatus {
@@ -290,5 +303,41 @@ export function reportStatus(deliveryStatus: string, type: string | undefined, u
   if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', tone: 'green', extra: extra({}) };
   if (unpaid) return { key: 'unpaid', label: 'Unpaid', tone: 'red', extra: extra({ unpaid: true }) };
   if (prelim) return { key: 'preliminary', label: 'Preliminary', tone: 'amber', extra: [] };
-  return { key: 'completed', label: 'Completed', tone: 'green', extra: [] };
+  return { key: 'completed', label: 'Ready', tone: 'green', extra: [] };
 }
+
+/** The grid's Status pill (owner 2026-11-19, Reports v2): ONE neutral pill with a small coloured dot —
+ *  Ready (violet) · Partial (light blue, a preliminary report) · Delivered (green) · Failed (rose).
+ *  "Unpaid" is never a status: it is a quiet line UNDER the pill (`unpaid`). */
+export type QueueStatusKey = 'completed' | 'partial' | 'delivered' | 'failed';
+export interface QueueStatus { key: QueueStatusKey; label: string; unpaid: boolean; prelim: boolean }
+export function queueStatus(deliveryStatus: string, type: string | undefined, unpaid: boolean): QueueStatus {
+  const prelim = type === 'partial';
+  if (deliveryStatus === 'failed') return { key: 'failed', label: 'Failed', unpaid, prelim };
+  if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', unpaid, prelim };
+  if (prelim) return { key: 'partial', label: 'Partial', unpaid, prelim };
+  return { key: 'completed', label: 'Ready', unpaid, prelim };
+}
+
+/**
+ * The Status cell as WORDS (owner design D, 2026-11-21): line 1 the state, line 2 what happened / what is next —
+ *   Ready / Not sent yet · Partial / Preliminary report · Delivered / WhatsApp · read 10:12 (green) ·
+ *   Failed / the reason (rose). `sent` = the screen's own sent line (WhatsApp status, printed, failure note).
+ */
+export function queueWords(st: Pick<QueueStatus, 'key' | 'label'>, sent: string): StatusWords {
+  const said = (sent ?? '').trim();
+  switch (st.key) {
+    case 'delivered': return statusWords('Delivered', said || 'Sent', 'done');
+    case 'failed': return statusWords('Failed', said || 'Not delivered', 'late');
+    case 'partial': return statusWords('Partial', said || 'Preliminary report', 'normal');
+    default: return statusWords('Ready', said || 'Not sent yet', 'normal');
+  }
+}
+
+/** Status dot colours (theme tokens, AA in light + dark) — the side card, the filter menu and the pills share them. */
+export const QUEUE_DOT: Record<QueueStatusKey, string> = {
+  completed: 'var(--violet-text)',
+  partial: 'var(--sky-text)',
+  delivered: 'var(--green-text)',
+  failed: 'var(--rose-text)',
+};

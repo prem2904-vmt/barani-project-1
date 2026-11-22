@@ -27,6 +27,12 @@ export interface SettingsHost {
    * them (`?tab=<id>`, the note muted on the right) and the main card shows the matching `pf-setting-group [id]`.
    */
   readonly categories: WritableSignal<readonly SettingsHostCategory[] | null>;
+  /**
+   * The `pf-setting-group [id]` the frame's main card currently shows ALONE (its head already names it), or null.
+   * That group hands its `[group-tools]` (pills, Add, Paste, Reset…) to the card head instead of drawing a second
+   * tools row under it (owner 2026-11-21: no extra toolbar row under the head). Optional: a test host may omit it.
+   */
+  readonly headGroup?: WritableSignal<string | null>;
 }
 export interface SettingsHostAction { readonly tpl: TemplateRef<unknown>; readonly group: string | null }
 export interface SettingsHostCategory {
@@ -49,7 +55,7 @@ export function pickHostSearch(list: readonly SettingsHostAction[], sel: string 
 }
 
 export function createSettingsHost(): SettingsHost {
-  return { hosted: true, actions: signal([]), searches: signal([]), status: signal(null), categories: signal(null) };
+  return { hosted: true, actions: signal([]), searches: signal([]), status: signal(null), categories: signal(null), headGroup: signal(null) };
 }
 
 /** True while the page is rendered inside the Settings shell. Call from an injection context. */

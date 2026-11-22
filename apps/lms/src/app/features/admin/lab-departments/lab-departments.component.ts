@@ -1,7 +1,10 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import {
@@ -129,7 +132,7 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
                 </div>
               }
               <div class="pf-sg-main__body">
-                <pf-data-grid [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+                <pf-data-grid viewStateKey="admin.lab-departments.g1" [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
                               [getRowClass]="rowClass" [singleClickEdit]="isCoarse" [suppressCellFocus]="false"
                               [loading]="listSkeleton()" loadingLabel="Loading departments…"
                               [emptyTitle]="departments().length === 0 ? 'No departments yet.' : 'No departments match your search.'"
@@ -501,13 +504,13 @@ export class LabDepartmentsComponent implements OnInit {
   readonly colDefs = computed<ColDef<Department>[]>(() => {
     const web = !this.isCoarse && !this.phone();
     const cols: ColDef<Department>[] = [
-      { colId: 'name', field: 'name', headerName: 'Department', flex: 1.6, minWidth: 180, sort: 'asc',
+      // `field` stays so an inline rename still writes through it; the helper's value getter returns the same name.
+      textCol<Department>({ colId: 'name', field: 'name', headerName: 'Department', flex: 1.6, minWidth: 180, sort: 'asc',
         editable: p => !!p.data && this.isLabMade(p.data),
         valueParser: p => String(p.newValue ?? '').trim().slice(0, 80) || p.oldValue,
-        cellRenderer: (p: ICellRendererParams<Department>) => sgCell(p.data?.name, null, true) },
-      { colId: 'code', field: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num' },
-      { colId: 'origin', headerName: 'Origin', width: 170, minWidth: 140, flex: 0,
-        valueGetter: p => (p.data && this.isLabMade(p.data) ? this.originLabel.lab : this.originLabel.catalogue),
+        cellRenderer: (p: ICellRendererParams<Department>) => sgCell(p.data?.name, null, true) }, d => d.name ?? ''),
+      textCol<Department>({ colId: 'code', field: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num' }, d => d.code ?? ''),
+      valuesCol<Department>({ colId: 'origin', headerName: 'Origin', width: 170, minWidth: 140, flex: 0,
         cellRenderer: (p: ICellRendererParams<Department>) => {
           const el = document.createElement('span');
           const own = !!p.data && this.isLabMade(p.data);
@@ -515,14 +518,15 @@ export class LabDepartmentsComponent implements OnInit {
           el.dataset['testid'] = 'ld-origin';
           el.textContent = own ? this.originLabel.lab : this.originLabel.catalogue;
           return el;
-        } },
+        } }, d => (this.isLabMade(d) ? this.originLabel.lab : this.originLabel.catalogue), WorkSetFilterComponent),
       sgStatusCol<Department>(d => d.isActive, d => d.name, d => this.toggleActive(d)),
     ];
     // Rename / Delete only exist for the lab's own departments: no blank, divided actions column for a catalogue-only list.
     if (this._departments().some(d => this.isLabMade(d))) {
-      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
+      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), true));
     }
-    if (this.phone()) return cols.filter(c => c.colId !== 'origin');
+    // Phone: no clipped columns — the code folds away, the name may narrow, the actions are pinned in full view.
+    if (this.phone()) return cols.filter(c => c.colId !== 'origin' && c.colId !== 'code').map(c => (c.colId === 'name' ? { ...c, minWidth: 120 } : c));
     return cols;
   });
   onGridReady(e: GridReadyEvent<Department>) { this.gridApi = e.api; }
@@ -757,4 +761,8 @@ export class LabDepartmentsComponent implements OnInit {
     const v = b.labStructure;
     return v === 'standalone' || v === 'individual' ? 'standalone' : v === 'integrated' ? 'integrated' : 'auto';
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.lab-departments', { q: this.q, status: this.status });
 }

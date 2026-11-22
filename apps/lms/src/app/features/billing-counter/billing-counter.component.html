@@ -495,6 +495,7 @@
       <section class="pf-bc-msec" aria-labelledby="pf-bc-day-t">
         <div class="pf-bc-dayhead">
           <h3 class="pf-bc-sec" id="pf-bc-day-t">Day-end summary</h3>
+          <pf-back-to-today [show]="reconcileDate() !== today" (reset)="setReconcileDate(today)" />
           <pf-date class="pf-bc-date" label="Business day" inputId="pf-bc-date"
                       [value]="reconcileDate()" [max]="today" (valueChange)="setReconcileDate($event)"></pf-date>
         </div>

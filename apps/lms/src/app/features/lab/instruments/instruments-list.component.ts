@@ -1,3 +1,5 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
@@ -19,7 +21,10 @@ import { spinDelay } from '../../../shared/utils/busy';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
 import { InstrumentDto } from '../../../shared/instruments/instrument.models';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
-import { STATUS_ORDER, connectionSummary, protocolLabel, statusSubline, statusWord } from '../../../shared/instruments/instrument-config';
+import { instrumentStatusWords } from '../../../shared/instruments/instrument-status-words';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
+import { STATUS_ORDER, connectionSummary, protocolLabel, statusWord } from '../../../shared/instruments/instrument-config';
 import { AssistantButtonComponent } from '../../../shared/assistant/assistant-button.component';
 import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
 import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../shared/assistant/assistant.models';
@@ -43,7 +48,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [SettingsSiblingsComponent, DataGridComponent, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, DataGridComponent, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -103,9 +108,9 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="5" label="Loading instruments…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="5" label="Loading instruments…"></pf-skel-grid>
               }
-              <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
+              <pf-data-grid viewStateKey="lab.instruments.g1" [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {
                 <div class="pf-sg-empty">
                   <p class="pf-sg-empty__title">{{ q().trim() ? 'No instruments match "' + q().trim() + '"' : 'No instruments yet' }}</p>
@@ -182,7 +187,6 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
     .pf-inl__switch { flex-shrink: 0; }
     .pf-inl__main ::ng-deep .pf-inl-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-inl__main ::ng-deep .pf-inl-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-inl__main ::ng-deep .pf-inl-cell__sub--err { color: var(--red-text, #b91c1c); }
     .pf-inl__main ::ng-deep .pf-inl-cell__name { font-weight: 600; color: var(--text-primary); }
     .pf-inl-status, .pf-inl__main ::ng-deep .pf-inl-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap;
       --pf-inl-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-inl-tone) 70%, var(--text-primary)); }
@@ -237,23 +241,19 @@ export class InstrumentsListComponent {
     const web = !this.isCoarse && !this.isPhone;
     const cell = (main: string, sub?: string, cls = '') =>
       `<div class="pf-inl-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-inl-cell__sub">${esc(sub)}</span>` : ''}</div>`;
-    const status = (d?: InstrumentDto) => {
-      const st = statusWord(d?.status);
-      const sub = statusSubline(d);
-      const err = d?.status === 'error';
-      return `<div class="pf-inl-cell"><span class="pf-inl-status" data-tone="${st.tone}"><span class="pf-inl-status__dot" aria-hidden="true"></span>${esc(st.label)}</span>${sub ? `<span class="pf-inl-cell__sub${err ? ' pf-inl-cell__sub--err' : ''}">${esc(sub)}</span>` : ''}</div>`;
-    };
     const cols: ColDef<InstrumentDto>[] = [
-      { colId: 'name', headerName: 'Instrument', flex: 1.3, minWidth: 180, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+      textCol<InstrumentDto>({ colId: 'name', headerName: 'Instrument', flex: 1.3, minWidth: 180, sort: 'asc',
         cellRenderer: (p: { data?: InstrumentDto }) => cell(p.data?.name ?? '', [p.data?.make, p.data?.model].filter(Boolean).join(' · '), 'pf-inl-cell__name') },
-      { colId: 'connection', headerName: 'Connection', flex: 1.4, minWidth: 190, valueGetter: (p) => connectionSummary(p.data?.config, p.data?.transport),
+        (d) => d.name ?? ''),
+      textCol<InstrumentDto>({ colId: 'connection', headerName: 'Connection', flex: 1.4, minWidth: 190,
         cellRenderer: (p: { data?: InstrumentDto }) => cell(connectionSummary(p.data?.config, p.data?.transport),
           [p.data?.bridgeId ? `via ${p.data.bridgeName || 'Prefrontal Bridge'}` : '', protocolLabel(p.data?.config)].filter(Boolean).join(' · ')) },
-      { colId: 'status', headerName: 'Status', flex: 1.3, minWidth: 200, valueGetter: (p) => p.data?.status ?? 'never',
-        cellRenderer: (p: { data?: InstrumentDto }) => status(p.data) },
-      { colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
-        valueGetter: (p) => p.data?.unmatchedCount ?? 0,
+        (d) => connectionSummary(d.config, d.transport)),
+      statusValuesCol<InstrumentDto>({ colId: 'status', headerName: 'Status', flex: 1.3, minWidth: 200 },
+        (d) => instrumentStatusWords(d)),
+      numberCol<InstrumentDto>({ colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
         cellRenderer: (p: { data?: InstrumentDto }) => `<span class="pf-num">${esc(p.data?.unmatchedCount ?? 0)}</span>` },
+        (d) => d.unmatchedCount ?? 0, 'right'),
       sgActionsCol<InstrumentDto>(web, [], 1, (p) => sgActions(web, [
         { label: 'Open', aria: `Open ${p.data?.name ?? 'instrument'}`, path: SG_ICON.open, icon: true, run: () => this.open(p.data) },
       ])),
@@ -296,4 +296,8 @@ export class InstrumentsListComponent {
     if (ev.colDef.colId === 'actions') return;
     this.open(ev.data);
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('lab.instruments', { q: this.q });
 }

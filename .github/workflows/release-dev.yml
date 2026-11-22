@@ -24,6 +24,7 @@ jobs:
     uses: ./.github/workflows/_tests.yml
     with:
       ref: ${{ github.event.workflow_run.head_sha || inputs.build }}
+      dev_soft_browsers: true
   # Dev only: the tests run on the dev PC (job "tests"). If the PC is off, that job just waits in the queue —
   # after 3 minutes the gate lets dev release without it (the queued tests still run when the PC is back).
   # If the PC picked them up, dev waits for the result and a failure stops the release.

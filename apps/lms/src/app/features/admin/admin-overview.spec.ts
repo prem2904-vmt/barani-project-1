@@ -13,6 +13,11 @@ import { OpdGateService } from '../opd/shared/opd-gate.service';
 import { CasesheetGateService } from '../casesheets/shared/casesheet-gate.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
+
 /**
  * Settings overview = the two-panel hub: grouped section list on the left, the
  * selected section's existing tiles on the right, section in the URL, search

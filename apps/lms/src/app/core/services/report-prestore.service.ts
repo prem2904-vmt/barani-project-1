@@ -2,6 +2,7 @@ import { Injectable, Injector, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
 import { storedReportBlob } from '../../shared/utils/report-blob';
+import { backgroundReportLoadsOn } from '../../shared/utils/background-report-loads';
 
 /** The slice of a report summary this service reads. */
 interface ReportSummary { id: string; type?: string; storedPdfKey?: string | null }
@@ -24,7 +25,8 @@ export class ReportPrestoreService {
   private readonly injector = inject(Injector);
 
   /** The renderer/uploader — the shared stored-PDF path (swappable in specs). */
-  store: (rep: ReportSummary) => Promise<unknown> = (rep) => storedReportBlob(rep, this.api, this.injector);
+  store: (rep: ReportSummary) => Promise<unknown> = (rep) =>
+    backgroundReportLoadsOn() ? storedReportBlob(rep, this.api, this.injector) : Promise.resolve(null);
 
   /** Fire-and-forget after a validate call on an order's test. */
   afterValidation(orderId: string | null | undefined): void {

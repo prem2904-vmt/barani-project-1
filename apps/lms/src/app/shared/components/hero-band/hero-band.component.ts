@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, TemplateRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, TemplateRef, afterEveryRender, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { fitPlaceholdersIn } from '../../utils/placeholder-fit';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -415,6 +416,18 @@ export class HeroBandComponent {
   /** The Settings shell (shared/utils/settings-host.ts) when this band's page is routed inside it. */
   protected readonly host = inject(SETTINGS_HOST, { optional: true });
   private readonly el = inject(ElementRef);
+  /** Band search placeholders fit their field on every width (shorter form on a phone; utils/placeholder-fit). */
+  private readonly fitPh = (() => {
+    const host = this.el.nativeElement as HTMLElement;
+    const run = () => fitPlaceholdersIn(host);
+    afterEveryRender(run);
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(run);
+      ro.observe(host);
+      inject(DestroyRef).onDestroy(() => ro.disconnect());
+    }
+    return run;
+  })();
   /** THE shell's own band: it shows the hosted page's actions and search instead of hiding itself. */
   readonly shellBand = input<boolean>(false);
   /** THE shell's band: the hosted page's search for the shown group (the shell picks it). */

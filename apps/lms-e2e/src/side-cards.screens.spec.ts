@@ -16,6 +16,7 @@ const SCREENS: { name: string; url: string; side: string; item: string | null }[
   { name: 'Microbiology', url: '/admin/tests?view=microbiology', side: '[data-testid="mm-side"]', item: '[data-testid="mm-side"] .pf-side-item' },
   { name: 'Option groups', url: '/admin/tests?view=option-groups', side: '[data-testid="og-side"]', item: null },
   { name: 'Pricing', url: '/admin/tests?view=pricing', side: '[data-testid="pr-side"]', item: '[data-testid="pr-side"] .pf-side-item' },
+  { name: 'Reports', url: '/reports', side: '[data-testid="rq-side"]', item: null },
 ];
 
 test.beforeEach(async ({ page, context }) => {

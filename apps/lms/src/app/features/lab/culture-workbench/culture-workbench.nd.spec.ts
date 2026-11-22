@@ -10,6 +10,12 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /** Culture case on the nd pattern (owner): band + context bar, one primary,
  *  stage tabs, compact option controls, one-tap notes, phone stacking. */
 

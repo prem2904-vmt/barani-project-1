@@ -163,67 +163,39 @@ test.describe('Workflow Builder (form editor) — admin functional', () => {
 test.describe('Process Builder (work-area/action editor) — admin functional', () => {
   test('admin: toggling the Home Visits action persists (save API + reload), then is restored', async ({ page }) => {
     await loginAs(page, 'admin');
-    await page.goto('/admin/process');
-    await expect(page.getByRole('heading', { name: /workflow.*builder/i, level: 1 })).toBeVisible({ timeout: 15_000 });
-
-    // The "Home Visits" work-area lane holds the home_visits action item —
-    // free-standing per ACTION_POLICY (not locked/mandatory, no couplings or
-    // requires), so toggling it has no cascading effect on any other action.
-    const homeVisitsLane = page.locator('.pb-lane').filter({ has: page.locator('.pb-action', { hasText: 'Home Visits' }) });
-    await expect(homeVisitsLane).toBeVisible({ timeout: 15_000 });
-    const toggle = homeVisitsLane.locator('.pb-action', { hasText: 'Home Visits' }).locator('.pb-toggle');
-    await expect(toggle).toBeVisible();
-
-    const wasOn = ((await toggle.getAttribute('class')) ?? '').includes(' on') || ((await toggle.getAttribute('class')) ?? '').split(' ').includes('on');
-
+    // Work steps (workflow redesign 2026-11-19): work areas LEFT, the selected area's actions RIGHT.
+    const openHomeVisits = async () => {
+      await page.goto('/admin/process');
+      await expect(page.locator('[data-testid="wf-main"]')).toBeVisible({ timeout: 15_000 });
+      await page.locator('[data-testid="wf-area-homecoll"]').locator('visible=true').first().click();
+      const sw = page.locator('[data-testid="wf-switch-home_visits"]');
+      await expect(sw).toBeVisible({ timeout: 15_000 });
+      return sw;
+    };
+    const isOn = async (sw: import('@playwright/test').Locator) => (await sw.getAttribute('aria-checked')) === 'true';
     async function saveAndAssert() {
       const saveResponse = page.waitForResponse(
         r => r.url().includes('/api/process-workflows/') && r.request().method() === 'PUT',
         { timeout: 15_000 }
       );
-      await page.getByRole('button', { name: /^save$/i }).click();
+      await page.locator('pf-hero-band [data-testid="band-save"] .pf-ssv__save').click();
       const resp = await saveResponse;
       expect(resp.ok(), 'Save must persist the process-workflow toggle').toBe(true);
     }
 
-    async function reloadAndGetToggle() {
-      await page.reload();
-      await expect(page.getByRole('heading', { name: /workflow.*builder/i, level: 1 })).toBeVisible({ timeout: 15_000 });
-      const lane = page.locator('.pb-lane').filter({ has: page.locator('.pb-action', { hasText: 'Home Visits' }) });
-      await expect(lane).toBeVisible({ timeout: 15_000 });
-      return lane.locator('.pb-action', { hasText: 'Home Visits' }).locator('.pb-toggle');
-    }
-
+    let toggle = await openHomeVisits();
+    const wasOn = await isOn(toggle);
     try {
-      // ── Flip + save + verify it survives a reload ──────────────────────
       await toggle.click();
-      if (wasOn) {
-        await expect(toggle).not.toHaveClass(/\bon\b/); // sanity: visual state flipped
-      } else {
-        await expect(toggle).toHaveClass(/\bon\b/);
-      }
+      await expect(toggle).toHaveAttribute('aria-checked', String(!wasOn));
       await saveAndAssert();
-
-      const toggleAfterReload = await reloadAndGetToggle();
-      if (wasOn) {
-        await expect(toggleAfterReload).not.toHaveClass(/\bon\b/);
-      } else {
-        await expect(toggleAfterReload).toHaveClass(/\bon\b/);
-      }
+      toggle = await openHomeVisits();
+      await expect(toggle).toHaveAttribute('aria-checked', String(!wasOn));
     } finally {
-      // ── Restore to the original enabled state ───────────────────────────
-      const lane = page.locator('.pb-lane').filter({ has: page.locator('.pb-action', { hasText: 'Home Visits' }) });
-      const currentToggle = lane.locator('.pb-action', { hasText: 'Home Visits' }).locator('.pb-toggle');
-      const nowOnRaw = (await currentToggle.getAttribute('class')) ?? '';
-      const nowOn = nowOnRaw.split(' ').includes('on');
-      if (nowOn !== wasOn) {
-        await currentToggle.click();
-        await saveAndAssert();
-      }
-
-      const finalToggle = await reloadAndGetToggle();
-      const finalOn = ((await finalToggle.getAttribute('class')) ?? '').split(' ').includes('on');
-      expect(finalOn, 'Home Visits toggle must be restored to its original state').toBe(wasOn);
+      toggle = await openHomeVisits();
+      if ((await isOn(toggle)) !== wasOn) { await toggle.click(); await saveAndAssert(); }
+      toggle = await openHomeVisits();
+      expect(await isOn(toggle), 'Home Visits toggle must be restored to its original state').toBe(wasOn);
     }
   });
 });
@@ -234,7 +206,7 @@ test.describe('Workflows / Process Builder RBAC gate — only manage_workflows (
     await page.goto('/admin/workflows');
     await expect(page.getByRole('heading', { name: /workflow builder/i, level: 1 })).toBeVisible({ timeout: 15_000 });
     await page.goto('/admin/process');
-    await expect(page.getByRole('heading', { name: /workflow.*builder/i, level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-testid="wf-main"]')).toBeVisible({ timeout: 15_000 });
   });
 
   for (const role of ['labTech', 'manager'] as const) {

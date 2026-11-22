@@ -1,3 +1,6 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, input, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -23,6 +26,7 @@ import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, Module
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { HomeCollectionSwitchCardComponent } from '../lab-pages/home-collection-switch-card.component';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgPillCol, sgRowOff, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -41,7 +45,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 @Component({
   selector: 'pf-home-collection-agents',
   standalone: true,
-  imports: [NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
+  imports: [SkelGridComponent, NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
     DataGridComponent, HomeCollectionSwitchCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
@@ -49,7 +53,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
     .pf-hc-lbl { display: block; margin-bottom: 6px; }
     .pf-hc-hint { margin-top: 6px; }
     .pf-hc-body { gap: 12px; }
-    .pf-hc-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-hc-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-hc-panels.pf-sg-panels--single, .pf-hc-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-hc-strip { flex: none; display: block; }
     .pf-hc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -94,7 +98,8 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
                 <h3 class="pf-card__label">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
                 <span class="pf-card__spacer"></span>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving() || !draftChanged()" [pfBusyInactive]="!draft().userId || saving() || !draftChanged()"
+                        [attr.title]="draftChanged() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
                   {{ saving() ? 'Saving…' : 'Save agent' }}
                 </button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
@@ -163,9 +168,9 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="4" label="Loading agents…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="4" label="Loading agents…"></pf-skel-grid>
               }
-              <pf-data-grid [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.hc-agents.g1" [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!listSkeleton() && visibleAgents().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   <p class="pf-sg-empty__title">{{ agents().length === 0 ? 'No home-collection agents yet.' : 'No agents match "' + q() + '".' }}</p>
@@ -262,18 +267,19 @@ export class HomeCollectionAgentsComponent implements OnInit {
     const web = this.web() && !this.phone();
     this.removingId(); this._users();
     const cols: ColDef<HomeCollectionAgent>[] = [
-      { colId: 'agent', headerName: 'Agent', flex: 1.1, minWidth: 180, sort: 'asc', valueGetter: p => (p.data ? this.agentName(p.data) : ''),
+      textCol<HomeCollectionAgent>({ colId: 'agent', headerName: 'Agent', flex: 1.1, minWidth: 180, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => sgCell(p.data ? this.agentName(p.data) : '', p.data?.user?.email ?? null, true) },
-      { colId: 'coverage', headerName: 'Coverage', flex: 2, minWidth: 220, valueGetter: p => (p.data ? this.coverageText(p.data) : ''),
+        a => `${this.agentName(a)} ${a.user?.email ?? ''}`.trim(), 'left', a => this.agentName(a)),
+      textCol<HomeCollectionAgent>({ colId: 'coverage', headerName: 'Coverage', flex: 2, minWidth: 220,
         cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => {
           const t = p.data ? this.coverageText(p.data) : '';
           const unset = !!p.data && this.coverageUnset(p.data);
           const el = sgCell(unset ? null : t, unset ? t : null);
           if (unset) el.firstElementChild?.remove();
           return el;
-        } },
-      { colId: 'weight', headerName: 'Share of work', width: 140, minWidth: 120, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
-        valueGetter: p => p.data?.weightage ?? 1 },
+        } }, a => this.coverageText(a)),
+      numberCol<HomeCollectionAgent>({ colId: 'weight', headerName: 'Share of work', width: 140, minWidth: 120, flex: 0, type: 'rightAligned', cellClass: 'pf-num' },
+        a => a.weightage ?? 1, 'right'),
       sgPillCol<HomeCollectionAgent>(a => a.isActive !== false),
       sgActionsCol<HomeCollectionAgent>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span'))),
     ];
@@ -325,9 +331,14 @@ export class HomeCollectionAgentsComponent implements OnInit {
       radiusKm: a.radiusKm ?? 5,
       weightage: a.weightage
     });
+    this._draftBase.set(stableJson(this._draft()));
     this._editing.set(true);
     this._formOpen.set(true);
   }
+  /** Save only when something changed (owner 2026-11-19): an agent being EDITED is compared with how it was opened;
+   *  a new agent has nothing saved yet (Save follows the picked person). */
+  private readonly _draftBase = signal('');
+  readonly draftChanged = computed(() => !this._editing() || stableJson(this._draft()) !== this._draftBase());
 
   save() {
     const d = this._draft();
@@ -372,4 +383,8 @@ export class HomeCollectionAgentsComponent implements OnInit {
     if (!json) return [];
     try { return JSON.parse(json) as string[]; } catch { return []; }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.hc-agents', { q: this.q });
 }

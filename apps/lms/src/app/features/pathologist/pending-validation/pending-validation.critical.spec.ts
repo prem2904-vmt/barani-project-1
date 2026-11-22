@@ -20,7 +20,7 @@ import { CriticalResultEvent } from '../../../shared/models/critical-result.mode
 /**
  * Pathologist queue × the NABL critical-result record: after the queue loads
  * the screen looks up the open records of its lines (a GET); a tile whose
- * critical value THIS user has not acknowledged reads "Critical · not
+ * critical value THIS user has not acknowledged reads "Critical" + "Not
  * acknowledged" and carries an Acknowledge row action (via
  * 'pathologist_queue'); once acknowledged the tile is plain "Critical" again.
  */
@@ -89,8 +89,12 @@ async function render(events: CriticalResultEvent[]) {
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
+  await settle(f);
   return { f, el: f.nativeElement as HTMLElement, api };
 }
+
+/** Let the grid render (the queue is a pf-data-grid since 2026-11-20; rows = .ag-row). */
+const settle = async (f: { detectChanges(): void }) => { for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 40)); f.detectChanges(); } };
 
 describe('Pathologist queue — critical acknowledgement', () => {
   it('looks up the queued lines\' records with a GET and flags the unacknowledged tile with ONE status word + Acknowledge', async () => {
@@ -99,8 +103,11 @@ describe('Pathologist queue — critical acknowledgement', () => {
     expect(lookups.length).toBe(1);
     expect(lookups[0]).toContain('orderTestIds=l1');
     expect(lookups[0]).toContain('l2');
-    const statuses = [...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim());
-    expect(statuses).toContain('Critical · not acknowledged');
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim());
+    // Two lines of words (design D): "Critical" / "Not acknowledged", rose; no pill.
+    expect(statuses).toContain('Critical');
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__detail')].map(s => s.textContent?.trim())).toContain('Not acknowledged');
+    expect(el.querySelector('.ag-row .wg-pill')).toBeNull();
     expect(el.querySelectorAll('.pv-ack').length).toBe(1);
     expect(el.querySelector('.pv-ack')?.classList.contains('pf-rowact')).toBe(true);
   });
@@ -109,16 +116,17 @@ describe('Pathologist queue — critical acknowledgement', () => {
     const { f, el, api } = await render([EVENT]);
     (el.querySelector('.pv-ack') as HTMLButtonElement).click();
     f.detectChanges();
+    await settle(f);
     expect(api.post).toHaveBeenCalledWith('/api/critical-results/e1/acknowledge', { via: 'pathologist_queue' });
-    const statuses = [...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim());
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical');
-    expect(statuses).not.toContain('Critical · not acknowledged');
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__detail')].map(s => s.textContent?.trim())).not.toContain('Not acknowledged');
     expect(el.querySelector('.pv-ack')).toBeNull();
   });
 
   it('a record already acknowledged by me needs no button; a communicated one is not even returned', async () => {
     const { el } = await render([{ ...EVENT, status: 'acknowledged', acknowledgements: [{ userId: 'me', name: 'Me', at: '2026-09-27T09:58:00Z', via: 'bell' }] }]);
     expect(el.querySelector('.pv-ack')).toBeNull();
-    expect([...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim())).toContain('Critical');
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim())).toContain('Critical');
   });
 });

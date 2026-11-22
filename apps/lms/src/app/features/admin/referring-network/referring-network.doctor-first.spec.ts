@@ -102,8 +102,8 @@ describe('Referring network — doctor-first screen', () => {
     p.cmp.setHospitalFilter(ALL_HOSPITALS);
     p.type('kauvery');                       // band search covers the hospitals column
     expect(p.cmp.gridDoctors().map((d: any) => d.id)).toEqual(['d1']);
-    // The view's action is Add doctor, in the card head (no band buttons in Settings).
-    expect(p.actions().map(b => b.textContent?.trim())).toEqual(['Add doctor']);
+    // The view's actions are Add doctor, then Paste from sheet (bulk add), in the card head (no band buttons in Settings).
+    expect(p.actions().map(b => b.textContent?.trim())).toEqual(['Add doctor', 'Paste from sheet']);
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
   });

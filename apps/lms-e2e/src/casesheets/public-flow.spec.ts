@@ -52,7 +52,7 @@ test('Google sign-in creates the personal space → Departments · Cases · Sett
   await expectNoHorizontalScroll(page);
 
   // Departments → a form → the patient step (search + quick-create)
-  await page.locator('.dp__row', { hasText: 'General Medicine' }).first().click();
+  await page.locator('.pf-tp__item', { hasText: 'General Medicine' }).first().click();
   await settle(page);
   await shot(page, 'public-03-department-forms', { viewport: 'phone' });
   await page.locator('.dp__tile', { hasText: 'General consultation' }).first().click();

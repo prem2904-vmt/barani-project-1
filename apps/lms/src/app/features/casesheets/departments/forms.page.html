@@ -1,22 +1,16 @@
-<!-- Prepare home (ND, owner 2026-11-11 "too zoomed"): the band (back + search; "My case sheets" in its action slot), then one
-     card at the app's type scale:
-     departments on the left (numbered, "N case sheets"), the open department's case sheets on the right (initial disc,
-     name, star). Wide screens open the first department by itself; phones show the list, then the department with a
-     back arrow. -->
+<!-- Prepare home (ND, owner 2026-11-19: "a different two-panel than ours"): the band (back + search), then OUR two-panel
+     (pf-two-panel = Test Master's frame): LEFT the Departments side card (shared rows, count on the right, "Continue" drafts
+     as a second group), RIGHT the department's case sheets as tiles in the main card (its head carries "My case sheets").
+     Wide screens open the first department by itself; phones show the list, then the department (the band's back climbs). -->
 <cs-styles />
 <div class="pf-page pg dp" [class.dp--picked]="!!chosenDept()">
   <pf-hero-band
     [back]="nav.isLab"
     [standardPill]="true"
-    placeholder="Search departments and case sheets"
-    [value]="query()"
+    [placeholder]="searchPlaceholder()"
+    [value]="bandValue()"
     (valueChange)="onSearch($event)"
   >
-    @if (fromPrepare) {
-    <a band-actions class="pf-hb-btn pf-hb-btn--ghost dp__mine" routerLink="/prepare/cases" data-my-sheets>
-      <pf-icon name="cases" [size]="16" /> My case sheets
-    </a>
-    }
   </pf-hero-band>
   <div class="pf-body dp__body">
     <!-- the band + the card say where you are: the page title is for screen readers only -->
@@ -72,134 +66,124 @@
         }
       </div>
     </div>
+    } @else if (!departments().length) {
+    <div class="dp__card dp__card--msg">
+      <div class="dp__msg" data-empty="search">
+        <h2 class="dp__msg-title">Nothing matches “{{ query() }}”</h2>
+        <p>Try a department name or the name of a case sheet.</p>
+      </div>
+    </div>
     } @else {
-    <div class="dp__card">
-      <!-- Left: departments -->
-      <section class="dp__list" aria-labelledby="dp-lh">
-        <header class="dp__head">
-          <h2 class="dp__lh" id="dp-lh">Departments</h2>
-          <span class="dp__lc" data-dept-count>{{ departments().length }}</span>
-        </header>
-        <div class="dp__scroll pf-card__body">
-          @if (!departments().length) {
-          <div class="dp__msg" data-empty="search">
-            <h2 class="dp__msg-title">Nothing matches “{{ query() }}”</h2>
-            <p>Try a department name or the name of a case sheet.</p>
-          </div>
-          } @else {
-          <ul class="dp__rows" role="list">
-            @for (d of departments(); track d.name; let i = $index) {
-            <li>
-              <button
-                type="button"
-                class="dp__row pf-touch"
-                [class.dp__row--on]="pickedDept()?.name === d.name"
-                [attr.aria-current]="pickedDept()?.name === d.name ? 'true' : null"
-                [attr.data-dept]="d.name"
-                (click)="pick(d.name)"
-              >
-                <span class="dp__num">{{ i + 1 }}</span>
-                <span class="dp__rowtext">
-                  <span class="dp__name">{{ d.name }}</span>
-                  <span class="dp__count">{{ d.forms.length ? d.forms.length + (d.forms.length === 1 ? ' case sheet' : ' case sheets') : 'No case sheets yet' }}</span>
-                </span>
-                <pf-icon name="chevron-right" [size]="20" />
-              </button>
-            </li>
-            }
-          </ul>
-          } @if (drafts()?.length) {
-          <div class="dp__cont" aria-labelledby="dp-cont">
-            <h2 class="dp__conth" id="dp-cont">Continue</h2>
-            <ul class="dp__rows" role="list">
-              @for (d of drafts(); track d.id) {
-              <li>
-                <a class="dp__row dp__row--draft pf-touch" [routerLink]="nav.sheet(d.id)" [attr.data-case]="d.id">
-                  <span class="dp__num dp__num--draft"><pf-icon name="pen" [size]="16" /></span>
-                  <span class="dp__rowtext">
-                    <span class="dp__name">{{ d.patientName || 'No name yet' }}</span>
-                    <span class="dp__count">{{ d.formTitle }} · saved {{ when(d.updatedAt) }}</span>
-                  </span>
-                  <pf-icon name="chevron-right" [size]="20" />
-                </a>
-              </li>
-              }
-            </ul>
-          </div>
-          }
-        </div>
-      </section>
-
-      <!-- Right: the department's case sheets -->
-      <section class="dp__sheets" [attr.aria-labelledby]="pickedDept() ? 'dp-sh' : null">
-        @if (pickedDept(); as d) {
-        <header class="dp__shead">
-          <button type="button" class="dp__back pf-touch" aria-label="All departments" (click)="pick(null)">
-            <pf-icon name="chevron-left" [size]="20" />
-          </button>
-          <h2 class="dp__shtitle" id="dp-sh">{{ d.name }}</h2>
-          <span class="dp__shsub">{{ d.forms.length ? 'Select a case sheet to begin' : 'No case sheets in this department yet' }}</span>
-        </header>
-        <div class="dp__gridscroll pf-card__body">
-          @if (error()) {
-          <p class="dp__err" role="alert">{{ error() }}</p>
-          }
-          @if (d.forms.length) {
-          <ul class="dp__grid" role="list">
-            @for (f of d.forms; track f.id) {
-            <li class="dp__cell">
-              <button
-                type="button"
-                class="dp__tile pf-touch"
-                [attr.data-form]="f.key"
-                [attr.aria-busy]="starting() === f.id ? 'true' : null"
-                [disabled]="!!starting()"
-                (click)="start(f)"
-              >
-                <span class="dp__disc" aria-hidden="true">{{ initial(f.title) }}</span>
-                <span class="dp__tname">{{ f.title }}</span>
-                @if (starting() === f.id) {
-                <span class="dp__tstate">Starting…</span>
-                }
-              </button>
-              <button
-                type="button"
-                class="dp__star pf-touch"
-                [class.dp__star--on]="f.pinned"
-                [attr.data-pin]="f.key"
-                [attr.aria-pressed]="f.pinned"
-                [attr.aria-label]="(f.pinned ? 'Unpin ' : 'Pin ') + f.title + (f.pinned ? '' : ' to the top')"
-                (click)="togglePin(f)"
-              >
-                <pf-icon name="star" [size]="20" />
-              </button>
-            </li>
-            }
-          </ul>
-          } @else {
-          <div class="pf-empty" data-empty="dept-forms">
-            <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
-            <h2 class="pf-empty__title">No case sheets in {{ d.name }} yet</h2>
-            @if (nav.isLab && canManage()) {
-            <p class="pf-empty__body">Publish a case sheet for this department in IPD settings.</p>
-            <a class="pf-btn pf-btn--secondary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
-              <pf-icon name="studio" [size]="18" /> Open case sheets
+    <pf-two-panel
+      class="dp__tp"
+      [groups]="groups()"
+      [selected]="pickedDept()?.name ?? null"
+      [compact]="compact()"
+      [detailOpen]="!!chosenDept()"
+      navLabel="Departments"
+      navTitle="Departments"
+      [navIcon]="icons.dept"
+      [panelIcon]="icons.dept"
+      [panelNote]="panelNote()"
+      (pick)="onPick($event)"
+    >
+      <!-- "My case sheets" never sits in the band's corner: wide = the main card's head; phone (no room beside the
+           count) = an icon button in the side card's head -->
+      <ng-container nav-tools>
+        <span class="pf-card__note dp__lc pf-num" data-dept-count>{{ departments().length }}</span>
+        @if (fromPrepare && compact()) {
+        <a class="pf-btn pf-btn--secondary pf-btn--icon dp__mine dp__mine--icon" routerLink="/prepare/cases" data-my-sheets aria-label="My case sheets" title="My case sheets">
+          <pf-icon name="cases" [size]="18" />
+        </a>
+        }
+      </ng-container>
+      <pf-segmented panel-tools class="dp__tabs" size="sm" [options]="tabOptions()" [value]="tab()" (valueChange)="setTab($event)" aria-label="Case sheets or drafts" />
+      @if (tab() === 'continue') {
+      <span panel-tools class="dp__ctl">
+        <label class="dp__only">
+          <pf-toggle size="sm" [checked]="thisDeptOnly()" (checkedChange)="thisDeptOnly.set($event)" data-only-dept aria-label="This department only" />
+          <span>This department only</span>
+        </label>
+      </span>
+      }
+      @if (fromPrepare && !compact()) {
+      <a panel-tools class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
+        <pf-icon name="cases" [size]="16" /> My case sheets
+      </a>
+      }
+      @if (tab() === 'continue') {
+        @if (draftRows().length) {
+        <ul class="dp__drafts" role="list" data-drafts>
+          <li class="dp__dh" aria-hidden="true"><span>Patient</span><span>Case sheet</span><span>Department</span><span>Saved</span></li>
+          @for (r of draftRows(); track r.id) {
+          <li>
+            <a class="dp__dr pf-touch" [routerLink]="nav.sheet(r.id)" [attr.data-case]="r.id">
+              <span class="dp__dp">{{ r.patient }}</span>
+              <span class="dp__ds">{{ r.sheet }}</span>
+              <span class="dp__dd">{{ r.dept }}</span>
+              <span class="dp__dw">{{ when(r.saved) }}</span>
             </a>
-            } @else {
-            <p class="pf-empty__body">Ask your case sheet admin to publish one.</p>
-            }
-          </div>
+          </li>
           }
-        </div>
+        </ul>
         } @else {
-        <div class="dp__none">
-          <span class="dp__noneicon"><pf-icon name="forms" [size]="32" /></span>
-          <h2 class="dp__nonetitle">Pick a department</h2>
-          <p>Its case sheets show here.</p>
+        <div class="pf-empty" data-empty="drafts">
+          <span class="pf-empty__icon"><pf-icon name="pen" [size]="26" /></span>
+          <h2 class="pf-empty__title">No drafts to continue</h2>
         </div>
         }
-      </section>
-    </div>
+      } @else if (pickedDept(); as d) {
+        @if (error()) {
+        <p class="dp__err" role="alert">{{ error() }}</p>
+        }
+        @if (d.forms.length) {
+        <ul class="dp__grid" role="list">
+          @for (f of d.forms; track f.id) {
+          <li class="dp__cell">
+            <button
+              type="button"
+              class="dp__tile pf-touch"
+              [attr.data-form]="f.key"
+              [attr.aria-busy]="starting() === f.id ? 'true' : null"
+              [disabled]="!!starting()"
+              (click)="start(f)"
+            >
+              <span class="dp__disc" aria-hidden="true">{{ initial(f.title) }}</span>
+              <span class="dp__tname">{{ f.title }}</span>
+              @if (starting() === f.id) {
+              <span class="dp__tstate">Starting…</span>
+              }
+            </button>
+            <button
+              type="button"
+              class="dp__star pf-touch"
+              [class.dp__star--on]="f.pinned"
+              [attr.data-pin]="f.key"
+              [attr.aria-pressed]="f.pinned"
+              [attr.aria-label]="(f.pinned ? 'Unpin ' : 'Pin ') + f.title + (f.pinned ? '' : ' to the top')"
+              (click)="togglePin(f)"
+            >
+              <pf-icon name="star" [size]="20" />
+            </button>
+          </li>
+          }
+        </ul>
+        } @else {
+        <div class="pf-empty" data-empty="dept-forms">
+          <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
+          <h2 class="pf-empty__title">No case sheets in {{ d.name }} yet</h2>
+          @if (nav.isLab && canManage()) {
+          <p class="pf-empty__body">Publish a case sheet for this department in IPD settings.</p>
+          <a class="pf-btn pf-btn--secondary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
+            <pf-icon name="studio" [size]="18" /> Open case sheets
+          </a>
+          } @else {
+          <p class="pf-empty__body">Ask your case sheet admin to publish one.</p>
+          }
+        </div>
+        }
+      }
+    </pf-two-panel>
     }
   </div>
 </div>

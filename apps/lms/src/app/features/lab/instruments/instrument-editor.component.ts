@@ -1,3 +1,6 @@
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../shared/utils/save-shortcut';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -167,6 +170,15 @@ export class InstrumentEditorComponent {
   private readonly uploads = inject(UploadsService);
   readonly imageMaps = signal<ImageCodeDto[]>([]);
   readonly imageMapsDirty = signal(false);
+  /** Owner 2026-11-19: Save only when something CHANGED — the settings, the code mapping and the image mapping each
+   *  compared with what was loaded / last saved (an edit put back is no change). A new instrument = the empty form. */
+  private readonly formSnap = (() => { const s = dirtySnapshot(() => ({ f: this.form(), via: this.connectedVia() })); s.mark(); return s; })();
+  private readonly mapsSnap = (() => { const s = dirtySnapshot(() => this.maps()); s.mark(); return s; })();
+  private readonly imgSnap = (() => { const s = dirtySnapshot(() => this.imageMaps()); s.mark(); return s; })();
+  readonly changed = computed(() => (this.dirty() && this.formSnap.dirty())
+    || (this.mapsDirty() && this.mapsSnap.dirty()) || (this.imageMapsDirty() && this.imgSnap.dirty()));
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.changed() && !this.saving() && !this.loading(), save: () => { void this.save(); } });
   readonly newImageCode = signal('');
   /** Profiles (by catalogue key) an image can be mapped to. */
   readonly profileOptions = computed((): PfSelectOption[] => this.tests()
@@ -192,7 +204,7 @@ export class InstrumentEditorComponent {
   }
   private loadImageMaps(id: string) {
     this.api.imageMaps(id).subscribe({
-      next: list => { this.imageMaps.set(list ?? []); this.imageMapsDirty.set(false); },
+      next: list => { this.imageMaps.set(list ?? []); this.imageMapsDirty.set(false); this.imgSnap.mark(); },
       error: () => this.imageMaps.set([]),
     });
   }
@@ -324,6 +336,7 @@ export class InstrumentEditorComponent {
     if (this.sampleIdMode() === 'custom' && this.tab() === 'protocol') void this.loadPickerMessage();
     this.connectedVia.set(dto.bridgeId ?? '');
     this.dirty.set(false);
+    this.formSnap.mark();
   }
 
   /** Pick "This computer" or a Bridge; a Bridge can't do serial / folder. */
@@ -344,7 +357,7 @@ export class InstrumentEditorComponent {
   private loadMaps(id: string) {
     this.loadImageMaps(id);
     this.api.codeMaps(id).subscribe({
-      next: (list) => { this.maps.set((list ?? []).map(rowFromDto)); this.mapsDirty.set(false); this.mapsReady = true; this.flushPrefill(); },
+      next: (list) => { this.maps.set((list ?? []).map(rowFromDto)); this.mapsDirty.set(false); this.mapsSnap.mark(); this.mapsReady = true; this.flushPrefill(); },
       error: () => { this.mapsReady = true; this.flushPrefill(); },
     });
     // Codes the server saw but could not map (any state) — "Add unmapped codes".
@@ -547,12 +560,14 @@ export class InstrumentEditorComponent {
         const maps = await firstValueFrom(this.api.saveCodeMaps(saved.id, toCodeMapUpserts(this.maps())));
         this.maps.set((maps ?? []).map(rowFromDto));
         this.mapsDirty.set(false);
+        this.mapsSnap.mark();
       }
       if (this.imageMapsDirty()) {
         const im = await firstValueFrom(this.api.saveImageMaps(saved.id, this.imageMaps()
           .filter(r => r.profileKeys.length).map(r => ({ code: r.code, label: r.label, profileKeys: r.profileKeys }))));
         this.imageMaps.set(im ?? []);
         this.imageMapsDirty.set(false);
+        this.imgSnap.mark();
       }
       this.toasts.success(id ? 'Instrument saved' : 'Instrument created');
       // Paired here? Apply the saved settings to the running connector now

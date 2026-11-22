@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
@@ -18,7 +19,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { bandFilter } from '../../../shared/utils/band-search';
 import { OPD_API } from '../shared/opd-api';
 import { OpdAdminApi, OpdDoctorAdminRow, OpdDoctorLite, OpdServiceRow } from './opd-admin.api';
-import { WEEK_DAYS, inr, opdGridDark, opdGridLight } from './opd-admin.util';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
+import { WEEK_DAYS, daysText, inr, opdGridDark, opdGridLight } from './opd-admin.util';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -62,7 +65,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
 @Component({
   selector: 'pf-doctors-admin',
   standalone: true,
-  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent, BusyDirective, SkeletonTableComponent],
+  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent, BusyDirective, SkeletonTableComponent, SkelGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   template: `
@@ -72,7 +75,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    aria-label="Save" title="Save">
+                    aria-label="Save" [pfBusyInactive]="!dirty() || saving()" [attr.title]="(!dirty() && !saving()) ? 'No changes to save' : 'Save'">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -86,7 +89,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
         eyebrow="OPD" title="Doctors" subtitle="Fee per service, room, token prefix and availability"
         parentRoute="/admin/opd">
         <div actions>
-          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="!dirty() || saving()" [attr.title]="(!dirty() && !saving()) ? 'No changes to save' : null">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
@@ -102,7 +105,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
           </header>
           <div class="oa-main__body">
             @if (listSkeleton()) {
-              <pf-skeleton-table class="oa-grid-skel" [rows]="8" [cols]="6" label="Loading doctors…"></pf-skeleton-table>
+              <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="6" label="Loading doctors…"></pf-skel-grid>
             }
             @if (!loading() && rowData().length === 0) {
               <div class="oa-empty">
@@ -165,28 +168,27 @@ export class DoctorsAdminComponent {
   readonly perDoctorServices = computed(() => this.services().filter((s) => s.priceMode === 'per_doctor' && s.isActive));
 
   readonly colDefs = computed<ColDef<DoctorRow>[]>(() => [
-    { field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 170, pinned: 'left' },
-    { headerName: 'Department', minWidth: 140, valueGetter: (p) => p.data?.department || '—' },
-    { headerName: 'Qualifications', minWidth: 160, valueGetter: (p) => (p.data?.specializations ?? []).join(', ') || '—' },
+    textCol<DoctorRow>({ field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 170, pinned: 'left' }, (r) => r.name ?? ''),
+    textCol<DoctorRow>({ colId: 'department', headerName: 'Department', minWidth: 140, valueFormatter: (p) => p.value || '—' }, (r) => r.department ?? ''),
+    textCol<DoctorRow>({ colId: 'qualifications', headerName: 'Qualifications', minWidth: 160, valueFormatter: (p) => p.value || '—' }, (r) => (r.specializations ?? []).join(', ')),
     // The ONE registration number (users.RegistrationId) — what prints under the signature.
-    { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'pf-num',
-      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' },
-    { field: 'room', headerName: 'Room', editable: true, minWidth: 110,
-      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 40) || null, valueFormatter: (p) => p.value || '—' },
-    { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'pf-num',
+    textCol<DoctorRow>({ field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'pf-num',
+      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' }, (r) => r.regNo ?? ''),
+    textCol<DoctorRow>({ field: 'room', headerName: 'Room', editable: true, minWidth: 110,
+      valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 40) || null, valueFormatter: (p) => p.value || '—' }, (r) => r.room ?? ''),
+    textCol<DoctorRow>({ field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'pf-num',
       valueParser: (p) => { const s = String(p.newValue ?? '').trim().toUpperCase(); return /^[A-Z0-9]{0,4}$/.test(s) ? (s || null) : p.oldValue; },
-      valueFormatter: (p) => p.value || '—' },
+      valueFormatter: (p) => p.value || '—' }, (r) => r.tokenPrefix ?? ''),
     // The doctor's assistant (consult v6 Page) — a tenant user; blank = none.
-    { colId: 'assistant', headerName: 'Assistant', minWidth: 200, sortable: false, autoHeight: false,
-      valueGetter: (p) => p.data?.assistantUserId ?? '',
+    rawChoiceCol<DoctorRow>({ colId: 'assistant', headerName: 'Assistant', minWidth: 200, autoHeight: false,
       cellRenderer: AssistantCellComponent,
       cellRendererParams: { options: this.userOpts(), onPick: (r: DoctorRow, id: string) => { r.assistantUserId = id || null; this.markDirty(r.id); } } },
-    { field: 'days', headerName: 'Sits on', minWidth: 290, flex: 1.6, sortable: false,
-      cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) },
-    ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => ({
+      (r) => r.assistantUserId ?? '', (r) => this.userOpts().find((o) => o.value === (r.assistantUserId ?? ''))?.label ?? 'None'),
+    textCol<DoctorRow>({ field: 'days', headerName: 'Sits on', minWidth: 290, flex: 1.6,
+      cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) }, (r) => daysText(r.days)),
+    ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => numberCol<DoctorRow>({
       colId: `fee:${s.id}`, headerName: `${s.name} (₹)`, headerTooltip: `${s.code} — per-doctor fee; blank = not offered`,
       editable: true, width: 150, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
-      valueGetter: (p) => p.data?.[`fee:${s.id}`] ?? null,
       valueSetter: (p) => {
         if (!p.data) return false;
         const t = String(p.newValue ?? '').trim();
@@ -196,11 +198,11 @@ export class DoctorsAdminComponent {
         return true;
       },
       valueFormatter: (p) => (p.value == null ? 'Not offered' : inr(p.value)),
-    })),
-    { field: 'fee', headerName: 'Default consult fee (₹)', editable: true, width: 190, flex: 0, headerTooltip: 'Legacy desk consult fee (pre-OPD Master)',
+    }, (r) => r[`fee:${s.id}`] ?? null, 'right')),
+    numberCol<DoctorRow>({ field: 'fee', headerName: 'Default consult fee (₹)', editable: true, width: 190, flex: 0, headerTooltip: 'Legacy desk consult fee (pre-OPD Master)',
       cellClass: 'pf-num', type: 'numericColumn',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
-      valueFormatter: p => '₹' + (p.value ?? 0) },
+      valueFormatter: p => '₹' + (p.value ?? 0) }, (r) => r.fee ?? null, 'right'),
   ]);
 
   constructor() {

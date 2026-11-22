@@ -56,8 +56,10 @@ describe('Studio page rail', () => {
 
 describe('case-sheet search box', () => {
   it('Prepare home searches in the band (no native search field, so no browser clear button to hide)', () => {
-    expect(deptHtml).toMatch(/<pf-hero-band[^>]*placeholder="Search departments and case sheets"/);
-    expect(deptHtml).not.toMatch(/type="search"/);
+    expect(deptHtml).toMatch(/<pf-hero-band[^>]*\[placeholder\]="searchPlaceholder\(\)"/);
+    // The band is THE search (owner 2026-11-21): no second search field in the card head, drafts included.
+    expect(deptHtml.match(/<input[^>]*type="search"[^>]*>/g) ?? []).toEqual([]);
+    expect(deptHtml).not.toMatch(/data-draft-search/);
     expect(dept).not.toMatch(/dp__search/);
   });
 });

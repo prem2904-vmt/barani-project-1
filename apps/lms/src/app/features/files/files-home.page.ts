@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ViewStateService } from '../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../shared/services/grid-view-state';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
@@ -16,6 +18,7 @@ import { FilesAccessService } from './files-access.service';
 import { FilesDeviceService } from './files-device.service';
 import { FILES_APPS, FILES_NAME, FilesApp, filesAppForKind, withAppExtension } from './files-registry';
 import { OfficeFile, OfficeOwnTemplate, OfficeService, toApiError } from './office.service';
+import { dateCol, numberCol, textCol } from '../../shared/utils/work-grid';
 import { logoSvg, phiPillHtml } from './files-logo-svg';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -33,7 +36,7 @@ type Tab = 'all' | 'trash' | string;
 @Component({
   selector: 'pf-files-home',
   standalone: true,
-  imports: [SkeletonRowsComponent, HeroBandComponent, AgGridAngular, FilesLogoComponent, FilesShareDialogComponent],
+  imports: [GridViewStateDirective, SkeletonRowsComponent, HeroBandComponent, AgGridAngular, FilesLogoComponent, FilesShareDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page fh" data-testid="files-home">
@@ -91,7 +94,7 @@ type Tab = 'all' | 'trash' | string;
                 }
               </div>
             } @else {
-              <ag-grid-angular class="fh-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef"
+              <ag-grid-angular pfGridViewState="files" class="fh-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef"
                                [domLayout]="'normal'" [suppressCellFocus]="true" [getRowId]="rowId" (gridReady)="onGridReady($event)"
                                (rowClicked)="onRowClicked($event.data)"></ag-grid-angular>
             }
@@ -200,11 +203,12 @@ export class FilesHomePage {
     const actionsW = phone ? 130 : trash ? 120 : this.access.full() ? 262 : 150;
     void this.theme.isDark();                       // the name cell's logo and pill follow the theme
     return [
-      { field: 'name', headerName: 'Name', flex: 1, minWidth: 200, wrapText: true, autoHeight: true, cellClass: 'fh-cell-name', cellRenderer: this.nameRenderer },
-      { field: 'updatedAt', headerName: trash ? 'Deleted' : 'Last saved', width: 158, hide: phone, valueGetter: p => (trash ? p.data?.deletedAt ?? p.data?.updatedAt : p.data?.updatedAt), valueFormatter: p => formatWhen(p.value) },
-      { field: 'updatedByName', headerName: 'Saved by', width: 124, hide: compact, valueFormatter: p => p.value || '' },
-      { field: 'sizeBytes', headerName: 'Size', width: 82, hide: compact, type: 'numericColumn', valueFormatter: p => formatSize(p.value) },
-      { colId: 'actions', headerName: '', sortable: false, resizable: false, width: actionsW, pinned: 'right', cellRenderer: this.actionsRenderer },
+      textCol<OfficeFile>({ field: 'name', headerName: 'Name', flex: 1, minWidth: 200, wrapText: true, autoHeight: true, cellClass: 'fh-cell-name', cellRenderer: this.nameRenderer }, f => f.name ?? ''),
+      dateCol<OfficeFile>({ field: 'updatedAt', headerName: trash ? 'Deleted' : 'Last saved', width: 158, hide: phone, valueFormatter: p => (p.value == null ? '' : formatWhen(new Date(p.value as number).toISOString())) },
+        f => (trash ? f.deletedAt ?? f.updatedAt : f.updatedAt), 'left'),
+      textCol<OfficeFile>({ field: 'updatedByName', headerName: 'Saved by', width: 124, hide: compact, valueFormatter: p => p.value || '' }, f => f.updatedByName ?? ''),
+      numberCol<OfficeFile>({ field: 'sizeBytes', headerName: 'Size', width: 82, hide: compact, type: 'numericColumn', valueFormatter: p => formatSize(p.value) }, f => f.sizeBytes ?? null, 'right'),
+      { colId: 'actions', headerName: '', sortable: false, filter: false, resizable: false, width: actionsW, pinned: 'right', cellRenderer: this.actionsRenderer },
     ];
   });
 
@@ -257,8 +261,18 @@ export class FilesHomePage {
 
   constructor() {
     effect(() => { if (this.access.available()) void this.access.ensureLoaded(); });
+    // Screen view state (owner 2026-11-21): tab + search come back as left after in-app navigation; a `?type=`
+    // link still opens its own tab.
+    const restored = inject(ViewStateService).bind('files', { tab: this.tab, q: this.q });
+    let first = true;
     // `/files?type=doc` (the Start menu's app rows) opens Files on that app's tab.
-    this.route.queryParamMap.subscribe(q => { const t = q.get('type'); this.tab.set(t && FILES_APPS.some(a => a.kind === t) ? t : t === 'shared' ? 'shared' : 'all'); });
+    this.route.queryParamMap.subscribe(q => {
+      const t = q.get('type');
+      const keep = first && restored && !t;
+      first = false;
+      if (keep) { if (this.tab() === 'trash') void this.loadTrash(); return; }
+      this.tab.set(t && FILES_APPS.some(a => a.kind === t) ? t : t === 'shared' ? 'shared' : 'all');
+    });
     void this.load();
   }
 

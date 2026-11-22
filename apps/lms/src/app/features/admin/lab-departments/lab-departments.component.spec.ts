@@ -7,6 +7,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { DEPARTMENT_ORIGIN_LABEL, departmentErrorMessage, departmentOrigin } from '../../../shared/utils/test-origin';
 
 /**
@@ -75,12 +76,22 @@ describe('Lab departments — Departments tab', () => {
   const cell = (c: any, colId: string, d: any) => c.colDefs().find((x: any) => x.colId === colId).cellRenderer({ data: d }) as HTMLElement;
   const dept = (c: any, code: string) => c.departments().find((d: any) => d.code === code);
 
+  it('every data column sorts and filters on its real value; actions is exempt', () => {
+    const { c } = render();
+    const cols = c.colDefs() as any[];
+    const data = cols.filter((x) => x.colId !== 'actions');
+    expect(data.map((x) => x.colId)).toEqual(['name', 'code', 'origin', 'status']);
+    for (const x of data) expect(sortsAndFilters(x), x.colId).toBe(true);
+    expect(cols.find((x) => x.colId === 'actions').sortable).toBe(false);
+  });
+
   it('Test Master grid: every department, its origin, and only lab-made ones get rename / delete', () => {
     const { c, el } = render();
     expect(el.querySelector('.pf-sg-main pf-data-grid ag-grid-angular')).not.toBeNull();
     expect(c.visibleDepartments().map((d: any) => d.name)).toEqual(['Haematology', 'Cytogenetics']);
     expect(c.colDefs().map((x: any) => x.colId)).toEqual(['name', 'code', 'origin', 'status', 'actions']);
-    expect(c.colDefs().find((x: any) => x.colId === 'actions').pinned).toBeUndefined();
+    // Pinned right at every size (owner 2026-11-21: row actions were cut off at the edge on phone / tablet).
+    expect(c.colDefs().find((x: any) => x.colId === 'actions').pinned).toBe('right');
     expect(cell(c, 'origin', MASTER).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.catalogue);
     expect(cell(c, 'origin', OWN).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.lab);
     expect(c.actionsFor(MASTER)).toEqual([]);

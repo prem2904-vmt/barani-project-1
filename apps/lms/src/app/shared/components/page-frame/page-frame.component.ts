@@ -3,10 +3,8 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { PageSkeleton } from '../../../core/navigation/page-skeleton';
 import { HeroBandComponent } from '../hero-band/hero-band.component';
 import { SkeletonComponent } from '../../primitives/skeleton.component';
-import {
-  SkeletonCardComponent, SkeletonDetailComponent, SkeletonFormComponent, SkeletonRowsComponent,
-  SkeletonTableComponent, SkeletonTilesComponent,
-} from '../../primitives/skeleton-kit.component';
+import { SkeletonRowsComponent, SkeletonTilesComponent } from '../../primitives/skeleton-kit.component';
+import { SkelTwoPanelComponent } from '../skeleton-frame/skeleton-frame.component';
 
 /**
  * `<pf-page-frame>` — the DESTINATION's frame while a navigation is on its
@@ -24,8 +22,7 @@ import {
   selector: 'pf-page-frame',
   standalone: true,
   imports: [
-    HeroBandComponent, SkeletonComponent, SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent,
-    SkeletonDetailComponent, SkeletonFormComponent, SkeletonCardComponent,
+    HeroBandComponent, SkeletonComponent, SkeletonRowsComponent, SkeletonTilesComponent, SkelTwoPanelComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -49,44 +46,43 @@ import {
           <pf-skeleton variant="line" width="320px" height="10px"></pf-skeleton>
         </div>
       }
-      <div class="pf-band-body pf-pgf__body">
+      <!-- The NEW frame (owner 2026-11-19): the shared skeleton-frame blocks in each screen's real geometry —
+           side card LEFT at --pf-side-w, main card with its pf-card__head, both the band body's height. -->
+      <div class="pf-band-body pf-band-body--fill pf-pgf__body">
         @switch (kind()) {
           @case ('grid') {
-            <div class="pf-pgf__card"><pf-skeleton-table [rows]="10" [cols]="6" label=""></pf-skeleton-table></div>
+            <pf-skel-two-panel [side]="false" main="grid" [rows]="16" [cols]="6" [search]="false" [pills]="1" label=""></pf-skel-two-panel>
           }
           @case ('grid-side') {
-            <div class="pf-pgf__split pf-pgf__split--lead">
-              <div class="pf-pgf__side pf-pgf__card"><pf-skeleton-rows [rows]="7" [avatar]="false" [dense]="true" [trailing]="false" label=""></pf-skeleton-rows></div>
-              <div class="pf-pgf__card"><pf-skeleton-table [rows]="10" [cols]="6" label=""></pf-skeleton-table></div>
-            </div>
+            <pf-skel-two-panel main="grid" [sideRows]="9" [rows]="16" [cols]="6" [pills]="1" label=""></pf-skel-two-panel>
+          }
+          @case ('settings') {
+            <pf-skel-two-panel main="rows" [sideRows]="6" [sideCounts]="false" [rows]="7" label=""></pf-skel-two-panel>
+          }
+          @case ('settings-tiles') {
+            <pf-skel-two-panel main="tiles" [sideRows]="9" [sideHeadings]="[0, 3]" [rows]="10" [note]="true" phone="side" label=""></pf-skel-two-panel>
+          }
+          @case ('doc') {
+            <pf-skel-two-panel main="designer" [sideRows]="7" [sideCounts]="false" [note]="true" [pills]="2" label=""></pf-skel-two-panel>
           }
           @case ('tiles') {
             <pf-skeleton-tiles [count]="8" min="220px" height="96px" label=""></pf-skeleton-tiles>
           }
           @case ('detail') {
-            <div class="pf-pgf__split">
-              <div class="pf-pgf__card pf-pgf__pad"><pf-skeleton-detail [fields]="6" [sections]="2" label=""></pf-skeleton-detail></div>
-              <div class="pf-pgf__side"><pf-skeleton-card [lines]="4" label=""></pf-skeleton-card></div>
-            </div>
+            <pf-skel-two-panel main="detail" [sideRows]="6" [sideCounts]="false" label=""></pf-skel-two-panel>
           }
           @case ('form') {
-            <div class="pf-pgf__split">
-              <div class="pf-pgf__card pf-pgf__pad"><pf-skeleton-form [fields]="8" label=""></pf-skeleton-form></div>
-              <div class="pf-pgf__side"><pf-skeleton-card [lines]="5" label=""></pf-skeleton-card></div>
-            </div>
+            <pf-skel-two-panel main="form" [sideRows]="6" [sideCounts]="false" [rows]="8" label=""></pf-skel-two-panel>
           }
           @case ('chat') {
-            <div class="pf-pgf__split pf-pgf__split--chat">
-              <div class="pf-pgf__card"><pf-skeleton-rows [rows]="8" [trailing]="false" label=""></pf-skeleton-rows></div>
-              <div class="pf-pgf__side pf-pgf__card pf-pgf__pad"><pf-skeleton-card [lines]="6" [boxed]="false" label=""></pf-skeleton-card></div>
-            </div>
+            <pf-skel-two-panel main="queue" [sideRows]="9" [sideCounts]="false" [rows]="6" phone="side" label=""></pf-skel-two-panel>
           }
           @case ('dashboard') {
             <pf-skeleton-tiles [count]="4" min="180px" height="84px" [lines]="2" label=""></pf-skeleton-tiles>
             <div class="pf-pgf__card pf-pgf__gap"><pf-skeleton-rows [rows]="6" label=""></pf-skeleton-rows></div>
           }
           @default {
-            <div class="pf-pgf__card"><pf-skeleton-rows [rows]="8" label=""></pf-skeleton-rows></div>
+            <pf-skel-two-panel [side]="false" main="queue" [rows]="8" label=""></pf-skel-two-panel>
           }
         }
       </div>
@@ -119,15 +115,8 @@ import {
     }
     .pf-pgf__pad { padding: 18px; }
     .pf-pgf__gap { margin-top: 14px; }
-    .pf-pgf__split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 16px; align-items: start; }
-    .pf-pgf__split--chat { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
-    .pf-pgf__split--lead { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); }
-    /* Phones / narrow tablets: one column, the side card steps aside (the
-       screens themselves stack it below the fold). */
-    @media (max-width: 900px) {
-      .pf-pgf__split, .pf-pgf__split--chat, .pf-pgf__split--lead { grid-template-columns: minmax(0, 1fr); }
-      .pf-pgf__side { display: none; }
-    }
+    /* The body fills the band page (no page scroll); the two-panel blocks fill it. */
+    .pf-pgf__body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
     .pf-pgf__sr {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;

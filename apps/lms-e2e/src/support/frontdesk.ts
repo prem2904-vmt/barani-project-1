@@ -19,8 +19,19 @@ const isOn = async (page: Page, label: string) => {
   return (await t.getAttribute('aria-selected')) === 'true' || (await t.getAttribute('aria-checked')) === 'true';
 };
 
+/** The work pill collapsed to its selected-pill menu (a tight work card, pf-segmented fit): pick from the menu. */
+const workMenu = (page: Page) => page.locator('.pf-work-hdr pf-segmented [data-seg-compact]').locator('visible=true').first();
+async function pickFromWorkMenu(page: Page, label: string | null): Promise<boolean> {
+  const m = workMenu(page);
+  if (!(await m.count())) return false;
+  await m.click();
+  await page.getByRole('menuitemradio', { name: label ? new RegExp(`^${label}`) : /^All statuses/ }).locator('visible=true').first().click();
+  return true;
+}
+
 /** Make `label` the selected work tab (never toggles an already-selected chip off). */
 export async function deskTab(page: Page, label: string): Promise<void> {
+  if (await pickFromWorkMenu(page, label)) return;
   const t = tabLoc(page, label);
   if (await t.count()) {
     if (!(await isOn(page, label))) await t.click();
@@ -35,6 +46,7 @@ export async function deskTab(page: Page, label: string): Promise<void> {
  *  so it shows In progress (where today's open orders are). */
 export async function deskAllStatuses(page: Page): Promise<void> {
   if (await iconTabs(page)) { await deskTab(page, 'In progress'); return; }
+  if (await pickFromWorkMenu(page, null)) return;
   const t = tabLoc(page, 'In progress');
   if (!(await t.count())) return;
   if (!(await isOn(page, 'In progress'))) await t.click();   // select first…
@@ -44,9 +56,31 @@ export async function deskAllStatuses(page: Page): Promise<void> {
 
 /** The count on a work tab (chip "Payments due 3", or the icon tab's badge), in either layout. */
 export async function tabCount(page: Page, label: string): Promise<number> {
-  const t = tabLoc(page, label);
-  if (!(await t.count())) return 0;
+  let t = tabLoc(page, label);
+  if (!(await t.count())) {
+    // A tight work card collapses the pill to its selected-pill menu ("● Payments due 3 ⌄"): read the count there
+    // when that tab is the selected one.
+    const m = workMenu(page);
+    if (!(await m.count()) || !((await m.textContent()) ?? '').includes(label)) return 0;
+    t = m;
+  }
   const txt = ((await t.textContent()) ?? '').replace(label, ' ');
   const m = /(\d+)\s*$/.exec(txt.trim()) ?? /(\d+)/.exec(txt);
   return m ? Number(m[1]) : 0;
+}
+
+/**
+ * The work row's "Dispatch drawn tubes" (a series with more draws to come). The flow grid / shared work list shows ONE
+ * Next button per row (Collect here) and every other action in the row's ⋯ "More actions" menu (approved Frontdesk
+ * flow-grid design, 2026-11-19), so Dispatch is a menu row. Opens the menu and returns the row's menu item.
+ */
+export async function openRowMenu(page: Page, patient: string) {
+  const trigger = page.locator(`button[aria-label="More actions for ${patient}"]`).locator('visible=true').first();
+  await expect(trigger).toBeVisible({ timeout: 60_000 });
+  await trigger.click();
+  return page.locator('[role="menu"]').locator('visible=true').first();
+}
+export async function dispatchDrawnItem(page: Page, patient: string) {
+  const menu = await openRowMenu(page, patient);
+  return menu.locator('[data-action="dispatch-drawn"]');
 }

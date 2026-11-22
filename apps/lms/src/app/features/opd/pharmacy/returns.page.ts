@@ -13,6 +13,8 @@ import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-them
 import {
   PharmacyApi, type BatchRow, type DispenseLineView, type DispenseSummary, type DispenseView, type MoveRow, type PharmacyDrugRow, type SupplierRow,
 } from './pharmacy.api';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
 import { errText, expiryLabel, inr } from './pharmacy-math';
 import { MOVE_WORDS } from './stock.page';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
@@ -158,15 +160,7 @@ export class PharmacyReturnsPage {
   protected readonly supplierId = signal('');
   protected readonly busy = signal(false);
 
-  protected readonly cols: ColDef<MoveRow>[] = [
-    { field: 'at', headerName: 'When', width: 150, valueFormatter: p => new Date(p.value).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) },
-    { field: 'kind', headerName: 'Kind', width: 170, valueFormatter: p => MOVE_WORDS[p.value as MoveRow['kind']] ?? p.value },
-    { field: 'drugName', headerName: 'Drug', flex: 2, minWidth: 160 },
-    { field: 'batchNo', headerName: 'Batch', width: 120 },
-    { field: 'qty', headerName: 'Qty', width: 90, type: 'rightAligned', valueFormatter: p => (p.value > 0 ? '+' : '') + p.value },
-    { field: 'note', headerName: 'Reason', flex: 2, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'byName', headerName: 'By', flex: 1, minWidth: 130, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-  ];
+  protected readonly cols: ColDef<MoveRow>[] = moveColumns();
 
   protected readonly lineOpts = computed<PfSelectOption<string>[]>(() => (this.sale()?.lines ?? []).map(l => ({
     value: l.id, label: `${l.drugName} · ${l.batchNo}`, hint: `${returnable(l)} of ${l.qty} can come back`, disabled: returnable(l) <= 0,
@@ -225,4 +219,17 @@ export class PharmacyReturnsPage {
     }
   }
   private openSaleById(id: string) { this.api.dispense(id).subscribe({ next: v => this.sale.set(v), error: () => undefined }); }
+}
+
+/** The stock-movement grid's columns (When = time, Kind = the word, Qty = signed number). */
+export function moveColumns(): ColDef<MoveRow>[] {
+  return [
+    dateCol<MoveRow>({ field: 'at', headerName: 'When', width: 150, valueFormatter: p => (p.data?.at ? new Date(p.data.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '') }, r => r.at, 'left'),
+    rawChoiceCol<MoveRow>({ field: 'kind', headerName: 'Kind', width: 170, valueFormatter: p => MOVE_WORDS[p.value as MoveRow['kind']] ?? p.value }, r => r.kind, r => MOVE_WORDS[r.kind] ?? r.kind),
+    textCol<MoveRow>({ field: 'drugName', headerName: 'Drug', flex: 2, minWidth: 160 }, r => r.drugName ?? ''),
+    textCol<MoveRow>({ field: 'batchNo', headerName: 'Batch', width: 120 }, r => r.batchNo ?? ''),
+    numberCol<MoveRow>({ field: 'qty', headerName: 'Qty', width: 90, type: 'rightAligned', valueFormatter: p => (p.value > 0 ? '+' : '') + p.value }, r => r.qty ?? null, 'right'),
+    textCol<MoveRow>({ field: 'note', headerName: 'Reason', flex: 2, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.note ?? ''),
+    textCol<MoveRow>({ field: 'byName', headerName: 'By', flex: 1, minWidth: 130, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.byName ?? ''),
+  ];
 }

@@ -29,6 +29,11 @@ export interface PfAction {
    *  draft tray's overflow): `aria-current="page"` + the quiet selected look.
    *  Still pickable — the host decides that picking it is a no-op. */
   current?: boolean;
+  /** A small leading status dot (a CSS colour, e.g. `var(--sky-text)`), or
+   *  `'ring'` for the empty ring that stands for "All" — a filter menu. */
+  dot?: string;
+  /** A plain tabular count on the right ("18") — a filter menu. */
+  count?: number | string;
 }
 
 /** Stroked paths per icon — never emoji (docs/PF-PATTERN.md §10). */
@@ -135,6 +140,10 @@ export class ActionsMenuTriggerDirective {
                           [attr.aria-checked]="checkCurrent() ? !!a.current : null"
                           [disabled]="a.disabled" [attr.aria-disabled]="a.disabled || null"
                           (click)="pick(a)">
+                    @if (a.dot) {
+                      <span class="pf-am-item__dot" [class.pf-am-item__dot--ring]="a.dot === 'ring'"
+                            [style.background]="a.dot === 'ring' ? null : a.dot" aria-hidden="true"></span>
+                    }
                     @if (a.icon) {
                       <svg class="pf-am-item__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -145,8 +154,11 @@ export class ActionsMenuTriggerDirective {
                       <span class="pf-am-item__t">{{ a.label }}</span>
                       @if (a.hint) { <span class="pf-am-item__hint">{{ a.hint }}</span> }
                     </span>
-                    @if (checkCurrent() && a.current) {
-                      <svg class="pf-am-item__check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    @if (a.count !== undefined && a.count !== null) {
+                      <span class="pf-am-item__count">{{ a.count }}</span>
+                    }
+                    @if (checkCurrent()) {
+                      <svg class="pf-am-item__check" [class.pf-am-item__check--off]="!a.current" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                     }
                   </button>
@@ -179,11 +191,11 @@ export class ActionsMenuTriggerDirective {
       background: var(--pf-card-bg, var(--bg-card-solid, #fff)); color: var(--text-primary);
       border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
       box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
-      visibility: hidden; opacity: 0; transform: translateY(-4px) scale(0.98); transform-origin: top right;
+      pointer-events: none; opacity: 0; transform: translateY(-4px) scale(0.98); transform-origin: top right;
       transition: opacity var(--pf-dur-fast, 200ms) ease, transform var(--pf-dur, 320ms) var(--pf-spring, ease);
     }
     .pf-am-panel--start { transform-origin: bottom left; }
-    .pf-am-panel--placed { visibility: visible; opacity: 1; transform: none; }
+    .pf-am-panel--placed { pointer-events: auto; opacity: 1; transform: none; }
     .pf-am-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 
     .pf-am-group__t {
@@ -199,7 +211,11 @@ export class ActionsMenuTriggerDirective {
     }
     .pf-am-item__i { flex: none; color: var(--text-secondary); }
     .pf-am-item__check { flex: none; margin-left: auto; color: var(--text-primary); }
-    .pf-am-item__txt { display: flex; flex-direction: column; min-width: 0; }
+    .pf-am-item__check--off { visibility: hidden; }
+    .pf-am-item__dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+    .pf-am-item__dot--ring { box-sizing: border-box; border: 1.5px solid var(--text-tertiary); }
+    .pf-am-item__count { flex: none; font-size: 13px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-am-item__txt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .pf-am-item__t { line-height: 1.3; }
     .pf-am-item__hint { font-size: 12px; line-height: 1.3; color: var(--text-tertiary); }
     .pf-am-item:hover:not(:disabled), .pf-am-item:focus-visible { background: var(--pf-chip-bg, rgba(15, 23, 42, 0.05)); outline: none; }
@@ -260,8 +276,11 @@ export class ActionsMenuComponent {
   /** A pick-one list (e.g. the Cortex model): rows are `menuitemradio`,
    *  the `current` row carries a quiet trailing check instead of the tint. */
   readonly checkCurrent = input(false);
-  /** Popover width in px (phones always get the full-width sheet). */
+  /** Popover width in px (phones get the full-width sheet unless `popover`). */
   readonly width = input(POP_W);
+  /** Always a popover anchored to the trigger, phones included (a short
+   *  pick-one filter menu right under its button — never a bottom sheet). */
+  readonly popover = input(false);
 
   /** The chosen row's id — emitted AFTER the menu closed. */
   readonly action = output<string>();
@@ -339,7 +358,7 @@ export class ActionsMenuComponent {
   /** Open, place, and put focus on the first (or last) enabled row. */
   show(focus: 'first' | 'last' = 'first'): void {
     if (!this.actions().length) return;
-    this.sheet.set(matches(ACTIONS_MENU_SHEET_MQ));
+    this.sheet.set(!this.popover() && matches(ACTIONS_MENU_SHEET_MQ));
     this.placed.set(this.sheet());
     this.open.set(true);
     this.opened.emit();

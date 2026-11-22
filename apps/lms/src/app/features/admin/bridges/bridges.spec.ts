@@ -18,12 +18,18 @@ import {
   BRANCH_SALEM, FX_BRIDGE_BIOCHEM, FX_BRIDGE_HAEM, FX_IDENTITY, FX_INSTRUMENTS, FX_MDNS_EVENT, FX_NEARBY, FX_TICKET, VECTOR_QR_URL,
   fxClaimResult, mockBridgeApi,
 } from '../../../shared/bridges/testing/bridge-fixtures';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { BridgesListComponent, searchBridges } from './bridges-list.component';
 import { BridgeDetailComponent, analyzerRows } from './bridge-detail.component';
 import { BridgeAddComponent } from './bridge-add.component';
 import { BridgeNearbyBannerComponent } from '../../../shared/components/bridge-nearby-banner/bridge-nearby-banner.component';
 import { SETTINGS_SECTIONS } from '../settings/settings-map';
 import { BridgeLinkPage, handleBridgeLinkHref } from '../../bridges/bridge-link.page';
+
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
 
 const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
 /** The detail's first-load skeleton is HELD 600 ms (heldFlag, ND "Loading feedback"). */
@@ -161,6 +167,15 @@ describe('Bridges list', () => {
     expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['name', 'branch', 'status', 'lastMessage', 'queue', 'version', 'wifi', 'actions']);
   });
 
+  it('every data column sorts and filters on its real value; actions is exempt', async () => {
+    const p = render(BridgesListComponent);
+    await flush();
+    const cols = p.cmp.colDefs() as any[];
+    for (const c of cols.filter((x) => x.colId !== 'actions')) expect(sortsAndFilters(c), c.colId).toBe(true);
+    const act = cols.find((x) => x.colId === 'actions');
+    expect(act.sortable).toBe(false); expect(act.filter).toBe(false);
+  });
+
   it('search matches name, serial, branch, Wi-Fi and analyzer names', () => {
     expect(searchBridges([FX_BRIDGE_HAEM, FX_BRIDGE_BIOCHEM], 'beef').map((b) => b.id)).toEqual([FX_BRIDGE_BIOCHEM.id]);
     expect(searchBridges([FX_BRIDGE_HAEM, FX_BRIDGE_BIOCHEM], 'xn-350').map((b) => b.id)).toEqual([FX_BRIDGE_HAEM.id]);
@@ -190,6 +205,15 @@ describe('Bridge detail', () => {
     expect(p.el.querySelector('pf-hero-band .pf-ctx__primary')!.textContent).toContain('Haematology Bridge');
     expect(p.el.querySelector('.pf-brd__facts')!.textContent).toContain('LabWiFi');
     expect(p.el.querySelector('.pf-brd__acts')!.textContent).toContain('Wrong Wi-Fi password');
+  });
+
+  it('analyzer grid: every data column sorts and filters; the actions column is exempt', async () => {
+    const p = render(BridgeDetailComponent, { inputs: { id: FX_BRIDGE_HAEM.id } });
+    await settle(); p.f.detectChanges();
+    const cols = p.cmp.colDefs() as any[];
+    expect(cols.map((c) => c.colId)).toEqual(['name', 'connection', 'link', 'queue', 'actions']);
+    for (const c of cols.filter((x) => x.colId !== 'actions')) expect(sortsAndFilters(c), c.colId).toBe(true);
+    expect(cols.find((x) => x.colId === 'actions').sortable).toBe(false);
   });
 
   it('without manage_bridges: read-only (no ⋮, no Assign, no Link it, no Change Wi-Fi)', async () => {

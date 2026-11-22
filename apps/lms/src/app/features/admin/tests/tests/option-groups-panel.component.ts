@@ -1,8 +1,12 @@
+import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
+import { numberCol, textCol } from '../../../../shared/utils/work-grid';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
@@ -10,7 +14,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { Test } from '../../../../shared/models/test.model';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
-import { SkeletonCardComponent, SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
+import { SkeletonCardComponent } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { prefetch } from '../../../../shared/utils/prefetch';
 import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
@@ -23,13 +27,26 @@ interface OgGroup { code: string; name: string; values: OgRow[]; links: OgLink[]
 /** One distinct test a group is linked into. */
 interface OgTestRef { testId: string; testCode: string | null; testName: string; params: string[]; }
 
-interface OgGridRow {
+export interface OgGridRow {
   group: OgGroup;
   name: string;
   valuesJoined: string;
   normalsJoined: string;
   testCount: number;
   testCodesJoined: string;
+}
+
+/** The option-groups grid's columns: every data column sorts and filters on its real value (work-grid helpers). */
+export function ogColumns(): ColDef<OgGridRow>[] {
+  return [
+    textCol<OgGridRow>({ headerName: 'Option group', field: 'name', minWidth: 170, flex: 1, wrapText: true, autoHeight: true,
+      cellStyle: { fontWeight: '600' } }, r => r.name),
+    textCol<OgGridRow>({ headerName: 'Values', field: 'valuesJoined', minWidth: 200, flex: 1.4 }, r => r.valuesJoined),
+    textCol<OgGridRow>({ headerName: 'Normal', field: 'normalsJoined', minWidth: 100, maxWidth: 150 }, r => r.normalsJoined),
+    numberCol<OgGridRow>({ headerName: 'Tests', field: 'testCount', minWidth: 84, maxWidth: 95, sort: 'desc' }, r => r.testCount, 'left'),
+    textCol<OgGridRow>({ headerName: 'Linked tests', field: 'testCodesJoined', minWidth: 180, flex: 1.3,
+      tooltipField: 'testCodesJoined' }, r => r.testCodesJoined),
+  ];
 }
 
 /** A pickable parameter of a test in the create-mapping flow. */
@@ -47,7 +64,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
 @Component({
   selector: 'pf-option-groups-panel',
   standalone: true,
-  imports: [AgGridAngular, FormsModule, BusyDirective, SkeletonTableComponent, SkeletonCardComponent],
+  imports: [...SKELETON_FRAME, AgGridAngular, FormsModule, BusyDirective, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-og">
@@ -144,7 +161,9 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               @if (editing()) {
                 <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn press" (click)="editing.set(false)">Cancel</button>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary pf-2p__hbtn pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
+                <button type="button" class="pf-btn pf-btn--primary pf-2p__hbtn pf-og__save press" [disabled]="saving() || !draftValid() || !draftChanged()"
+                        [pfBusyInactive]="saving() || !draftValid() || !draftChanged()" [title]="draftChanged() || saving() ? 'Save' : NO_CHANGES"
+                        [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
                   {{ saving() ? 'Saving…' : 'Save everywhere' }}
                 </button>
               } @else {
@@ -214,7 +233,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
           <div class="pf-2p__body">
             @if (listSkeleton()) {
               <!-- First load: the grid's shape over the mounted grid (PF-PATTERN "Loading feedback"). -->
-              <pf-skeleton-table class="pf-2p__skel" [rows]="8" [cols]="5" label="Loading option groups…"></pf-skeleton-table>
+              <pf-skel-grid class="pf-2p__skel" [rows]="30" [columns]="5" label="Loading option groups…"></pf-skel-grid>
             }
             <ag-grid-angular
               class="pf-2p__grid"
@@ -336,15 +355,7 @@ export class OptionGroupsPanelComponent implements OnInit {
   readonly rowClass = (p: { data?: OgGridRow }) => (p.data && p.data.group.code === this.selected()?.code ? 'pf-og__row--sel' : '');
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
-  readonly columnDefs: ColDef<OgGridRow>[] = [
-    { headerName: 'Option group', field: 'name', minWidth: 170, flex: 1,
-      cellStyle: { fontWeight: '600' } },
-    { headerName: 'Values', field: 'valuesJoined', minWidth: 200, flex: 1.4 },
-    { headerName: 'Normal', field: 'normalsJoined', minWidth: 100, maxWidth: 150 },
-    { headerName: 'Tests', field: 'testCount', minWidth: 84, maxWidth: 95, sort: 'desc' },
-    { headerName: 'Linked tests', field: 'testCodesJoined', minWidth: 180, flex: 1.3,
-      tooltipField: 'testCodesJoined' },
-  ];
+  readonly columnDefs: ColDef<OgGridRow>[] = ogColumns();
 
   readonly rows = computed<OgGridRow[]>(() => {
     const q = this.effectiveQuery().trim().toLowerCase();
@@ -413,8 +424,13 @@ export class OptionGroupsPanelComponent implements OnInit {
   // ── Edit existing ──────────────────────────────────────────────
   startEdit(g: OgGroup) {
     this.draft.set(g.values.map(v => ({ ...v })));
+    this.draftSnap.mark();
     this.editing.set(true);
   }
+  /** Save only when the values differ from the group as opened (owner 2026-11-19). */
+  private readonly draftSnap = dirtySnapshot(() => this.draft());
+  readonly draftChanged = this.draftSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   patchRow(ix: number, patch: Partial<OgRow>) {
     this.draft.update(rows => rows.map((r, i) => i === ix ? { ...r, ...patch } : r));
   }

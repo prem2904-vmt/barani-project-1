@@ -1,5 +1,6 @@
 import { FormRow } from '../data/studio-models';
-import { deptCode, filterSheets, railRows, sheetColumns, statusLabel, statusOf } from './case-sheet-grid';
+import { sortsAndFilters } from '../../../../shared/utils/work-grid';
+import { deptCode, filterSheets, railRows, sheetColumns, statusLabel, statusOf, statusWordsOf } from './case-sheet-grid';
 
 const row = (o: Partial<FormRow>): FormRow => ({
   id: 'f', key: 'k', title: 'T', specialty: null, status: 'active', origin: 'local', departmentKey: null, departmentName: null, catalogKey: null,
@@ -54,8 +55,33 @@ describe('case-sheet list (Test Master pattern)', () => {
     expect(fixed + (phone[0].minWidth ?? 0)).toBeLessThanOrEqual(390 - 32 - 2);
   });
 
+  it('columns: every data column sorts and filters; only the actions column is exempt', () => {
+    for (const c of sheetColumns(true, false)) {
+      if (c.colId === 'actions') expect([c.sortable, c.filter]).toEqual([false, false]);
+      else expect(sortsAndFilters(c as never), String(c.colId)).toBe(true);
+    }
+  });
+
+  it('columns: Pending sorts on the injected count, Updated on the epoch', () => {
+    const cols = sheetColumns(true, false, () => 3);
+    const get = (id: string, r: FormRow) => (cols.find((c) => c.colId === id)!.valueGetter as (p: { data: FormRow }) => unknown)({ data: r });
+    expect(get('pending', row({}))).toBe(3);
+    expect(get('updated', row({ published: pub }))).toBe(Date.parse('2026-11-01T00:00:00Z'));
+  });
+
   it('columns: every desktop column fits the card at 1440 with the department rail open (about 1000px)', () => {
     const need = sheetColumns(true, false).reduce((n, c) => n + (c.minWidth ?? c.width ?? 0), 0);
     expect(need).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe('statusWordsOf', () => {
+  it('published is done; a waiting draft shows as the quiet line', () => {
+    expect(statusWordsOf(row({ published: pub }))).toEqual({ now: 'Published', detail: null, tone: 'done' });
+    expect(statusWordsOf(row({ published: pub, draft: { state: 'editing' } as unknown as FormRow['draft'] }))).toEqual({ now: 'Published', detail: 'Changes in draft', tone: 'done' });
+  });
+  it('draft and in review are normal text', () => {
+    expect(statusWordsOf(row({}))).toEqual({ now: 'Draft', detail: null, tone: 'normal' });
+    expect(statusWordsOf(row({ draft: { state: 'in_review' } as unknown as FormRow['draft'] }))).toEqual({ now: 'In review', detail: null, tone: 'normal' });
   });
 });

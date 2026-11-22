@@ -1,0 +1,166 @@
+/* ══ Side card (owner 2026-11-20) — NEW DESIGN only ══
+   A real card head like WORK: icon tile + VISITS (one fixed title), "+ New" at its right end while Appointments shows. Under it, full-width rows: the panel switch (Who is where | Appointments | Home — or Appointments |
+   Home for a lab-only tenant), then for the lists the date pill and one row with the "Lab ✕" chip + the calendar link. */
+:host-context(.design-new) {
+  /* Head: icon tile + the panel's name + count (WORK's look), "+ New" at the right end. */
+  .fd-side-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+  /* Both card heads line up: the side head takes WORK's height (its 40px search / 44px touch controls + padding)
+     even on a panel with no head buttons. */
+  @media (min-width: 1024px) {
+    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 55px; box-sizing: border-box; }
+  }
+  @media (min-width: 1024px) and (pointer: coarse) {
+    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 70px;   /* touch: 44px head controls + the 46px pill (owner 2026-11-21) */ }
+  }
+  /* Exactly WORK's title (.pf-work-hdr__title .pf-card__label). */
+  .fd-side-title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .fd-side-title--switch { position: relative; }
+  /* Procedures to book (OPD): the procedure's name, then the date + Book on one row (they wrap under on a narrow card). */
+  .fd-proc { cursor: default; }
+  .fd-proc__what { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-top: 4px; }
+  .fd-proc__act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .fd-proc__act pf-date { flex: 1 1 150px; min-width: 0; }
+  .fd-proc__book { flex: none; }
+
+  /* Head buttons: WORK's head controls (32px quiet squares; 44px on touch) — the calendar icon and a compact "+ New". */
+  .fd-side-headbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: none;
+    height: 32px; min-width: 32px; padding: 0; border-radius: 9px; box-sizing: border-box;
+    border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-secondary);
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: none;
+  }
+  .fd-side-headbtn:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
+  .fd-side-headbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .fd-side-headbtn--icon { width: 32px; }
+  .fd-side-new { padding: 0 10px 0 8px; color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 35%, var(--pf-line)); }
+  @media (pointer: coarse) {
+    .fd-side-headbtn { height: 44px; min-width: 44px; }
+    .fd-side-headbtn--icon { width: 44px; }
+  }
+
+  /* The week strip is the ONE date picker: ‹ › move the week (44px targets), days share the rest. */
+  .pf-daystrip.fd-daystrip { align-items: stretch; gap: 4px; container-type: inline-size; }
+  /* "Back to today" sits on its own row under the strip so the seven day cells keep equal widths. */
+  .fd-btt-row { display: flex; justify-content: flex-end; padding: 4px 0 2px; }
+  /* Three-letter day over the date, always (owner 2026-11-21: one-letter / glued days were unreadable). */
+  .fd-dow-s { display: none; }
+  .fd-daystrip__nav {
+    flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .fd-daystrip__nav:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .fd-daystrip__nav:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  @media (pointer: coarse) { .fd-daystrip__nav { flex-basis: 36px; } }
+
+  /* The panel switch: a full-width row under the head (never fights the title); pill-fit folds it when narrow. */
+  .fd-side-switch { flex-shrink: 0; padding: 8px 12px 0; min-width: 0; }
+  .fd-side-switch > pf-segmented { display: flex; width: 100%; }
+  .fd-side-switch > pf-segmented:not(.is-tight):not(.is-menu) ::ng-deep .bar { width: 100%; }
+  .fd-side-switch > pf-segmented:not(.is-menu) ::ng-deep .seg-item { flex: 1 1 auto; }
+
+  .fd-side-sub {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px 8px;
+    flex-shrink: 0;
+    padding: 8px 12px 0;
+    min-width: 0;
+  }
+  .fd-side-sub__sp { flex: 1 1 0; min-width: 0; }
+  .fd-side-sub__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 6px 0 10px;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, var(--pf-card-bg));
+    color: var(--violet-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fd-side-sub__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+
+  /* "Who is where": the chart + chips, centred; the card body scrolls if a short screen needs it. */
+  .fd-who-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px 12px 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  /* The chart sizes itself to this box and centres in it (who-is-where.component). */
+  .fd-who-body > pf-fd-who-is-where { flex: 1 1 auto; min-height: 0; }
+
+  /* Overdue booking: soft-rose status text. */
+  .fd-appt-late { color: var(--rose-text) !important; font-weight: 600; font-family: inherit !important;
+    white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; }
+
+  @media (pointer: coarse) {
+    .fd-side-sub__chip { min-height: 44px; }
+  }
+
+  /* Appointment / home rows (owner 2026-11-20): the shared side-list rows — no card in the card. Time (accent,
+     tabular) · name (wraps by WORD) · meta + status · the row's action (44px) at the right. */
+  .fd-vrows { padding: 4px 8px 8px; container-type: inline-size; }
+  .fd-vrow { align-items: flex-start; gap: 10px; padding: 10px 6px; cursor: pointer; }
+  .fd-vrow__time { flex: 0 0 44px; padding-top: 1px; font-size: 12.5px; font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+  .fd-vrow__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .fd-vrow__name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary); white-space: normal; overflow-wrap: break-word; word-break: normal; }
+  .fd-vrow__meta { font-size: 12px; line-height: 1.35; color: var(--text-secondary); font-family: inherit; font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
+  .fd-vrow__tel { color: inherit; text-decoration: none; font-family: inherit; }
+  .fd-vrow__tel:hover { text-decoration: underline; }
+  .fd-vrow__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .fd-vrow__status--late { color: var(--rose-text) !important; }
+  .fd-vrow__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--text-tertiary); flex: none; }
+  .fd-vrow__dot[data-tone='green'] { background: var(--green-text); }
+  .fd-vrow__dot[data-tone='rose'] { background: var(--rose-text); }
+  .fd-vrow__acts { flex: none; display: inline-flex; align-items: center; gap: 4px; align-self: center; }
+  .fd-vrow__icon {
+    display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px;
+    color: var(--text-secondary); text-decoration: none;
+  }
+  .fd-vrow__icon:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .fd-vrow__btn { height: 44px; min-height: 44px; padding: 0 12px; }
+  @media (pointer: coarse) { .fd-vrow__icon { width: 44px; height: 44px; } }
+  /* A narrow side card: the row's actions drop under the text (right-aligned) so the name keeps whole words. */
+  @container (max-width: 320px) {
+    .fd-vrow { flex-wrap: wrap; }
+    .fd-vrow__body { flex: 1 1 calc(100% - 54px); }
+    .fd-vrow__acts { flex: 1 0 100%; justify-content: flex-end; }
+  }
+}
+
+/* ══ Week strip cells (owner 2026-11-21, iPad portrait "MONTUEWEDTHU") ══
+   Equal-width day cells with a clear 6px gap, the 3-letter day over the date, today / selected in the theme's
+   selection tokens (never a one-off violet). Below 340px (each day cell would drop under ~36px) the strip shows the five weekdays (‹ › still move the
+   week; a selected / today weekend day always stays). Doubled class = beats the older per-theme tile rules. */
+:host-context(.design-new) .pf-daystrip.fd-daystrip.fd-daystrip {
+  display: flex; align-items: stretch; gap: 6px;
+  > .pf-daystrip__day {
+    flex: 1 1 0 !important; min-width: 0 !important; height: auto !important; min-height: 48px;
+    padding: 6px 0 !important; gap: 3px; border-radius: 10px;
+    border: 1px solid var(--pf-line, var(--glass-border)) !important;
+    background: transparent !important; box-shadow: none !important;
+  }
+  .pf-daystrip__dow {
+    display: block; font-size: 11px !important; font-weight: 600; letter-spacing: 0 !important; line-height: 1.1;
+    white-space: nowrap; color: var(--text-muted) !important;
+  }
+  .pf-daystrip__n { font-size: 15px !important; font-weight: 600 !important; line-height: 1.1; color: var(--text-primary) !important; }
+  > .pf-daystrip__day--today { border-color: var(--pf-sel-border) !important; }
+  > .pf-daystrip__day--on { background: var(--pf-sel-bg) !important; border-color: var(--pf-sel-border) !important; }
+  > .pf-daystrip__day--on .pf-daystrip__dow { color: var(--text-secondary) !important; }
+  > .pf-daystrip__day--on .pf-daystrip__n, > .pf-daystrip__day--today .pf-daystrip__n { color: var(--text-primary) !important; font-weight: 700 !important; }
+  @container (max-width: 340px) {
+    > .pf-daystrip__day:nth-child(7):not(.pf-daystrip__day--on):not(.pf-daystrip__day--today),
+    > .pf-daystrip__day:nth-child(8):not(.pf-daystrip__day--on):not(.pf-daystrip__day--today) { display: none !important; }
+  }
+}

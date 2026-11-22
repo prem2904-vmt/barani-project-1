@@ -17,13 +17,16 @@
 /** The body layouts the frame can draw (all from the skeleton kit). */
 export type PageSkeletonKind =
   | 'queue'      // band + one card of list rows (work queues)
-  | 'grid'       // band + a table card (AG-Grid screens)
-  | 'grid-side'  // band + a filter side card + a table card (Test Master)
+  | 'grid'       // band + one grid card (AG-Grid screens)
+  | 'grid-side'  // band + the 340px side card + a grid card (Test Master and its views)
   | 'tiles'      // band + a tile grid (hubs, menus)
-  | 'detail'     // band + a record card and a side card (record screens)
-  | 'form'       // band + a form card and a side card (editors, settings)
+  | 'detail'     // band + a side card + a record card (record screens)
+  | 'form'       // band + a side card (rail) + a form card (editors)
   | 'chat'       // band + a conversation list and a thread (messages)
-  | 'dashboard'; // band + KPI tiles over a card of rows (landings, boards)
+  | 'dashboard'  // band + KPI tiles over a card of rows (landings, boards)
+  | 'settings'   // band + categories side card + the setting's rows (the Settings frame)
+  | 'settings-tiles' // band + sections side card + tiles (Settings overview, Lab settings hub)
+  | 'doc';       // band + a side card + a document / preview (Report design)
 
 export interface PageSkeleton {
   readonly kind: PageSkeletonKind;
@@ -51,7 +54,7 @@ const RULES: readonly Rule[] = [
   [/^\/lab\/receive$/, 'queue', 'Receive'],
   [/^\/lab\/(sample|result|culture)\/[^/]+$/, 'detail', 'Result entry'],
   [/^\/lab\/critical-results$/, 'queue', 'Critical results'],
-  [/^\/lab\/settings$/, 'tiles', 'Lab settings'],
+  [/^\/lab\/settings$/, 'settings-tiles', 'Lab settings'],
   [/^\/pathologist$/, 'queue', 'Validation'],
   [/^\/pathologist\/validate\/[^/]+$/, 'detail', 'Validation'],
   // Reports, billing, messages, dashboards
@@ -71,20 +74,24 @@ const RULES: readonly Rule[] = [
   [/^\/admin\/tests\/(new|[^/]+\/edit)$/, 'form', 'Test editor'],
   [/^\/admin\/users$/, 'grid', 'Users & roles'],
   [/^\/admin\/(users\/invite|users\/[^/]+\/edit|roles\/new|roles\/[^/]+\/edit)$/, 'form', 'User editor'],
-  [/^\/admin(\/manage|\/modules)?$/, 'tiles', 'Admin'],
+  [/^\/admin(\/manage)?$/, 'settings-tiles', 'Settings'],
+  [/^\/admin\/modules$/, 'tiles', 'Admin'],
   [/^\/admin\/(opd|ipd|pharmacy|payroll|insurance|radiology|emergency|blood-bank)$/, 'tiles', 'Module settings'],
   [/^\/admin\/(branches|vendors|referral-labs|inventory|partners|audit|home-collection|referring-network|opd\/doctors)$/, 'grid', 'Settings'],
-  [/^\/admin\/lab-settings$/, 'form', 'Lab settings'],
-  [/^\/admin\/communication$/, 'form', 'Communication'],
-  [/^\/admin\/ai-connectors$/, 'form', 'AI connectors'],
+  [/^\/admin\/report-template$/, 'doc', 'Report design'],
+  [/^\/admin\/lab-settings$/, 'settings', 'Lab settings'],
+  [/^\/admin\/communication$/, 'settings', 'Communication'],
+  [/^\/admin\/ai-connectors$/, 'settings', 'AI connectors'],
   [/^\/admin\/bridges$/, 'grid', 'Bridges'],
+  [/^\/admin\/instruments$/, 'grid', 'Instruments'],
   [/^\/admin\/bridges\/add$/, 'form', 'Add a Bridge'],
   [/^\/admin\/bridges\/[^/]+$/, 'detail', 'Bridge'],
   // Settings re-home: the screens that open inside the Settings shell (its left panel keeps the categories).
-  [/^\/admin\/(lab|org|opd|pharmacy|ipd)\/.+$/, 'form', 'Settings'],
-  [/^\/admin\//, 'form', 'Settings'],
-  [/^\/(printing|signature|setup)$/, 'form', 'Settings'],
+  [/^\/admin\/(lab|org|opd|pharmacy|ipd)\/.+$/, 'settings', 'Settings'],
+  [/^\/admin\//, 'settings', 'Settings'],
+  [/^\/(printing|signature|setup)$/, 'settings', 'Settings'],
   [/^\/stores$/, 'grid', 'Stores'],
+  [/^\/insights$/, 'grid-side', 'Insights'],
 ];
 
 /** Hops that must never draw a frame: the branch switch has its own veil,

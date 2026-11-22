@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, switchMap, tap, throwError } from 'rxjs';
 import { v4 as uuid } from 'uuid';
@@ -37,7 +38,9 @@ export class WorkflowBuilderService {
   private readonly _record = signal<WorkflowConfigRecord | null>(null);
   private readonly _selectedStepId = signal<string | null>(null);
   private readonly _selectedFieldId = signal<string | null>(null);
-  private readonly _isDirty = signal<boolean>(false);
+  /** An edit happened since the last load / save (cheap gate; `isDirty` compares the workflow with the saved one). */
+  private readonly _touched = signal<boolean>(false);
+  private readonly _savedCfg = signal<string | null>(null);
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
 
@@ -52,7 +55,19 @@ export class WorkflowBuilderService {
   readonly record = this._record.asReadonly();
   readonly selectedStepId = this._selectedStepId.asReadonly();
   readonly selectedFieldId = this._selectedFieldId.asReadonly();
-  readonly isDirty = this._isDirty.asReadonly();
+  /** Owner 2026-11-19: Save only when the workflow DIFFERS from what was loaded / last saved (an undo back to it is clean). */
+  readonly isDirty = computed<boolean>(() => {
+    if (!this._touched()) return false;
+    const saved = this._savedCfg();
+    return saved === null || stableJson(this._workflow()) !== saved;
+  });
+  /** Take the saved snapshot: `cfg` = what the server now holds (default: the workflow on screen). Edits made while
+   *  the save was in flight stay dirty. */
+  private markClean(cfg: WorkflowConfig | null = this._workflow()): void {
+    const saved = stableJson(cfg);
+    this._savedCfg.set(saved);
+    this._touched.set(stableJson(this._workflow()) !== saved);
+  }
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
   readonly lastDeletedField = this._lastDeletedField.asReadonly();
@@ -101,7 +116,7 @@ export class WorkflowBuilderService {
         this._workflow.set(cfg);
         this._selectedStepId.set(cfg.steps[0]?.id ?? null);
         this._selectedFieldId.set(null);
-        this._isDirty.set(false);
+        this.markClean();
         this._isLoading.set(false);
         return cfg;
       }),
@@ -119,7 +134,7 @@ export class WorkflowBuilderService {
     this._record.set(null);
     this._selectedStepId.set(null);
     this._selectedFieldId.set(null);
-    this._isDirty.set(false);
+    this.markClean();
     this._error.set(null);
     this.cancelUndo();
   }
@@ -138,7 +153,7 @@ export class WorkflowBuilderService {
     const current = this._workflow();
     if (!current) return;
     this._workflow.set({ ...current, ...updates });
-    this._isDirty.set(true);
+    this._touched.set(true);
   }
 
   // ── steps ──────────────────────────────────────────────────────────
@@ -161,7 +176,7 @@ export class WorkflowBuilderService {
 
     const steps = [...current.steps, step];
     this._workflow.set({ ...current, steps });
-    this._isDirty.set(true);
+    this._touched.set(true);
     this._selectedStepId.set(step.id);
     return step;
   }
@@ -359,7 +374,7 @@ export class WorkflowBuilderService {
 
     const body = { configJson: JSON.stringify(cfg), changeSummary };
     return this.api.post<void>(`/api/workflows/${record.screenName}`, body).pipe(
-      tap(() => this._isDirty.set(false))
+      tap(() => this.markClean(cfg))
     );
   }
 
@@ -370,7 +385,7 @@ export class WorkflowBuilderService {
 
     const saveBody = { configJson: JSON.stringify(cfg), changeSummary };
     return this.api.post<void>(`/api/workflows/${record.screenName}`, saveBody).pipe(
-      tap(() => this._isDirty.set(false)),
+      tap(() => this.markClean(cfg)),
       // then publish — errors here propagate to the caller instead of being
       // swallowed in a detached subscribe.
       switchMap(() => this.api.post<void>(`/api/workflows/${record.screenName}/publish`, {})),
@@ -426,7 +441,7 @@ export class WorkflowBuilderService {
     const current = this._workflow();
     if (!current) return;
     this._workflow.set({ ...current, steps: fn(current.steps) });
-    this._isDirty.set(true);
+    this._touched.set(true);
   }
 
   private mutateStep(stepId: string, fn: (s: WorkflowStep) => WorkflowStep): void {

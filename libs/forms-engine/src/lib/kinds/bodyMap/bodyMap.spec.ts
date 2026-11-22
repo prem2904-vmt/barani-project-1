@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Component, signal } from '@angular/core';
-import { ptr } from '../../canvas/canvas.component.spec';
+import { ptr } from '../../canvas/canvas.spec-helpers';
 import { CanvasAnswer } from '../../canvas/answer';
 import { optionChosen } from '../../core/pages';
 import { evaluateCondition } from '../../core/rules';

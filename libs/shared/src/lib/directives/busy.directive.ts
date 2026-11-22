@@ -27,7 +27,7 @@ import { createSpinDelay } from '../utils/busy.js';
   standalone: true,
   host: {
     '[attr.aria-busy]': 'busy() ? "true" : null',
-    '[attr.aria-disabled]': 'busy() ? "true" : null',
+    '[attr.aria-disabled]': 'busy() || inactive() ? "true" : null',
     '[class.pf-is-busy]': 'busy()',
     '[class.pf-is-busy--shown]': 'shown()',
   },
@@ -36,6 +36,10 @@ export class BusyDirective {
   readonly busy = input(false, { alias: 'pfBusy', transform: booleanAttribute });
   /** What a screen reader hears while the dots show. */
   readonly label = input('Working…', { alias: 'pfBusyLabel' });
+  /** The button is otherwise inactive (e.g. a Save with nothing to save, owner 2026-11-19): aria-disabled stays "true"
+   *  even when not busy. This directive owns the host's aria-disabled, so a screen passes it here, never as its own
+   *  `[attr.aria-disabled]` binding (which this one would overwrite). */
+  readonly inactive = input(false, { alias: 'pfBusyInactive', transform: booleanAttribute });
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly vcr = inject(ViewContainerRef);

@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry, RowClickedEvent } from 'ag-grid-community';
@@ -12,6 +13,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OpdAdminApi, OpdFormListRow } from './opd-admin.api';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { libraryVersion, opdGridDark, opdGridLight } from './opd-admin.util';
 import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 
@@ -28,7 +30,7 @@ type Show = 'active' | 'archived';
 @Component({
   selector: 'pf-opd-form-library',
   standalone: true,
-  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   template: `
@@ -59,7 +61,7 @@ type Show = 'active' | 'archived';
             <span class="oa-count pf-num">{{ plural(visible().length, 'form') }}</span>
           </header>
           <div class="oa-main__body">
-            @if (skeleton()) { <pf-skeleton-table class="oa-grid-skel" [rows]="8" [cols]="5" label="Loading forms…"></pf-skeleton-table> }
+            @if (skeleton()) { <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="5" label="Loading forms…"></pf-skel-grid> }
             <ag-grid-angular class="oa-grid" [theme]="gridTheme()" [rowData]="visible()" [columnDefs]="cols" [defaultColDef]="defaultColDef"
                              [getRowId]="getRowId" [animateRows]="true" (rowClicked)="open($event)"></ag-grid-angular>
             @if (!skeleton() && !visible().length) {
@@ -92,16 +94,7 @@ export class OpdFormLibraryPage {
 
   readonly getRowId = (p: GetRowIdParams<OpdFormListRow>) => p.data.id;
   readonly defaultColDef: ColDef<OpdFormListRow> = { sortable: true, resizable: true, minWidth: 100, flex: 1 };
-  readonly cols: ColDef<OpdFormListRow>[] = [
-    { field: 'name', headerName: 'Form', flex: 2, minWidth: 200 },
-    { headerName: 'Version', minWidth: 150, valueGetter: (p) => (p.data ? libraryVersion(p.data) : '') },
-    { field: 'questionCount', headerName: 'Questions', width: 120, flex: 0, cellClass: 'pf-num', type: 'rightAligned' },
-    { headerName: 'Used by', minWidth: 170, valueGetter: (p) => (p.data ? usedBy(p.data) : '') },
-    { field: 'updatedAt', headerName: 'Changed', minWidth: 130, cellClass: 'pf-num',
-      valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '') },
-    { colId: 'act', headerName: '', width: 92, flex: 0, sortable: false, pinned: 'right',
-      cellRenderer: (p: ICellRendererParams<OpdFormListRow>) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'pf-rowact'; b.textContent = 'Edit'; b.setAttribute('aria-label', `Edit ${p.data?.name ?? 'form'}`); return b; } },
-  ];
+  readonly cols: ColDef<OpdFormListRow>[] = formLibraryColumns();
 
   constructor() {
     this.api.ensureStarter().subscribe(() => this.api.forms().subscribe({
@@ -119,4 +112,20 @@ function usedBy(f: OpdFormListRow): string {
   if (f.usedByDepartments) parts.push(plural(f.usedByDepartments, 'department'));
   if (f.usedByServices) parts.push(plural(f.usedByServices, 'service'));
   return parts.join(' · ') || 'Not attached yet';
+}
+
+/** The library grid's columns: every data column sorts and filters on its real value; the Edit button column is exempt. */
+export function formLibraryColumns(): ColDef<OpdFormListRow>[] {
+  return [
+    textCol<OpdFormListRow>({ field: 'name', headerName: 'Form', flex: 2, minWidth: 200 }, (r) => r.name ?? ''),
+    // Sorts / filters on the published version number (a draft-only form = 0); the cell reads "v3 · draft changes".
+    numberCol<OpdFormListRow>({ colId: 'version', headerName: 'Version', minWidth: 150,
+      valueFormatter: (p) => (p.data ? libraryVersion(p.data) : '') }, (r) => r.publishedVersion ?? 0, 'left'),
+    numberCol<OpdFormListRow>({ field: 'questionCount', headerName: 'Questions', width: 120, flex: 0, cellClass: 'pf-num', type: 'rightAligned' }, (r) => r.questionCount ?? 0, 'right'),
+    textCol<OpdFormListRow>({ colId: 'usedBy', headerName: 'Used by', minWidth: 170 }, (r) => usedBy(r)),
+    dateCol<OpdFormListRow>({ field: 'updatedAt', headerName: 'Changed', minWidth: 130, cellClass: 'pf-num',
+      valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '') }, (r) => r.updatedAt || null, 'left'),
+    { colId: 'act', headerName: '', width: 92, flex: 0, sortable: false, filter: false, pinned: 'right',
+      cellRenderer: (p: ICellRendererParams<OpdFormListRow>) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'pf-rowact'; b.textContent = 'Edit'; b.setAttribute('aria-label', `Edit ${p.data?.name ?? 'form'}`); return b; } },
+  ];
 }

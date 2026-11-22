@@ -213,6 +213,9 @@ export interface DayClosing {
   closedAt?: string | null;
   closedByName?: string | null;
   lastClosed?: string | null;
+  /** Where a closed day's record came from: day_close (the one day-close) · daily_statement (an older Daily-statement
+   *  closure, payment split only) · expense_book (a legacy expense-book close, no cash count). Null while open. */
+  source?: 'day_close' | 'daily_statement' | 'expense_book' | null;
 }
 
 export interface DayClosingCloseInput { countedCash: number; openingBalance?: number | null; note?: string | null; }

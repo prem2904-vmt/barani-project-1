@@ -277,22 +277,6 @@
             </ul>
           </div>
         }
-        @if (showFetchFromAnalyzer() && !notCollected()) {
-          <!-- Re-query the server for newly arrived analyzer images/values for
-               this tube (the connector pushes automatically — this is a
-               refresh, not a device command). Its own small bar, independent
-               of .pf-sre-strip's other (mutually exclusive) conditions. -->
-          <div class="pf-sre-fetchbar">
-            <button type="button" class="pf-btn pf-btn--secondary pf-btn--sm pf-sre-fetch"
-                    [disabled]="fetchingAnalyzer()" (click)="fetchFromAnalyzer()">
-              {{ fetchingAnalyzer() ? 'Checking…' : 'Fetch from analyzer' }}
-            </button>
-            @if (simulationEnabled()) {
-              <pf-sample-result-simulator [sample]="sample()" [lines]="analyzerLines()"
-                                          (appliedRun)="onSimulatedRun($event)"></pf-sample-result-simulator>
-            }
-          </div>
-        }
         @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0 || analyzerRuns().length > 1) {
           <div class="pf-sre-strip">
             @if (analyzerRuns().length > 1 && !validateMode() && !viewOnly()) {
@@ -414,6 +398,7 @@
                 @if (blockProfileId(blk); as pid) {
                   <pf-report-note-button scope="profile" [key]="pid" [label]="blk.title ?? 'Profile'" [withText]="true"></pf-report-note-button>
                 }
+                @if (bi === 0) { <ng-container *ngTemplateOutlet="fetchBtn"></ng-container> }
               </header>
               <div class="pf-card__body pf-sre-card__body">
                 @if (blockProfileId(blk); as pid) {
@@ -486,7 +471,7 @@
                               <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                               @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                             </td>
-                            <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                            <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p, t)">{{ refLabelFor(p, t) || "—" }}</td>
                             <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
                             <td class="pf-sre__gc-method"><span class="pf-sre__method-t">{{ methodologyOf(p, t.test) }}</span></td>
                             <td class="pf-sre__gc-note">
@@ -822,6 +807,22 @@
         </span>
       </ng-template>
 
+      <!-- Fetch from analyzer: the right end of the FIRST results card's head (owner 2026-11-22).
+           Re-queries the server for newly arrived analyzer images/values for this tube (the connector
+           pushes automatically — this is a refresh, not a device command). -->
+      <ng-template #fetchBtn>
+        @if (showFetchFromAnalyzer() && !notCollected()) {
+          <button type="button" class="pf-btn pf-btn--secondary pf-btn--sm pf-sre-fetch"
+                  [disabled]="fetchingAnalyzer()" (click)="fetchFromAnalyzer()">
+            {{ fetchingAnalyzer() ? 'Checking…' : 'Fetch from analyzer' }}
+          </button>
+          @if (simulationEnabled()) {
+            <pf-sample-result-simulator [sample]="sample()" [lines]="analyzerLines()"
+                                        (appliedRun)="onSimulatedRun($event)"></pf-sample-result-simulator>
+          }
+        }
+      </ng-template>
+
       <!-- One RESULTS card per test: multi-value / culture / schema-less
            tests in Grid, and every test in Form. -->
       <ng-template #testCard let-cardTests let-first="first">
@@ -870,6 +871,7 @@
                   {{ isOverallOpen(t.id) ? "Close note" : "+ Note" }}
                 </button>
               }
+              @if (first && ti === 0) { <ng-container *ngTemplateOutlet="fetchBtn"></ng-container> }
             </header>
 
             <div class="pf-card__body pf-sre-card__body">
@@ -955,7 +957,7 @@
                             <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                             @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                           </td>
-                          <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                          <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p, t)">{{ refLabelFor(p, t) || "—" }}</td>
                           <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
                           <td class="pf-sre__gc-method">
                             <span class="pf-sre__method">

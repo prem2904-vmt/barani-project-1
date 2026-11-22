@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ModalPortalDirective } from '../../../shared/directives/modal-portal.directive';
@@ -87,7 +88,8 @@ import { linkableInstruments } from './detected-source-link-dialog.component';
 
         <footer class="pf-dialog__foot">
           <button type="button" class="pf-btn pf-btn--secondary" [disabled]="saving()" (click)="close()">Cancel</button>
-          <button type="submit" class="pf-btn pf-btn--primary" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…">
+          <button type="submit" class="pf-btn pf-btn--primary" [disabled]="saving() || !changed()" [pfBusyInactive]="saving() || !changed()"
+                  [attr.title]="changed() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…">
             {{ saving() ? 'Saving…' : (editing() ? 'Save connection' : 'Assign to Bridge') }}
           </button>
         </footer>
@@ -135,8 +137,12 @@ export class BridgeAssignDialogComponent implements OnInit {
 
   ngOnInit(): void {
     const i = this.instrument();
-    if (i) this.form.set(assignFormFrom(i));
+    if (i) { this.form.set(assignFormFrom(i)); this.base.set(stableJson(this.form())); }
   }
+  /** Save only when something changed (owner 2026-11-19): an existing connection compared with how it was opened;
+   *  a new assignment has nothing saved yet. */
+  private readonly base = signal('');
+  readonly changed = computed(() => !this.editing() || stableJson(this.form()) !== this.base());
 
   @HostListener('document:keydown.escape')
   onEscape() { if (!this.saving()) this.close(); }

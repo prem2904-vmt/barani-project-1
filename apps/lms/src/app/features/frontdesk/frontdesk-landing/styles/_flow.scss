@@ -1,0 +1,164 @@
+/* ══ Frontdesk redesign (owner-approved 2026-11-19) — NEW DESIGN only ══
+   Two-panel frame at ≥1024px: the side card (Appointments | Home collection) takes `--pf-side-w` (the app's one
+   side-card width; the shared pf-pane-splitter writes a per-user override on the row), clamped 300px – 45%;
+   the work card fills the rest. Same height, no page scroll — only the card bodies (and the grid) scroll. */
+:host-context(.design-new) {
+  @media (min-width: 1024px) {
+    .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work):not(.pf-appt-split__pane--solo) {
+      flex: 0 0 clamp(300px, var(--pf-side-w, 340px), 45%) !important;
+      min-width: 300px;
+    }
+    .pf-appt-split > .pf-appt-split__pane--work:not(.pf-appt-split__pane--solo) {
+      flex: 1 1 0 !important;
+      min-width: 0;
+    }
+    /* The side card is narrower than the old 33% split: its pieces must fit 300px+ without clipping. */
+    .pf-appt-split__pane:not(.pf-appt-split__pane--work) {
+      > .pf-appt-split__hdr { gap: 8px; flex-wrap: nowrap; }
+      /* The pill never scrolls (owner 2026-11-20): it tightens, then collapses to its selected-pill menu (pf-segmented fit). */
+      > .pf-appt-split__hdr > pf-segmented { flex: 0 1 auto; min-width: 0; overflow: visible; }
+      .pf-daystrip { gap: 6px; padding: 10px 12px; }
+      .pf-daystrip__day { flex: 1 1 0 !important; min-width: 0 !important; padding-left: 0; padding-right: 0; }
+      /* Appointment rows: the FULL name wraps (never runs under the row's actions). */
+      .pf-card__name { display: block; white-space: normal; overflow-wrap: anywhere; }
+      .pf-card__body { min-width: 0; }
+      /* ≤420px card: select + slot drop out and the design hides the avatar, so the row is body · actions only —
+         two tracks, or the body lands in an auto track and runs under Check-in. */
+      @container (max-width: 420px) {
+        .pf-card:not(.pf-card--ip):not(.pf-card--token-layout) { grid-template-columns: minmax(0, 1fr) auto; }
+      }
+    }
+  }
+
+  /* The flow grid IS the work card's body: it fills it (its own rows scroll), no wave art over the last rows. */
+  .pf-appt-split__pane--flow::after { display: none !important; }
+  .pf-appt-split__pane > .pf-fd-flow {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+    overflow: hidden;
+  }
+  .pf-appt-split__pane > .pf-wsec-note { margin: 8px 12px 0; flex-shrink: 0; }
+
+  /* Card head (owner 2026-11-19): icon tile + WORK on the left; everything else together at the RIGHT end
+     like every other card head — the status pill, the search, "Today" and the filter icon. DOM order stays search-first for reading order. */
+  .pf-work-hdr > .pf-work-hdr__filter { order: 1; flex: 0 1 auto; margin-left: auto; overflow: visible; }
+  .pf-work-hdr > .pf-work-find { order: 2; flex: 0 1 240px; }
+  /* Tight work card (owner 2026-11-20): the head stays ONE row — the search folds to a 44px magnifier that opens
+     over the head on tap (and folds back on blur); the status pill tightens / collapses to its menu. */
+  @container (max-width: 760px) {
+    .pf-work-hdr { position: relative; gap: 10px; }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) {
+      flex: none; width: 44px; min-width: 44px; max-width: 44px; height: 44px;
+      justify-content: center; border-radius: 10px; cursor: pointer;
+    }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__icon { left: 14px; color: var(--text-secondary); }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__input {
+      position: absolute; inset: 4px; width: 36px; min-height: 36px; height: 36px; padding: 0;
+      color: transparent; caret-color: transparent; pointer-events: none;
+    }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__input::placeholder { color: transparent; }
+    /* A search is in force while folded: a small violet dot on the magnifier. */
+    .pf-work-hdr > .pf-work-find:not(:focus-within):has(.pf-work-find__input:not(:placeholder-shown))::after {
+      content: ''; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 999px;
+      background: var(--color-violet-600, #7c3aed);
+    }
+    .pf-work-hdr > .pf-work-find:focus-within {
+      position: absolute; z-index: 6; left: 10px; right: 10px; top: 50%; transform: translateY(-50%);
+      max-width: none; min-width: 0; width: auto; border-radius: 10px; background: var(--pf-card-bg);
+    }
+    .pf-work-hdr > .pf-work-find:focus-within .pf-work-find__input { min-height: 40px; height: 40px; }
+  }
+  .pf-work-hdr > .pf-work-hdr__date { order: 3; }
+  /* Card-head ICON SWITCH (owner 2026-11-21): the card's icon tile is the view switch — a 44px target (no extra
+     head height), the tile's tint follows the view, the strokes morph (~260ms; instant under reduced motion). */
+  .pf-wvb, .pf-svb {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 44px; height: 44px; margin: -8px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer;
+  }
+  .pf-wvb:focus-visible, .pf-svb:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+  .pf-wvb .pf-card__icon, .pf-svb .pf-card__icon {
+    width: 30px; height: 30px; transition: background-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
+  }
+  .pf-wvb:hover .pf-card__icon, .pf-svb:hover .pf-card__icon { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent); }
+  [data-tint='teal'] > .pf-card__icon, .pf-wvb.is-clinic .pf-card__icon {
+    background: color-mix(in srgb, var(--teal-text, #0d9488) 16%, transparent); color: var(--teal-text, #0d9488);
+  }
+  [data-tint='sky'] > .pf-card__icon { background: color-mix(in srgb, var(--sky-text, #0284c7) 16%, transparent); color: var(--sky-text, #0284c7); }
+  [data-tint='pink'] > .pf-card__icon { background: color-mix(in srgb, var(--pink-text, #db2777) 14%, transparent); color: var(--pink-text, #db2777); }
+  /* List: the four room rects collapse into three lines (transform only — every engine animates it). */
+  .pf-wvb rect { transform-box: view-box; transform-origin: 0 0; vector-effect: non-scaling-stroke; transition: transform 260ms cubic-bezier(.2, .7, .2, 1), opacity 200ms ease; }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r1 { transform: translate(-3.75px, 5.825px) scale(2.25, .025); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r2 { transform: translate(-26.25px, 11.78px) scale(2.25, .04); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r3 { transform: translate(-26.25px, 17.718px) scale(2.25, .01818); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r4 { transform: translate(-3.75px, 11.575px) scale(2.25, .025); opacity: 0; }
+  /* The VISITS switch: its three icons cross-fade + scale (people → calendar → house). */
+  .pf-svb__ico { transform-origin: 12px 12px; transform-box: view-box; transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, .7, .2, 1); }
+  .pf-svb__ico:not(.on) { opacity: 0; transform: scale(.6) rotate(-20deg); }
+  .pf-svb__dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 999px; background: var(--red-text, #e11d48);
+    box-shadow: 0 0 0 2px var(--pf-card-bg); }
+  @media (prefers-reduced-motion: reduce) {
+    .pf-wvb rect, .pf-svb__ico, .pf-wvb .pf-card__icon, .pf-svb .pf-card__icon { transition: none; }
+  }
+  /* .pf-input's backdrop-filter makes its own stacking layer and painted over the magnifier. */
+  .pf-work-find__icon { z-index: 1; }
+  .pf-work-hdr__title {
+    order: -1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .pf-work-hdr__title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .pf-work-hdr__date { margin-left: 0; }
+  .pf-work-hdr__range {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The filter icon: a 32px quiet square (44px on touch); violet "on" when a filter / another date is in force. */
+  .pf-work-hdr .pf-hdr-filter__btn { width: 32px; height: 32px; border-radius: 9px; }
+  @media (pointer: coarse) {
+    .pf-work-hdr .pf-hdr-filter__btn { width: 44px; height: 44px; }
+  }
+
+  /* Phones / tablet portrait: the More filters icon rides inside the list search (one card). */
+  .pf-work-find-phone { position: relative; }
+  .pf-work-find__filter { display: none; }
+  @media (max-width: 1023px) {
+    .pf-work-find-phone--filters .pf-work-find--phone .pf-work-find__input { padding-right: 50px; }
+    /* New design: no list search any more (the band filters) — the head is ONE row: count · Sort · Filters. */
+    .pf-work-find-phone--filters { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 44px; margin: 0 0 8px; }
+    .pf-fd-listhead__n { margin-right: auto; padding-left: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+    .pf-work-find-phone--filters .pf-work-find__filter {
+      position: static;
+      flex: none;
+      border: 1px solid var(--pf-line, var(--glass-border)) !important;
+      border-radius: 999px !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .pf-work-find-phone--filters .pf-work-find__filter--on { color: var(--violet-text); }
+    .pf-work-find-phone--filters .pf-work-find__filter:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+  }
+}
+
+/* Below 1024px the work card is bounded and ONLY its list scrolls (owner 2026-11-21): the tab strip and the list head
+   (count · Sort · Filters) above it never scroll away. */
+@media (max-width: 1023px) {
+  :host-context(.design-new) .pf-appt-split__pane--work { overflow: hidden; min-height: 0; }
+  :host-context(.design-new) .pf-appt-split__pane--work > pf-outsourced-list { flex: 1 1 auto; min-height: 0; }
+}

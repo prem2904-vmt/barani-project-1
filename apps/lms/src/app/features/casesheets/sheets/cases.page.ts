@@ -9,6 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { Router, RouterLink } from '@angular/router';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { SegmentedComponent, SegmentedOption, SkeletonRowsComponent } from '@prefrontal/shared';
@@ -88,8 +89,21 @@ export class CasesPage {
   });
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private vsKey = '';
 
   constructor() {
+    // Screen view state (owner 2026-11-21): Drafts / Finished + search come back as left (per patient on the lab route).
+    const vs = inject(ViewStateService);
+    effect(() => {
+      const key = `prepare.cases.${this.patientId() ?? 'all'}`;
+      untracked(() => {
+        const saved = vs.get<{ query: string; filter: CaseFilter }>(key);
+        if (saved?.filter) this.filter.set(saved.filter);
+        if (saved?.query !== undefined) this.query.set(saved.query);
+        this.vsKey = key;
+      });
+    });
+    effect(() => { const f = this.filter(), q = this.query(); untracked(() => this.vsKey && vs.patch(this.vsKey, { filter: f, query: q })); });
     effect(() => {
       const state: CaseState = this.filter() === 'drafts' ? 'draft' : 'final';
       const q = this.query().trim();

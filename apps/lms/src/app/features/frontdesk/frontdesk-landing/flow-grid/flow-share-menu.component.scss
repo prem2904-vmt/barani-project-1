@@ -1,0 +1,15 @@
+@use 'sass:meta';
+
+/* The front desk's ONE share-menu stylesheet (the work list rows load the same partial). */
+@include meta.load-css('../styles/share-menu');
+
+/* A fixed box laid exactly over the pressed control; the menu opens above / below it like the row menu. */
+.fd-share-float {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+}
+.fd-share-float .pf-share-menu {
+  pointer-events: auto;
+  z-index: 70;
+}

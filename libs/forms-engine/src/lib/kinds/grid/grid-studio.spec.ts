@@ -8,7 +8,7 @@ import { FE_KINDS, kindControl } from '../../fill/contract';
 import { KIND_SPECS } from '../registry';
 import { unnamed, untouchable } from '../../testing/render-kind';
 import { GridEditorComponent, GridPanelComponent, gridSummary } from './grid.studio';
-import { DENTAL } from './grid-model.spec';
+import { DENTAL } from './grid-model.spec-helpers';
 import { GridConfig } from './grid-model';
 
 @Component({

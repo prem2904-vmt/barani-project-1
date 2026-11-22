@@ -113,7 +113,7 @@ export const MAX_IMAGE_BYTES = 1_000_000;
           <button type="button" class="pf-btn pf-btn--primary pc__save" data-testid="practice-save"
                   [disabled]="!dirty() || busy()"
                   [attr.aria-busy]="saving() ? 'true' : null"
-                  (click)="save()">
+                  (click)="save()" [attr.aria-disabled]="(!dirty() || busy()) ? 'true' : null" [attr.title]="(!dirty() && !busy()) ? 'No changes to save' : null">
             {{ saving() ? 'Saving…' : dirty() ? 'Save' : 'Saved' }}
           </button>
         }

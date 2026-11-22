@@ -26,15 +26,19 @@ describe('PageFrameComponent (destination frame)', () => {
     return f.nativeElement as HTMLElement;
   }
 
+  // The NEW frame (owner 2026-11-19): two-panel screens draw pf-skel-two-panel (side card LEFT + main card).
   const PRESET: Record<PageSkeletonKind, string[]> = {
-    queue: ['pf-skeleton-rows'],
-    grid: ['pf-skeleton-table'],
-    'grid-side': ['pf-skeleton-rows', 'pf-skeleton-table'],
+    queue: ['pf-skel-two-panel[data-main="queue"]'],
+    grid: ['pf-skel-two-panel.pf-skp--noside[data-main="grid"]', 'pf-skel-grid'],
+    'grid-side': ['pf-skel-two-panel[data-main="grid"] aside.pf-card', 'pf-skel-side-list', 'pf-skel-grid'],
     tiles: ['pf-skeleton-tiles'],
-    detail: ['pf-skeleton-detail', 'pf-skeleton-card'],
-    form: ['pf-skeleton-form', 'pf-skeleton-card'],
-    chat: ['pf-skeleton-rows', 'pf-skeleton-card'],
+    detail: ['pf-skel-two-panel[data-main="detail"]', 'pf-skeleton-detail'],
+    form: ['pf-skel-two-panel[data-main="form"]'],
+    chat: ['pf-skel-two-panel[data-main="queue"] aside.pf-card', 'pf-skeleton-rows'],
     dashboard: ['pf-skeleton-tiles', 'pf-skeleton-rows'],
+    settings: ['pf-skel-two-panel[data-main="rows"]', 'pf-skel-setting-rows'],
+    'settings-tiles': ['pf-skel-two-panel[data-main="tiles"]', 'pf-skel-tiles'],
+    doc: ['pf-skel-two-panel[data-main="designer"]', 'pf-skel-doc'],
   };
 
   for (const [kind, presets] of Object.entries(PRESET) as [PageSkeletonKind, string[]][]) {
@@ -48,7 +52,8 @@ describe('PageFrameComponent (destination frame)', () => {
 
   it('Test Master opens as its grid, with ONE status naming the screen', () => {
     const el = render(pageSkeletonFor('/admin/tests')!);
-    expect(el.querySelector('pf-skeleton-table')).not.toBeNull();
+    expect(el.querySelector('pf-skel-grid')).not.toBeNull();
+    expect(el.querySelector('.pf-band-body--fill pf-skel-two-panel')).not.toBeNull();
     const status = [...el.querySelectorAll('[role="status"]')].filter(n => !n.closest('[aria-hidden="true"]'));
     expect(status.length).toBe(1);
     expect(status[0].textContent).toContain('Opening Test Master…');

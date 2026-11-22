@@ -1,4 +1,17 @@
-import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, DestroyRef, ChangeDetectionStrategy, Component, ElementRef, NgZone, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { NgTemplateOutlet } from '@angular/common';
+import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
+import { GridFold, actionCol, dueCell, dueValue, durationCol, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
+import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
+import { pvColumns, pvMeta, pvRows, pvWaiting, pvWords } from './pending-validation.grid';
+import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WORK_LIST_MQ, WorkListItem, columnSortOptions, lateWords, sortItems } from '../../../shared/components/work-list/work-list';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -58,7 +71,7 @@ type Tab = 'mine' | 'all';
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [DailyNoComponent, BusyDirective, 
+  imports: [DailyNoComponent, WorkListComponent, SortChipComponent, BusyDirective, StatusWordsComponent, 
     ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
@@ -73,6 +86,8 @@ type Tab = 'mine' | 'all';
     HeroBandComponent,
     TileGridDirective,
     RegnoPromptComponent,
+    DataGridComponent,
+    NgTemplateOutlet,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -103,13 +118,22 @@ type Tab = 'mine' | 'all';
               </svg>
               <span class="pv-refresh__t">Refresh</span>
             </button>
+            <!-- The screen's ONE violet primary, in the band (owner 2026-11-21: moved from the side card's foot). -->
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press pv-next" data-cta data-testid="pv-review-next"
+                    [disabled]="!next()" (click)="reviewNext()"
+                    [attr.aria-label]="next() ? 'Review next: ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue' : 'Nothing to review')"
+                    [attr.title]="next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+              <span>{{ statsSkel() && !next() ? 'Loading…' : 'Review next' }}</span>
+            </button>
           </ng-container>
         </pf-hero-band>
       </header>
 
       <div class="pf-page__body pf-body pf-body--split pv-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
         <!-- ── Main card: the queue ── -->
-        <section class="pf-card pv-queue" aria-label="Pending validation">
+        <section #queueCard class="pf-card pv-queue" aria-label="Pending validation">
           <header class="pf-card__head pv-queue__head">
             <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -118,23 +142,14 @@ type Tab = 'mine' | 'all';
             <h2 class="pf-card__label">Pending validation</h2>
             <span class="pv-count pf-num">{{ countLabel() }}</span>
             <span class="pf-card__spacer"></span>
-            @if (deptFilters().length > 1) {
+            <!-- Phones only (no column headers there); the grid's Department column filters the same thing. -->
+            @if (phone() && deptFilters().length > 1) {
               <pf-segmented class="pv-depts" [options]="deptSegmentOptions()" [value]="dept()" (valueChange)="dept.set($any($event))" />
             }
           </header>
 
-          <div class="pf-card__body pv-scroll">
-            @if (loading() && rows().length === 0) {
-              <ul class="pv-grid" pfTileGrid aria-hidden="true">
-                @for (i of [0,1,2]; track i) {
-                  <li><div class="pv-tile pv-tile--skel pf-tile-fill">
-                    <pf-skeleton variant="line" width="40%" height="16px"></pf-skeleton>
-                    <pf-skeleton variant="line" width="70%"></pf-skeleton>
-                    <pf-skeleton variant="line" width="55%" height="10px"></pf-skeleton>
-                  </div></li>
-                }
-              </ul>
-            } @else if (visibleTiles().length === 0) {
+          <div class="pf-card__body pv-scroll" [class.pv-scroll--grid]="!phone()">
+            @if (!loading() && visibleTiles().length === 0) {
               <div class="pf-empty pv-empty">
                 <span class="pf-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -142,66 +157,83 @@ type Tab = 'mine' | 'all';
                 <p class="pf-empty__title">{{ emptyTitle() }}</p>
                 <p class="pf-empty__body">{{ emptyBody() }}</p>
               </div>
-            } @else {
-              @for (grp of ndGroups(); track grp.priority) {
-                <div class="pv-group" [attr.data-priority]="grp.priority">
-                  <h3 class="pv-group__h">
-                    <span class="pv-group__dot" [attr.data-priority]="grp.priority" aria-hidden="true"></span>
-                    {{ grp.label }}
-                    <span class="pv-group__n pf-num">{{ grp.tiles.length }}</span>
-                  </h3>
-                  <ul class="pv-grid" pfTileGrid>
-                    @for (g of grp.tiles; track g.key) {
-                      @let st = status(g);
-                      <li>
-                        <div class="pv-tile pf-tile-fill" role="button" tabindex="0"
-                             [attr.data-priority]="g.priority" [attr.data-status]="st.key"
-                             [class.pv-tile--mine]="g.mine"
-                             [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
-                             [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
-                             (click)="openOrder(g)" (keydown.enter)="openOrder(g)" (keydown.space)="$event.preventDefault(); openOrder(g)">
-                          <div class="pv-tile__top">
-                            <span class="pv-tile__id pf-num">{{ g.sampleLabel }}</span>
-                            <span class="pv-status" [attr.data-tone]="st.tone">
-                              <span class="pv-status__dot" aria-hidden="true"></span>{{ st.label }}
-                            </span>
-                          </div>
-                          <p class="pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
-                          <p class="pv-tile__meta pf-num">{{ tileMeta(g) }}</p>
-                          <p class="pv-tile__tests">{{ g.testNames.join(' · ') }}</p>
-                          <div class="pv-tile__foot">
-                            @if (g.mine) {
-                              <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span>
-                            }
-                            <span class="pv-tile__spacer"></span>
-                            @if (unacknowledged(g)) {
-                              <!-- NABL: the explicit acknowledgement of the tile's critical value(s). -->
-                              <button type="button" class="pf-rowact pv-ack" [class.pf-rowact--icon]="!web()"
-                                      [disabled]="acking() === g.key"
-                                      [attr.aria-label]="'Acknowledge critical result, sample ' + g.sampleLabel" title="Acknowledge critical result"
-                                      (click)="$event.stopPropagation(); acknowledge(g)">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                                <span class="pf-rowact__t">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</span>
-                              </button>
-                            }
-                            <button type="button" class="pf-rowact pv-review" [class.pf-rowact--icon]="!web()"
-                                    [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
-                                    (click)="$event.stopPropagation(); openOrder(g)">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                              <span class="pf-rowact__t">Review</span>
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
+            } @else if (phone()) {
+              <!-- Below 1024px: the ONE shared work list (owner 2026-11-21); the row's own actions at the right edge. -->
+              @if (rows().length) {
+                <div class="pv-listhead pf-wl-head pf-wl-head--sticky">
+                  <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
                 </div>
               }
+              <pf-work-list data-testid="pv-list" label="Waiting for validation" [items]="listItems()" [loading]="loading() && rows().length === 0"
+                [actionTpl]="pvListActs" (open)="openItem($event)" />
+              <ng-template #pvListActs let-it><ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: it.data }" /></ng-template>
+            } @else {
+              <pf-data-grid class="pv-gridc" data-testid="pv-grid" [rowData]="gridRows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
+                [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true" viewStateKey="pathologist.grid"
+                [loading]="loading() && rows().length === 0" loadingLabel="Loading the queue…"
+                (rowClicked)="onRow($event)" />
             }
           </div>
         </section>
+
+        <!-- ── Grid cell templates (the page's own nodes) ── -->
+        <ng-template #cSample let-g>
+          <span class="wg-cell" [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]">
+            <span class="wg-id wg-link pv-tile__id pf-num" role="link" tabindex="0"
+                  [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + status(g).label"
+                  (keydown.enter)="key(g, $event)" (keydown.space)="key(g, $event)">{{ g.sampleLabel }}</span>
+          </span>
+        </ng-template>
+        <ng-template #cPatient let-g>
+          <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g, status: fold() !== 'full' }" />
+        </ng-template>
+        <ng-template #cDept let-g>
+          <span class="wg-cell"><span class="wg-tests">{{ g.dept || '—' }}</span></span>
+        </ng-template>
+        <ng-template #cStatus let-g>
+          <span class="wg-cell"><ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></span>
+        </ng-template>
+        <!-- Due: time left to TAT (owner 2026-11-21 — every row here waits on validation, so no journey ring). -->
+        <ng-template #cDue let-g>
+          @let d = due(g);
+          <span class="wg-cell"><span class="wg-tat pv-due" [class.wg-tat--late]="d.late" [attr.title]="d.detail">{{ d.text }}</span></span>
+        </ng-template>
+        <ng-template #cWait let-g>
+          @let w = waiting(g);
+          <span class="wg-cell"><span class="wg-tat" [class.wg-tat--late]="w.late" [attr.title]="w.late ? 'Past its turnaround time' : null">{{ w.text }}</span>
+            @if (w.sub) { <span class="wg-sub pv-wait-sub">{{ w.sub }}</span> }</span>
+        </ng-template>
+        <ng-template #cActs let-g><ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></ng-template>
+
+        <!-- Status = two lines of words (owner design D, 2026-11-21): no pill, no dot. -->
+        <ng-template #statusTpl let-g>
+          <span class="pv-statuscell">
+            <pf-status-words class="pv-status" [words]="words(g)" />
+            @if (g.priority === 'urgent') { <span class="wg-prio" data-p="urgent">Urgent</span> }
+          </span>
+        </ng-template>
+        <ng-template #whoTpl let-g let-status="status">
+          <span class="wg-who">
+            @if (fold() === 'tight' && !phone()) { <span class="wg-id pf-num">{{ g.sampleLabel }}</span> }
+            <span class="wg-who__name pv-who__name pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</span>
+            <span class="wg-who__meta pv-tile__meta pf-num" [attr.title]="g.testNames.join(' · ')">{{ rowMeta(g) }}</span>
+            @if (g.mine) { <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span> }
+            @if (status) { <span class="wg-who__fold"><ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></span> }
+          </span>
+        </ng-template>
+        <ng-template #actsTpl let-g>
+          <span class="wg-acts pv-acts" [class.pv-acts--stack]="!phone() && fold() !== 'full'">
+            @if (unacknowledged(g)) {
+              <!-- NABL: the explicit acknowledgement of the row's critical value(s) — always visible, never in a menu. -->
+              <button type="button" class="pf-rowact wg-act wg-act--quiet pv-ack" [disabled]="acking() === g.key"
+                      [attr.aria-label]="'Acknowledge critical result, sample ' + g.sampleLabel" title="Acknowledge critical result"
+                      (click)="$event.stopPropagation(); acknowledge(g)">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</button>
+            }
+            <button type="button" class="pf-rowact wg-act pv-review" data-action="review"
+                    [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
+                    (click)="$event.stopPropagation(); openOrder(g)">Review</button>
+          </span>
+        </ng-template>
 
         <!-- ── Side card: the consultant's scope + today + the ONE primary ── -->
         @if (sheetOpen()) { <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
@@ -258,13 +290,6 @@ type Tab = 'mine' | 'all';
             </dl>
             <p class="pv-side__note">Open a sample to review every test on the tube, then validate, reject, reassign or send it back for correction.</p>
           </div>
-          <footer class="pf-card__foot">
-            <button type="button" class="pf-btn pf-span pv-next"
-                    [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
-                    [disabled]="!next()" (click)="reviewNext()">
-              {{ next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review') }}
-            </button>
-          </footer>
         </aside>
       </div>
 
@@ -276,9 +301,6 @@ type Tab = 'mine' | 'all';
           @if (stats().overdue) { · <span class="pv-bottombar__warn pf-num">{{ stats().overdue }} overdue</span> }
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
         </button>
-        <button type="button" class="pf-btn pv-next pv-next--bar"
-                [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
-                [disabled]="!next()" (click)="reviewNext()">Review next</button>
       </div>
     </section>
     } @else {
@@ -396,6 +418,8 @@ type Tab = 'mine' | 'all';
   `,
   styles: [`
     @use '../../../shared/styles/device-tier' as dt;
+    @use '../../../shared/styles/work-grid' as wg;
+    @include wg.cells;
     /* ===== WORK page: non-scroll app layout on all sizes =====
        :host fills the shell's main area; the page is a flex column whose
        header (KPI + title + tabs) is fixed and the queue scrolls internally,
@@ -404,6 +428,8 @@ type Tab = 'mine' | 'all';
       display: block;
       height: 100%;
     }
+    .pv-scroll:has(> .pv-listhead) { padding-top: 0; }
+    .pv-listhead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
     .pv-page {
       height: 100%;
       display: flex;
@@ -536,7 +562,10 @@ type Tab = 'mine' | 'all';
     .pv-body { gap: 16px; }
     /* Tablet: the side card stays, narrower. */
     @media (min-width: 641px) and (max-width: 1023px) {
-      .pv-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+      .pv-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+      /* The DOM keeps main first (phones stack it first); the side card sits LEFT, the queue takes the rest. */
+      .pv-body > .pv-side { grid-column: 1; grid-row: 1; }
+      .pv-body > .pv-queue { grid-column: 2; grid-row: 1; }
     }
 
     /* Band filter: neutral segmented, plain tabular counts. */
@@ -547,61 +576,19 @@ type Tab = 'mine' | 'all';
     .pv-seg__item[aria-checked='true'] .pv-seg__count { color: var(--color-violet-600, #7c3aed); }
 
     /* Queue card header: count is plain muted text, never a pill. */
-    .pv-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pv-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pv-depts { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
     .pv-depts::-webkit-scrollbar { display: none; }
     .pv-scroll { gap: 18px; padding: 14px 16px 18px; }
 
-    .pv-group__h {
-      display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
-      font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .pv-group__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
-    /* Group = ORDER priority. Dots: Normal neutral; red only for Urgent. */
-    .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-on); }
-    .pv-group__dot[data-priority='urgent'] { background: var(--red-text, #dc2626); }
-
-    /* The tube tile. Sample ID leads (16.5 / 600, tabular), patient 13 / 500,
-       meta 12 muted. Stripe only for an Urgent order (red). */
-    .pv-tile {
-      position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 132px;
-      padding: 14px 14px 12px 16px; border-radius: var(--pf-radius);
-      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: inherit;
-      cursor: pointer; text-align: left; outline: none;
-      transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
-    }
-    .pv-tile::before {
-      content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
-      background: transparent;
-    }
-    .pv-tile[data-priority='urgent']::before { background: var(--red-text, #dc2626); }
-    @media (hover: hover) and (pointer: fine) {
-      .pv-tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
-    }
-    .pv-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .pv-tile--skel { cursor: default; gap: 10px; }
-    .pv-tile__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .pv-tile__id {
-      min-width: 0; font-size: 16.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary);
-      overflow-wrap: anywhere;
-    }
-    .pv-tile__who { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--text-secondary); overflow-wrap: anywhere; }
-    .pv-tile__meta { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); overflow-wrap: anywhere; }
-    .pv-tile__tests { margin: 2px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pv-tile__foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; }
-    .pv-tile__spacer { flex: 1 1 auto; }
-
-    /* ONE status per tile: dot + coloured word, no chip / border / fill. */
-    .pv-status {
-      --pv-tone: var(--green-text, #15803d);
-      flex: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
-      font-size: 13px; font-weight: 500; line-height: 20px;
-      color: color-mix(in srgb, var(--pv-tone) 70%, var(--text-primary));
-    }
-    .pv-status[data-tone='amber'] { --pv-tone: var(--amber-text, #b45309); }
-    .pv-status[data-tone='red'] { --pv-tone: var(--red-text, #b91c1c); }
-    .pv-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pv-tone); }
+    /* Grid body: flush — the grid scrolls inside the card (no page scroll). */
+    .pv-scroll--grid { padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .pv-gridc { flex: 1 1 auto; min-height: 0; }
+    .pv-statuscell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .pv-wait-sub { white-space: normal; overflow-wrap: normal; }   /* "entered 10:50 AM" wraps by words, never clipped */
+    .pv-acts--stack { flex-direction: column; align-items: flex-end; gap: 8px; padding: 6px 0; }
+    .wg-who__fold .pv-statuscell { justify-content: flex-start; }
+    .pv-tile__id { font-size: 14.5px; }
 
     /* "Assigned to you": quiet text with the one violet mark. */
     .pv-mine { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
@@ -638,7 +625,7 @@ type Tab = 'mine' | 'all';
       .pv-depts { flex: 1 1 100%; }
       .pv-seg__item { min-height: 44px; height: 44px; }
       .pv-depts .pv-seg__item { min-height: 40px; height: 40px; }
-      .pv-scroll { padding: 12px; }
+      .pv-scroll { padding: 0; }
       .pv-bottombar__info {
         display: inline-flex; align-items: center; gap: 4px; min-height: 44px;
         border: 0; background: transparent; padding: 0; text-align: left; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600;
@@ -646,15 +633,9 @@ type Tab = 'mine' | 'all';
       .pv-bottombar__warn { color: var(--red-text, #b91c1c); }
       .pv-next--bar { flex: none; }
     }
-    @media (pointer: coarse) {
-      .pv-tile { min-height: 140px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .pv-tile { transition: none; }
-    }
   `]
 })
-export class PendingValidationComponent implements OnInit {
+export class PendingValidationComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiService);
   /** Design version gate — 'new' renders the ND screen, 'classic' the pre-port look. */
   readonly theme = inject(ThemeService);
@@ -747,7 +728,8 @@ export class PendingValidationComponent implements OnInit {
     ...this.deptFilters().map(d => ({ value: d.id, label: d.name, count: d.count })),
   ]);
   readonly visibleTiles = computed(() => {
-    const d = this.dept();
+    // The department pills are phones-only now: elsewhere the grid's Department column filters (never a hidden filter).
+    const d = this.phone() ? this.dept() : null;
     const tiles = this.tabTiles();
     // A department that left the queue drops the filter instead of hiding everything.
     if (!d || !tiles.some(t => (t.deptId ?? t.dept) === d)) return tiles;
@@ -775,6 +757,116 @@ export class PendingValidationComponent implements OnInit {
     };
   });
   readonly next = computed(() => nextTile(this.visibleTiles()));
+
+  // ── The queue as a GRID (owner 2026-11-20: "the grid format we had against Frontdesk and Results") ──
+  // Same tiles, same order (Urgent first, then mine → priority → least time left), one row each. The rules live in
+  // pending-validation.grid.ts; the row tap / Review / Acknowledge are this screen's existing handlers.
+  /** Phones (≤640px): card rows. */
+  /** Below 1024px the queue is the shared work list (owner 2026-11-21: a grid on mobile is horrible). */
+  readonly phone = mediaSignal(WORK_LIST_MQ, inject(DestroyRef));
+  readonly gridRows = computed(() => pvRows(this.ndGroups()));
+  private readonly queueCard = viewChild<ElementRef<HTMLElement>>('queueCard');
+  private readonly zone = inject(NgZone);
+  private readonly cardW = signal(1000);
+  /** The widest column tier whose minimum widths fit the main card (columns fold before any button shrinks). */
+  readonly fold = computed<GridFold>(() => this.foldFor(this.cardW()));
+  private foldFor(w: number): GridFold {
+    // Fixed columns lay out at their `width`, flex columns at least at `minWidth` — per tier (the actions stack when
+    // columns fold, so the patient keeps its room).
+    const mins = (f: GridFold) => Object.fromEntries(Object.entries(this.sizes(f)).map(([k, v]) => [k, v.width ?? v.minWidth ?? 0]));
+    return fitFold(w, f => minWidthOf(pvColumns(f), mins(f)));
+  }
+  private sizes(fold: GridFold): Record<string, ColDef<QueueTile>> {
+    const touch = !this.web();
+    // Acknowledge + Review: side by side when there is room; STACKED (Acknowledge above Review, 8 apart, each ≥44 on
+    // touch) once columns fold — the patient name keeps whole words on its line (owner review 2026-11-20).
+    const ack = this.gridRows().some(g => this.unacknowledged(g));
+    const stacked = fold !== 'full';
+    const acts = !ack ? (touch ? 120 : 112) : stacked ? 140 : (touch ? 236 : 220);
+    return {
+      // Wide enough for "Sample ID" + its sort arrow + filter icon (headers never truncate).
+      sample: { width: 128, minWidth: 128 },
+      patient: { flex: 1, minWidth: fold === 'tight' ? 190 : 250 },
+      dept: { width: 150, minWidth: 140 },
+      status: { width: 184, minWidth: 176 },
+      due: { width: 100, minWidth: 100 },
+      wait: { width: 118, minWidth: 118 },
+      acts: { width: acts, minWidth: acts },
+    };
+  }
+  /** Every column through the shared work-grid helpers (shared/utils/work-grid.ts): alignment + header filter + a
+   *  sort on the REAL value (minutes left / minutes waiting, the whole name), built together. */
+  private colRule(colId: string, def: ColDef<QueueTile>): ColDef<QueueTile> {
+    const set = WorkSetFilterComponent;
+    const wrap = (d: ColDef<QueueTile>) => ({ ...d, cellClass: 'wg-c-wrap' });
+    switch (colId) {
+      case 'sample': return textCol<QueueTile>(def, g => g.sampleLabel);
+      case 'patient': return textCol<QueueTile>(wrap(def), g => {
+        const p = g.items[0]?.subOrder?.order?.patient as { mrn?: string; phone?: string } | undefined;
+        return [g.patientName, p?.mrn, p?.phone].filter(Boolean).join(' ');
+      }, 'left', g => g.patientName);
+      // Department (the old head pills) + Status words read LEFT (two lines, design D).
+      case 'dept': return valuesCol<QueueTile>(wrap(def), g => g.dept ?? '', set, 'left');
+      case 'status': return valuesCol<QueueTile>(wrap(def), g => this.status(g).label, set, 'left');
+      case 'due': return durationCol<QueueTile>(def, g => dueValue(g.remainingMin), { kind: 'due' });
+      case 'wait': return durationCol<QueueTile>(def, g => minutesSince(g.items.map(i => i.resultedAt).filter(Boolean).sort().pop() ?? null), { kind: 'wait' });
+      default: return actionCol<QueueTile>({ ...def, cellClass: 'wg-c-acts' });
+    }
+  }
+  private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
+  private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
+  private readonly statusColTpl = viewChild<TemplateRef<unknown>>('cStatus');
+  private readonly deptColTpl = viewChild<TemplateRef<unknown>>('cDept');
+  private readonly dueTpl = viewChild<TemplateRef<unknown>>('cDue');
+  private readonly waitTpl = viewChild<TemplateRef<unknown>>('cWait');
+  private readonly actsColTpl = viewChild<TemplateRef<unknown>>('cActs');
+  readonly defaultCol: ColDef<QueueTile> = { sortable: false, resizable: false, filter: false, suppressMovable: true, wrapText: true, autoHeight: true, minWidth: 60 };
+  readonly rowId = (p: GetRowIdParams<QueueTile>) => p.data.key;
+  readonly rowClass = (p: RowClassParams<QueueTile>) => (p.data?.priority === 'urgent' ? ['pv-row', 'wg-row--urgent'] : ['pv-row']);
+  readonly cols = computed<ColDef<QueueTile>[]>(() => {
+    const tpl: Record<string, TemplateRef<unknown> | undefined> = {
+      sample: this.sampleTpl(), patient: this.patientTpl(), status: this.statusColTpl(),
+      due: this.dueTpl(), wait: this.waitTpl(), acts: this.actsColTpl(), dept: this.deptColTpl(),
+    };
+    const size = this.sizes(this.fold());
+    return pvColumns(this.fold()).map(c => this.colRule(c.colId, {
+      colId: c.colId, headerName: c.header, hide: c.hide, ...size[c.colId],
+      cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[c.colId] },
+    }));
+  });
+  waiting(g: QueueTile) { return pvWaiting(g); }
+  /** "44/F · AA0007 · Haematology · 2 tests" — no Tests column (owner 2026-11-20); names in the tooltip. */
+  rowMeta(g: QueueTile): string { return pvMeta(g, this.phone() || this.fold() === 'tight'); }
+  /** The Status cell's two lines (pending-validation.grid.ts). */
+  words(g: QueueTile) { return pvWords(tileStatus(g), this.unacknowledged(g)); }
+  /** "in 25m" / rose "12m late" — the tube's time left to TAT. */
+  due(g: QueueTile) { return dueCell(g.remainingMin); }
+  /** A tap on the row = the old tile tap (open the review); a button in the row does its own thing. */
+  onRow(e: RowClickedEvent<QueueTile>): void {
+    const t = e.event?.target as HTMLElement | null;
+    if (t?.closest?.('button, a, [role="menu"]')) return;
+    if (e.data) this.openOrder(e.data);
+  }
+  onCard(g: QueueTile, ev: Event): void {
+    if ((ev.target as HTMLElement | null)?.closest?.('button')) return;
+    this.openOrder(g);
+  }
+  key(g: QueueTile, ev: Event): void { ev.preventDefault(); ev.stopPropagation(); this.openOrder(g); }
+
+  ngAfterViewInit(): void {
+    const el = this.queueCard()?.nativeElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    this.zone.runOutsideAngular(() => {
+      const ro = new ResizeObserver(entries => {
+        const w = Math.round(entries[0]?.contentRect.width ?? el.clientWidth);
+        if (w <= 0) return;
+        if (this.foldFor(w) !== this.foldFor(this.cardW())) this.zone.run(() => this.cardW.set(w));
+        else this.cardW.set(w);
+      });
+      ro.observe(el);
+      this.destroyRef.onDestroy(() => ro.disconnect());
+    });
+  }
   readonly emptyTitle = computed(() =>
     this.query().trim() ? 'No matching samples'
       : this._tab() === 'mine' && this._rows().length ? 'Nothing assigned to you' : 'Nothing to validate');
@@ -783,6 +875,28 @@ export class PendingValidationComponent implements OnInit {
       : this._tab() === 'mine' && this._rows().length ? 'Switch to All to see the rest of the queue.'
       : this.scope()?.scoped ? 'Results from your departments appear here as soon as the lab submits them.'
       : 'Results appear here as soon as the lab submits them.');
+
+  /** Below 1024px: the queue as shared work-list items (Sample · patient · tests · status words · Due). */
+  /** The list's Sort chip: the grid headers' sorts (Due, Waiting, Patient, Sample), both directions. */
+  readonly listSortOptions = columnSortOptions([{ id: 'due', label: 'Due' }, { id: 'wait', label: 'Waiting', first: 'desc' }, { id: 'patient', label: 'Patient' }, { id: 'sample', label: 'Sample' }]);
+  readonly listSort = signal<string | null>(null);
+  private readonly sortedRows = computed(() => sortItems(this.gridRows(), this.listSort(), {
+    due: g => g.remainingMin, patient: g => g.patientName, sample: g => g.sampleLabel,
+    wait: g => { const at = g.items.map(i => i.resultedAt).filter((v): v is string => !!v).sort()[0]; return at ? Date.now() - Date.parse(at) : null; },
+  }));
+  readonly listItems = computed<WorkListItem<QueueTile>[]>(() => this.sortedRows().map(g => {
+    const st = this.status(g);
+    const d = this.due(g);
+    const w = this.waiting(g);
+    return {
+      id: g.key, name: g.patientName, daily: g.items[0]?.subOrder, lead: g.sampleLabel, urgent: g.priority === 'urgent',
+      facts: [this.rowMeta(g), g.mine ? 'Assigned to you' : null, w.text && w.text !== '—' ? `Waiting ${w.text}` : null],
+      status: lateWords(this.words(g), d.late),
+      time: { text: d.text, late: d.late, title: d.detail },
+      aria: 'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label, data: g,
+    };
+  }));
+  openItem(it: WorkListItem<QueueTile>): void { if (it.data) this.openOrder(it.data); }
 
   /** ONE status word: an open NABL record turns "Critical" into "Critical · not acknowledged". */
   status(g: QueueTile) {
@@ -918,4 +1032,7 @@ export class PendingValidationComponent implements OnInit {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+
+  // Screen view state (owner 2026-11-21): tab, search and department come back as left after in-app navigation.
+  private readonly _viewState = inject(ViewStateService).bind('pathologist', { tab: this._tab, query: this.query, dept: this.dept });
 }

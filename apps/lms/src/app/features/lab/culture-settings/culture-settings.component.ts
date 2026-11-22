@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
@@ -33,13 +34,13 @@ const STAGE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
+  imports: [SkelSettingRowsComponent, SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (embedded()) {
       <!-- Inside Results and validation: two group cards in the page grid; Save is the page band's primary. -->
       @if (formSkeleton()) {
-        <pf-setting-group label="Microbiology"><pf-skeleton-form [fields]="3" [cols]="1" label="Loading culture settings…"></pf-skeleton-form></pf-setting-group>
+        <pf-setting-group label="Microbiology"><pf-skel-setting-rows [rows]="3" label="Loading culture settings…"></pf-skel-setting-rows></pf-setting-group>
       } @else {
         <pf-setting-group label="Stage lock" scope="microbiology" id="micro" icon="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM8 11V7a4 4 0 0 1 8 0v4">
           <pf-setting-row label="Auto-release after" hint="An idle locked stage goes back to the pool. 0 = never.">
@@ -75,9 +76,9 @@ const STAGE_LABELS: Record<string, string> = {
                           (valueChange)="tab.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton() || !isDirty()"
                     [pfBusy]="saving()" pfBusyLabel="Saving…"
-                    (click)="save()" aria-label="Save changes" title="Save changes">
+                    (click)="save()" aria-label="Save changes" [pfBusyInactive]="saving() || formSkeleton() || !isDirty()" [attr.title]="(!isDirty() && !saving()) ? 'No changes to save' : 'Save changes'">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -94,7 +95,7 @@ const STAGE_LABELS: Record<string, string> = {
         subtitle="Stage lock + turnaround for the culture bench"
         parentRoute="/lab/settings">
         <div actions>
-          <button type="button" class="pf-cs__save press" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+          <button type="button" class="pf-cs__save press" [disabled]="saving() || formSkeleton() || !isDirty()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="saving() || formSkeleton() || !isDirty()" [attr.title]="(!isDirty() && !saving()) ? 'No changes to save' : null">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>

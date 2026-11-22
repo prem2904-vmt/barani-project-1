@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
@@ -21,6 +22,10 @@ import { PfSelectOptGroup } from '../../../shared/primitives/select.component';
 import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { ColDef, GetRowIdParams, ICellRendererParams, RowDragEndEvent } from 'ag-grid-community';
+import { numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
+
+type Row = KpiAssignmentDto & { idx: number };
 
 interface KpiCatalogItem {
   id: string;
@@ -165,7 +170,7 @@ const CATEGORY_LABELS: Record<string, string> = {
               <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
             </header>
             <div class="pf-sg-main__body">
-              <pf-data-grid [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+              <pf-data-grid viewStateKey="admin.kpis.g1" [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
                             [getRowClass]="rowClass" [rowDragManaged]="true" (rowDragEnd)="onRowDragEnd($event)"
                             [loading]="loading()" loadingLabel="Loading number cards…"
                             emptyTitle="No cards on this screen yet" emptyBody="Add KPI picks one from the catalogue; drag rows to reorder."></pf-data-grid>
@@ -222,7 +227,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     }
     .pf-kpi-bandsel { display: block; min-width: 190px; }
     .pf-kpi-page.pf-band-page { max-width: none; margin: 0; padding: 24px clamp(16px, 3vw, 32px) 40px; gap: 0; }
-    .pf-kpi-panels { grid-template-columns: 300px minmax(0, 1fr); }
+    .pf-kpi-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-kpi-panels.pf-sg-panels--single, .pf-kpi-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-kpi-scr { list-style: none; margin: 0; padding: 6px; gap: 2px; }
     .pf-kpi-scr__btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 8px 10px;
@@ -740,23 +745,24 @@ export class KpiConfigComponent implements OnInit, HasUnsavedChanges {
   readonly getRowId = (p: GetRowIdParams<KpiAssignmentDto & { idx: number }>) => p.data.kpiId;
   readonly rowClass = sgRowOff<KpiAssignmentDto>(a => a.enabled);
   readonly gridRows = computed(() => this._draft().map((a, idx) => ({ ...a, idx })));
-  readonly colDefs = computed<ColDef<KpiAssignmentDto & { idx: number }>[]>(() => {
+  readonly colDefs = computed<ColDef<Row>[]>(() => {
     this._catalog();
     const web = !this.narrow();
     const n = this._draft().length;
     return [
-      { colId: 'order', headerName: '#', width: 76, minWidth: 76, maxWidth: 76, flex: 0, rowDrag: true, cellClass: 'pf-num',
-        valueGetter: p => (p.data ? p.data.idx + 1 : '') },
-      { colId: 'kpi', headerName: 'KPI', flex: 1.6, minWidth: 200,
-        valueGetter: p => (p.data ? this.kpiName(p.data.kpiId) : ''),
-        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => sgCell(p.data ? this.kpiName(p.data.kpiId) : '', p.data ? this.kpiDesc(p.data.kpiId) : null, true) },
-      { colId: 'kind', headerName: 'Category · type', flex: 1, minWidth: 150,
-        valueGetter: p => (p.data ? `${this.kpiCategory(p.data.kpiId)} · ${this.kpiValueType(p.data.kpiId)}` : ''),
-        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => { const el = sgCell(null, p.data ? `${this.kpiCategory(p.data.kpiId)} · ${this.kpiValueType(p.data.kpiId)}` : null); el.firstElementChild?.remove(); return el; } },
-      { colId: 'status', headerName: 'Shown', width: 96, minWidth: 96, maxWidth: 96, flex: 0, wrapText: false, autoHeight: false,
-        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => (p.data
+      numberCol<Row>({ colId: 'order', headerName: '#', width: 76, minWidth: 76, maxWidth: 76, flex: 0, rowDrag: true, cellClass: 'pf-num' },
+        r => r.idx + 1, 'left'),
+      textCol<Row>({ colId: 'kpi', headerName: 'KPI', flex: 1.6, minWidth: 200,
+        cellRenderer: (p: ICellRendererParams<Row>) => sgCell(p.data ? this.kpiName(p.data.kpiId) : '', p.data ? this.kpiDesc(p.data.kpiId) : null, true) },
+        r => this.kpiName(r.kpiId)),
+      textCol<Row>({ colId: 'kind', headerName: 'Category · type', flex: 1, minWidth: 150,
+        cellRenderer: (p: ICellRendererParams<Row>) => { const el = sgCell(null, p.data ? `${this.kpiCategory(p.data.kpiId)} · ${this.kpiValueType(p.data.kpiId)}` : null); el.firstElementChild?.remove(); return el; } },
+        r => `${this.kpiCategory(r.kpiId)} · ${this.kpiValueType(r.kpiId)}`),
+      valuesCol<Row>({ colId: 'status', headerName: 'Shown', width: 96, minWidth: 96, maxWidth: 96, flex: 0, wrapText: false, autoHeight: false,
+        cellRenderer: (p: ICellRendererParams<Row>) => (p.data
           ? sgSwitch(p.data.enabled, this.kpiName(p.data.kpiId), () => this.toggleEnabled(p.data!.idx)) : document.createElement('span')) },
-      sgActionsCol<KpiAssignmentDto & { idx: number }>(web, [], 3, p => {
+        r => (r.enabled ? 'Shown' : 'Hidden'), WorkSetFilterComponent, 'left', r => (r.enabled ? 0 : 1)),
+      sgActionsCol<Row>(web, [], 3, p => {
         const d = p.data;
         if (!d) return document.createElement('span');
         const el = sgActions(web, [
@@ -1147,4 +1153,8 @@ export class KpiConfigComponent implements OnInit, HasUnsavedChanges {
       });
     }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.kpis', { q: this.filterQuery, scope: this.selectedScope });
 }

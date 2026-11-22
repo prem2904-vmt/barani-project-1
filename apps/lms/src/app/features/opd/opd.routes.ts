@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { unsavedChangesGuard } from '../../shared/utils/unsaved-changes';
 import { permissionGuard } from '../../core/auth/permission.guard';
 import { OPD_SETTINGS_OPEN_PERMS } from '../../core/auth/route-access';
@@ -26,7 +27,12 @@ export const OPD_SHELL_ROUTES: Routes = [
   { path: 'opd', canActivate: [opdGuard], loadComponent: () => import('./home/opd-home.component').then(m => m.OpdHomeComponent) },
 
   // ── Front desk / queue / vitals (Agent B) ──
-  { path: 'opd/desk', canActivate: [opdGuard], loadComponent: () => import('./frontdesk/desk.page').then(m => m.OpdDeskPage) },
+  // The OPD desk's visit list is retired into the COMMON Frontdesk (owner 2026-11-20): every OPD visit is an OPD row
+  // there. /opd/desk (nav tiles, "back" links, the book-visit return) lands on /frontdesk with OPD picked in the ONE
+  // service filter — still behind opdGuard, so with OPD off it bounces exactly as before. The old page stays at
+  // /opd/desk/classic (unlinked) for what the Frontdesk does not carry yet: the doctors board and "Procedures to book".
+  { path: 'opd/desk/classic', canActivate: [opdGuard], loadComponent: () => import('./frontdesk/desk.page').then(m => m.OpdDeskPage) },
+  { path: 'opd/desk', pathMatch: 'full', canActivate: [opdGuard, () => inject(Router).createUrlTree(['/frontdesk'], { queryParams: { service: 'opd' } })], children: [] },
   { path: 'opd/visit/new', canActivate: [opdGuard], loadComponent: () => import('./frontdesk/book-visit.page').then(m => m.OpdBookVisitPage) },
   { path: 'opd/visit/:id', canActivate: [opdGuard], loadComponent: () => import('./frontdesk/visit-detail.page').then(m => m.OpdVisitDetailPage) },
   { path: 'opd/queue', canActivate: [opdGuard], loadComponent: () => import('./queue/token-queue.page').then(m => m.OpdTokenQueuePage) },

@@ -1,28 +1,43 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { Router } from '@angular/router';
-import { ApiService } from '../../../core/services/api.service';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
+import { DesktopNotifyService } from '../../../core/services/desktop-notify.service';
 import { Notification } from '../../models/user.model';
 import { NotifRoute, notificationRoute } from './notification-route';
 import { canonicalNotificationType } from '../../utils/notification-type';
-import { CriticalResultsService } from '../../../core/services/critical-results.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { ApiError } from '../../models/api-response.model';
-import { DesktopNotifyService } from '../../../core/services/desktop-notify.service';
+import { NotificationsStore } from './notifications.store';
+import { MergedNotification, alertedText } from './notification-merge';
+import { NOTIF_ICON_PATHS, NotifTone, kindMeta } from './notification-kinds';
+import { RowAction, rowAction } from './notification-action';
+import { NotificationIconComponent } from './notification-icon.component';
 
-type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
+/** The popover shows the latest this-many rows (merged); the page has the full list. */
+export const POPOVER_ROWS = 6;
 
+const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The bell + its popover (owner-approved redesign 2026-11-19).
+ *
+ * Popover: "Notifications · N unread" + Mark all read; the latest few alerts, duplicates merged ("alerted 2 times");
+ * each row = icon tile, bold title + time, the body (wraps, never truncated), ONE action button; footer
+ * "See all notifications" → /notifications. Keyboard: Esc closes, Tab is trapped inside, focus returns to the bell;
+ * new arrivals are announced politely (aria-live). The badge is UNCHANGED: unread among the bell's list.
+ * State lives in NotificationsStore (shared with the Notifications page).
+ */
 @Component({
   selector: 'pf-notification-bell',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink, NotificationIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="relative">
-      <button type="button"
+      <button type="button" #bellBtn
               class="pf-bell-btn press"
               [class.has-unread]="unreadCount() > 0"
+              [attr.aria-expanded]="open()"
+              aria-haspopup="dialog"
               (click)="toggleOpen()"
               [attr.aria-label]="'Notifications' + (unreadCount() > 0 ? ', ' + unreadCount() + ' unread' : '')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -33,74 +48,87 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
           <span class="pf-bell-badge">{{ displayCount() }}</span>
         }
       </button>
+      <!-- New arrivals, announced without stealing focus. -->
+      <div class="pf-sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="bell-live">{{ announce() }}</div>
 
       @if (open()) {
-        <div class="pf-bell-panel slide-up pf-modal-centered" role="dialog" aria-label="Notifications">
+        <div class="pf-bell-panel slide-up pf-modal-centered" role="dialog" aria-label="Notifications" tabindex="-1" #panel
+             data-testid="bell-popover" (keydown)="onPanelKey($event)">
           <header class="pf-bell-header">
-            <div>
-              <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                 style="color: var(--text-muted);">Inbox</p>
-              <p class="text-[15px] font-semibold" style="color: var(--text-primary);">Notifications</p>
-            </div>
+            <h2 class="pf-bell-title">Notifications <span class="pf-bell-count">@if (unreadCount() > 0) { · <span class="pf-num">{{ unreadCount() }}</span> unread } @else { · all read }</span></h2>
             @if (unreadCount() > 0) {
-              <button type="button" class="pf-mark-all" (click)="markAllRead()">
-                Mark all read
-              </button>
+              <button type="button" class="pf-mark-all press" (click)="markAllRead()">Mark all read</button>
             }
           </header>
 
           <div class="pf-bell-body">
-            @if (items().length === 0) {
+            @if (!loaded()) {
+              <!-- Same shape as the rows: tile, title + time, two body lines, a button. -->
+              <div class="pf-bell-skel" role="status" aria-label="Loading notifications">
+                @for (i of skel; track i) {
+                  <div class="pf-bell-skel__row" aria-hidden="true">
+                    <span class="pf-bell-skel__tile"></span>
+                    <span class="pf-bell-skel__txt"><i style="width: 46%"></i><i style="width: 92%"></i><i style="width: 64%"></i><b></b></span>
+                  </div>
+                }
+              </div>
+            } @else if (rows().length === 0) {
               <div class="pf-bell-empty">
-                <div class="pf-empty-glow"></div>
-                <p class="text-[13px]" style="color: var(--text-secondary);">You're all caught up</p>
-                <p class="text-[11px] mt-1" style="color: var(--text-muted);">New alerts will land here.</p>
+                <p class="pf-bell-empty__t">You're all caught up</p>
+                <p class="pf-bell-empty__s">New alerts will land here.</p>
               </div>
             } @else {
-              @for (n of items(); track n.id) {
-                <button type="button"
-                        class="pf-bell-row"
-                        [class.is-unread]="!n.isRead"
-                        (click)="onRow(n)">
-                  <span class="pf-type-icon" [attr.data-tone]="toneFor(n.type)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <g [innerHTML]="pathFor(n.type)"></g>
-                    </svg>
-                  </span>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                      <p class="text-[13px] font-semibold truncate" style="color: var(--text-primary);">{{ n.title }}</p>
-                      @if (!n.isRead) { <span class="pf-unread-dot" aria-hidden="true"></span> }
+              <ul class="pf-bell-list">
+                @for (r of rows(); track r.key) {
+                  @let n = r.rep;
+                  @let a = actionOf(r);
+                  <li class="pf-bell-row" [class.is-unread]="!r.isRead">
+                    <pf-notif-icon [icon]="metaOf(n.type).icon" [tone]="metaOf(n.type).tone" [label]="typeLabel(n.type)" [tile]="34"></pf-notif-icon>
+                    <div class="pf-bell-main">
+                      <button type="button" class="pf-bell-open" (click)="onRow(r)">
+                        <span class="pf-bell-line">
+                          <b class="pf-bell-rtitle">{{ n.title }}</b>
+                          <time class="pf-bell-time" [attr.datetime]="n.createdAt">{{ n.createdAt | date:'h:mm a':'+0530' }}</time>
+                        </span>
+                        @if (n.body) { <span class="pf-bell-body-text">{{ n.body }}</span> }
+                      </button>
+                      @if (a || r.count > 1) {
+                        <div class="pf-bell-foot">
+                          @if (a) {
+                            @if (a.kind === 'ack') {
+                              <!-- NABL: the explicit acknowledgement — reading the bell is not it. A merged row acknowledges every alert it stands for. -->
+                              <button type="button" class="pf-bell-ack press" [disabled]="acking() === r.key"
+                                      (click)="acknowledge(r)"
+                                      [attr.aria-label]="'Acknowledge critical result: ' + n.title">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                {{ acking() === r.key ? 'Acknowledging…' : 'Acknowledge' }}
+                              </button>
+                            } @else {
+                              <button type="button" class="pf-bell-act press" (click)="go(r, a)">{{ a.label }}</button>
+                            }
+                          }
+                          @if (r.count > 1) { <span class="pf-bell-extra">{{ alerted(r.count) }}</span> }
+                        </div>
+                      }
                     </div>
-                    @if (n.body) {
-                      <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">{{ n.body }}</p>
-                    }
-                    <p class="text-[10.5px] font-mono mt-1" style="color: var(--text-muted);">
-                      {{ n.createdAt | date:'shortTime' }} · {{ typeLabel(n.type) }}
-                    </p>
-                  </div>
-                  @if (canAcknowledge(n)) {
-                    <!-- NABL: the explicit acknowledgement — reading the bell is
-                         not it. Records who saw the critical value and when. -->
-                    <button type="button" class="pf-bell-ack press" [disabled]="acking() === n.id"
-                            (click)="$event.stopPropagation(); acknowledge(n)"
-                            [attr.aria-label]="'Acknowledge critical result: ' + n.title">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                      {{ acking() === n.id ? 'Acknowledging…' : 'Acknowledge' }}
-                    </button>
-                  } @else if (linkFor(n)) {
-                    <svg class="pf-bell-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-                  }
-                </button>
-              }
+                    @if (!r.isRead) { <span class="pf-unread-dot" aria-label="Unread"></span> } @else { <span class="pf-unread-gap" aria-hidden="true"></span> }
+                  </li>
+                }
+              </ul>
             }
           </div>
+
+          <a class="pf-bell-all" routerLink="/notifications" (click)="onSeeAll()" data-testid="bell-see-all">
+            See all notifications
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
         </div>
       }
     </div>
   `,
   styles: [`
     :host { display: inline-flex; }
+    .pf-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
     /* Button matches the top-strip .pf-strip-btn slot exactly. */
     .pf-bell-btn {
@@ -125,6 +153,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
       background: var(--bg-hover);
       color: var(--text-primary);
     }
+    .pf-bell-btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-bell-btn.has-unread {
       color: var(--text-primary);
     }
@@ -161,163 +190,123 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
       letter-spacing: 0.01em;
     }
 
-    /* Panel --------------------------------------------------- */
+    /* Popover ------------------------------------------------- */
     .pf-bell-panel {
       position: absolute;
       right: 0;
       margin-top: 10px;
-      width: 340px;
-      max-width: calc(100vw - 32px);
-      border-radius: 18px;
+      width: 420px;
+      max-width: calc(100vw - 24px);
+      display: flex; flex-direction: column;
+      max-height: min(640px, calc(100dvh - var(--pf-botbar-h, 72px) - 28px));
+      border-radius: 16px;
       background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--pf-line, var(--glass-border));
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
       z-index: 40;
       overflow: hidden;
+      outline: none;
     }
-
     .pf-bell-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px 12px;
-      border-bottom: 1px solid var(--border-muted);
+      display: flex; align-items: center; gap: 10px; flex: none;
+      padding: 10px 12px 10px 16px; min-height: 56px;
+      border-bottom: 1px solid var(--pf-line, var(--border-muted));
     }
-
+    .pf-bell-title { flex: 1; margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-bell-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
     .pf-mark-all {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--violet-text);
-      background: none;
-      border: none;
-      padding: 4px 8px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.15s ease;
+      min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+      font: inherit; font-size: 12.5px; font-weight: 600; color: var(--violet-text);
     }
-    .pf-mark-all:hover {
-      background: rgba(168, 85, 247, 0.12);
-    }
+    .pf-mark-all:hover { background: var(--pf-chip-bg); }
 
-    .pf-bell-body {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .pf-bell-empty {
-      position: relative;
-      text-align: center;
-      padding: 36px 16px;
-    }
-    .pf-empty-glow {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 12px;
-      border-radius: 9999px;
-      background: radial-gradient(circle at center, rgba(124, 58, 237, 0.25), transparent 70%);
-    }
+    .pf-bell-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .pf-bell-list { list-style: none; margin: 0; padding: 0; }
 
     .pf-bell-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      width: 100%;
-      padding: 12px 16px;
-      text-align: left;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--border-muted);
-      cursor: pointer;
-      transition: background 0.15s ease;
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px 12px 16px;
+      border-bottom: 1px solid var(--pf-line, var(--border-muted));
     }
     .pf-bell-row:last-child { border-bottom: none; }
-    .pf-bell-row:hover { background: var(--bg-hover); }
-    .pf-bell-row.is-unread {
-      background: linear-gradient(90deg, rgba(124, 58, 237, 0.06), transparent 60%);
+    .pf-bell-row.is-unread { background: color-mix(in srgb, var(--violet-text) 7%, transparent); }
+    .pf-bell-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-bell-open {
+      display: flex; flex-direction: column; gap: 3px; width: 100%; margin: -4px; padding: 4px; border: 0; border-radius: 8px;
+      background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; min-height: 44px; box-sizing: content-box;
     }
-    .pf-bell-row.is-unread:hover {
-      background: linear-gradient(90deg, rgba(124, 58, 237, 0.1), var(--bg-hover) 60%);
+    .pf-bell-open:hover { background: var(--pf-chip-bg); }
+    .pf-bell-open:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 0; }
+    .pf-bell-line { display: flex; align-items: baseline; gap: 8px; }
+    .pf-bell-rtitle { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-bell-time { flex: none; font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-bell-body-text { font-size: 13px; line-height: 1.4; color: var(--text-secondary); overflow-wrap: anywhere; white-space: normal; }
+    .pf-bell-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pf-bell-extra { font-size: 11.5px; color: var(--text-tertiary); }
+
+    .pf-bell-act, .pf-bell-ack {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 9px;
+      font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: transparent; white-space: nowrap;
     }
+    .pf-bell-act { color: var(--violet-text); border: 1px solid var(--pf-line, var(--border-muted)); }
+    .pf-bell-act:hover { background: var(--pf-chip-bg); }
     .pf-bell-ack {
-      flex-shrink: 0; align-self: center; display: inline-flex; align-items: center; gap: 5px;
-      min-height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 600;
-      color: var(--red-text, #b91c1c); background: transparent;
-      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); cursor: pointer;
+      color: var(--red-text, #b91c1c);
+      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent);
     }
     .pf-bell-ack:hover:not(:disabled) { background: color-mix(in srgb, var(--red-text, #dc2626) 8%, transparent); }
     .pf-bell-ack:disabled { opacity: 0.6; cursor: default; }
-    @media (hover: none) and (pointer: coarse) { .pf-bell-ack { min-height: 44px; } }
-    .pf-bell-chev { flex-shrink: 0; align-self: center; color: var(--text-muted); opacity: 0.6; }
-    .pf-bell-row:hover .pf-bell-chev { opacity: 1; color: var(--text-secondary); }
+    .pf-bell-act:focus-visible, .pf-bell-ack:focus-visible, .pf-mark-all:focus-visible, .pf-bell-all:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+    /* Touch targets >= 44px. */
+    @media (hover: none) and (pointer: coarse) { .pf-bell-act, .pf-bell-ack { min-height: 44px; } }
 
-    .pf-type-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .pf-type-icon[data-tone='rose'] {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.08));
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: var(--red-text);
-    }
-    .pf-type-icon[data-tone='amber'] {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.08));
-      border: 1px solid rgba(245, 158, 11, 0.3);
-      color: var(--amber-text);
-    }
-    .pf-type-icon[data-tone='emerald'] {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: var(--green-text);
-    }
-    .pf-type-icon[data-tone='violet'] {
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.08));
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      color: var(--violet-text);
-    }
-    .pf-type-icon[data-tone='sky'] {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.08));
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      color: var(--sky-text);
-    }
+    .pf-unread-dot { flex: none; width: 7px; height: 7px; margin-top: 7px; border-radius: 9999px; background: var(--violet-text); }
+    .pf-unread-gap { flex: none; width: 7px; }
 
-    .pf-unread-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 9999px;
-      background: var(--gradient-primary);
-      box-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
-      flex-shrink: 0;
+    .pf-bell-all {
+      flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px;
+      border-top: 1px solid var(--pf-line, var(--border-muted)); color: var(--violet-text);
+      font-size: 13.5px; font-weight: 600; text-decoration: none;
     }
+    .pf-bell-all:hover { background: var(--pf-chip-bg); }
+
+    .pf-bell-empty { text-align: center; padding: 40px 16px; }
+    .pf-bell-empty__t { margin: 0; font-size: 13.5px; color: var(--text-secondary); }
+    .pf-bell-empty__s { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
+
+    /* Skeleton mirrors a row. */
+    .pf-bell-skel__row { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--pf-line, var(--border-muted)); }
+    .pf-bell-skel__tile { flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--pf-chip-bg); }
+    .pf-bell-skel__txt { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .pf-bell-skel__txt i, .pf-bell-skel__txt b { display: block; height: 11px; border-radius: 6px; background: var(--pf-chip-bg); }
+    .pf-bell-skel__txt b { width: 92px; height: 32px; border-radius: 9px; }
+    .pf-bell-skel__tile, .pf-bell-skel__txt i, .pf-bell-skel__txt b { animation: pf-bell-pulse 1.4s ease-in-out infinite; }
+    @keyframes pf-bell-pulse { 50% { opacity: 0.55; } }
+    @media (prefers-reduced-motion: reduce) { .pf-bell-skel__tile, .pf-bell-skel__txt i, .pf-bell-skel__txt b { animation: none; } }
   `]
 })
 export class NotificationBellComponent implements OnInit {
-  private readonly api = inject(ApiService);
+  private readonly store = inject(NotificationsStore);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
-  private readonly critical = inject(CriticalResultsService);
-  private readonly toasts = inject(ToastService);
 
-  private readonly _items = signal<Notification[]>([]);
-  /** Critical rows acknowledged in this session (the button hides once done). */
-  private readonly _acked = signal<Set<string>>(new Set());
-  readonly acking = signal<string | null>(null);
+  private readonly bellBtn = viewChild<ElementRef<HTMLButtonElement>>('bellBtn');
+  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
+
   private readonly _open = signal(false);
-  readonly items = this._items.asReadonly();
+  readonly items = this.store.items;
   readonly open = this._open.asReadonly();
-  readonly unreadCount = computed(() => this._items().filter(n => !n.isRead).length);
+  readonly acking = this.store.acking;
+  readonly unreadCount = this.store.unreadCount;
+  readonly loaded = this.store.bellLoaded;
   readonly displayCount = computed(() => {
     const n = this.unreadCount();
     return n > 99 ? '99+' : n.toString();
   });
+  /** The latest alerts, duplicates merged. */
+  readonly rows = computed(() => this.store.merge(this.store.items()).slice(0, POPOVER_ROWS));
+  readonly announce = signal('');
+  protected readonly skel = [0, 1, 2, 3];
 
   constructor() {
     // Desktop app: unread bell rows → dock / taskbar badge (0 when the bell
@@ -330,27 +319,56 @@ export class NotificationBellComponent implements OnInit {
       });
       inject(DestroyRef).onDestroy(() => desktop.setBellUnread(0));
     }
+    // Polite announcement when the unread count RISES after the first load (a live arrival).
+    let prev: number | null = null;
+    effect(() => {
+      const n = this.unreadCount();
+      const ready = this.store.bellLoaded();
+      untracked(() => {
+        if (!ready) return;
+        if (prev !== null && n > prev) this.announce.set(`${n - prev} new notification${n - prev === 1 ? '' : 's'}`);
+        prev = n;
+      });
+    });
   }
 
   ngOnInit(): void { this.load(); }
 
-  load(): void {
-    this.api.get<Notification[]>('/api/notifications/').subscribe({
-      next: list => this._items.set(list ?? []),
-      error: () => this._items.set([])
-    });
-  }
+  load(): void { this.store.loadBell(); }
 
   toggleOpen() {
-    this._open.update(v => !v);
-    if (this._open()) this.load();
+    if (this._open()) { this.close(true); return; }
+    this.openPanel();
+  }
+
+  private openPanel(): void {
+    this._open.set(true);
+    this.load();
+    // Focus lands in the popover (its panel), so the keyboard user starts inside the trap.
+    setTimeout(() => { this.fitPanel(); this.panel()?.nativeElement.focus(); }, 0);
+  }
+
+  /** The popover hangs from the bell's right edge; on a phone the bell is not at the screen edge, so pull the
+   *  popover back until it is fully on screen (12px gutter). */
+  private fitPanel(): void {
+    const p = this.panel()?.nativeElement;
+    if (!p) return;
+    p.style.right = '';
+    const r = p.getBoundingClientRect();
+    if (r.width > 0 && r.left < 12) p.style.right = `${Math.round(r.left - 12)}px`;
+  }
+
+  private close(returnFocus: boolean): void {
+    if (!this._open()) return;
+    this._open.set(false);
+    if (returnFocus) setTimeout(() => this.bellBtn()?.nativeElement.focus(), 0);
   }
 
   /** A tap on a system push with no dedicated screen lands here: the push
    *  service broadcasts pf-open-bell so the tapped notification is visible. */
   @HostListener('window:pf-open-bell')
   onOpenRequest() {
-    if (!this._open()) { this._open.set(true); this.load(); }
+    if (!this._open()) this.openPanel();
   }
 
   /** Desktop app: a click on a native bell notification → open that event's
@@ -361,7 +379,7 @@ export class NotificationBellComponent implements OnInit {
     ev.stopImmediatePropagation();
     const d = (ev as CustomEvent<{ type: string; referenceType: string | null; referenceId: string | null }>).detail
       ?? { type: '', referenceType: null, referenceId: null };
-    const row = this._items().find(n => !n.isRead && (n.referenceId ?? null) === d.referenceId
+    const row = this.items().find(n => !n.isRead && (n.referenceId ?? null) === d.referenceId
       && canonicalNotificationType(n.type) === canonicalNotificationType(d.type));
     const link = notificationRoute(d.type, d.referenceType, d.referenceId, this.auth.hasPermission('validate_result'));
     if (row) this.markRead(row);
@@ -378,88 +396,72 @@ export class NotificationBellComponent implements OnInit {
   @HostListener('document:click', ['$event'])
   onDocClick(ev: MouseEvent) {
     if (!this._open()) return;
-    if (!this.host.nativeElement.contains(ev.target as Node)) this._open.set(false);
+    if (!this.host.nativeElement.contains(ev.target as Node)) this.close(false);
   }
 
   @HostListener('document:keydown.escape')
-  onEscape() { if (this._open()) this._open.set(false); }
+  onEscape() { this.close(true); }
 
-  /** Tap a notification: mark it read and, when it points at something with a
+  /** Tab stays inside the popover (the bell's own button is outside it, reached again after Esc). */
+  onPanelKey(ev: KeyboardEvent): void {
+    if (ev.key !== 'Tab') return;
+    const root = this.panel()?.nativeElement;
+    if (!root) return;
+    const f = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(e => !e.hasAttribute('disabled'));
+    if (!f.length) { ev.preventDefault(); root.focus(); return; }
+    const first = f[0], last = f[f.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (ev.shiftKey && (active === first || active === root)) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && active === last) { ev.preventDefault(); first.focus(); }
+  }
+
+  onSeeAll(): void { this.close(false); }
+
+  /** Tap a notification: mark it (and everything merged into it) read and, when it points at something with a
    *  screen, jump there (OPS-60). Falls back to just marking read. */
-  onRow(n: Notification) {
-    this.markRead(n);
-    const link = this.linkFor(n);
+  onRow(r: MergedNotification) {
+    this.store.markRowRead(r);
+    const link = this.linkFor(r.rep);
     if (link) {
-      this._open.set(false);
+      this.close(false);
       this.router.navigate(link.commands, link.queryParams ? { queryParams: link.queryParams } : {});
     }
   }
 
+  go(r: MergedNotification, a: RowAction): void {
+    this.store.markRowRead(r);
+    if (!a.route) return;
+    this.close(false);
+    this.router.navigate(a.route.commands, a.route.queryParams ? { queryParams: a.route.queryParams } : {});
+  }
+
   /** Navigation target for a notification, or null when there's no dedicated
    *  screen (see notificationRoute). */
-  linkFor(n: Notification): NotifRoute | null {
-    return notificationRoute(n.type, n.referenceType, n.referenceId, this.auth.hasPermission('validate_result'));
-  }
+  linkFor(n: Notification): NotifRoute | null { return this.store.linkFor(n); }
 
   /** Critical bells (critical_value / critical_unvalidated) referencing an
    *  order test, for a user who may act on results. */
-  canAcknowledge(n: Notification): boolean {
-    const t = canonicalNotificationType(n.type);
-    if (t !== 'critical_value' && t !== 'critical_unvalidated') return false;
-    if (n.referenceType !== 'order_test' || !n.referenceId) return false;
-    if (this._acked().has(n.referenceId)) return false;
-    return this.auth.hasAnyPermission?.(['enter_result', 'validate_result']) ?? false;
-  }
+  canAcknowledge(n: Notification): boolean { return this.store.canAcknowledge(n); }
 
-  /** Explicit acknowledgement from the bell: writes the NABL record (via
-   *  'bell'), then the row is read. A record already acknowledged by this
-   *  user (or one that never existed — a legacy bell) just marks read. */
-  acknowledge(n: Notification) {
-    const ref = n.referenceId;
-    if (!ref || this.acking()) return;
-    this.acking.set(n.id);
-    this.critical.acknowledgeOrderTest(ref, 'bell').subscribe({
-      next: touched => {
-        this.acking.set(null);
-        this._acked.update(s => new Set(s).add(ref));
-        this.markRead(n);
-        this.toasts.success(touched.length ? 'Critical result acknowledged' : 'Already acknowledged');
-      },
-      error: e => { this.acking.set(null); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
+  actionOf(r: MergedNotification): RowAction | null { return rowAction(r.rep, this.store); }
 
-  markRead(n: Notification) {
-    if (n.isRead) return;
-    this.api.patch(`/api/notifications/${n.id}/read`).subscribe({
-      next: () => this._items.update(list => list.map(x => x.id === n.id ? { ...x, isRead: true } : x))
-    });
-  }
+  /** Explicit acknowledgement from the bell: writes the NABL record (via 'bell') for every alert the row stands
+   *  for, then reads them. */
+  acknowledge(r: MergedNotification) { this.store.acknowledge(r); }
 
-  markAllRead() {
-    const unread = this._items().filter(n => !n.isRead);
-    if (unread.length === 0) return;
-    unread.forEach(n => this.api.patch(`/api/notifications/${n.id}/read`).subscribe());
-    this._items.update(list => list.map(n => ({ ...n, isRead: true })));
-  }
+  markRead(n: Notification) { this.store.markRead(n); }
+
+  markAllRead() { this.store.markAllRead(); }
+
+  alerted(count: number): string { const t = alertedText(count); return t ? t[0].toUpperCase() + t.slice(1) : ''; }
 
   // Icon / tone / label match the CANONICAL key, so legacy "lms."-prefixed
-  // rows (most of dev's tat_breach / report_ready / sample_rejection) render
-  // like new ones instead of as a generic bell.
-  toneFor(type: string): TypeTone {
-    switch (canonicalNotificationType(type)) {
-      case 'critical_value':   return 'rose';
-      case 'result_rejected':  return 'rose';
-      case 'sample_rejection': return 'amber';
-      case 'tat_breach':       return 'amber';
-      case 'report_ready':     return 'emerald';
-      // Urgent-priority order ready to report — amber (same urgency tone as
-      // tat_breach/sample_rejection), distinct from the routine report_ready.
-      case 'urgent_report_ready': return 'amber';
-      default:                 return 'violet';
-    }
-  }
+  // rows render like new ones instead of as a generic bell.
+  metaOf(type: string) { return kindMeta(type); }
 
+  toneFor(type: string): NotifTone { return kindMeta(type).tone; }
+
+  /** Plain-words kind name (the icon tile's screen-reader name). */
   typeLabel(type: string): string {
     const t = canonicalNotificationType(type);
     switch (t) {
@@ -473,29 +475,6 @@ export class NotificationBellComponent implements OnInit {
     }
   }
 
-  pathFor(type: string): string {
-    switch (canonicalNotificationType(type)) {
-      // critical value — heart-pulse
-      case 'critical_value':
-        return '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27"/>';
-      // sample rejection — test tube with slash
-      case 'sample_rejection':
-        return '<path d="M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z"/><path d="M2 22 22 2"/>';
-      // report ready — file check
-      case 'report_ready':
-      // urgent order ready to report — same file-check (it IS a report-ready
-      // moment), amber tone above is what marks it urgent.
-      case 'urgent_report_ready':
-        return '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>';
-      // TAT breach — clock with alert
-      case 'tat_breach':
-        return '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>';
-      // result rejected — arrow-uturn / undo
-      case 'result_rejected':
-        return '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>';
-      // default — bell
-      default:
-        return '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>';
-    }
-  }
+  /** The kind's icon as one path string (equal kinds → equal strings). */
+  pathFor(type: string): string { return (NOTIF_ICON_PATHS[kindMeta(type).icon] ?? NOTIF_ICON_PATHS.bell).join(' '); }
 }

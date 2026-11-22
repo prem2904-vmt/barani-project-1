@@ -10,6 +10,7 @@
  * reason a failed apply gives. The server stays the judge of every rule
  * (clinical confirm, staleness, permissions); these only describe.
  */
+import { statusWords, type StatusWords } from './status-words';
 import type { TmJson, TmProposal } from '../models/tm-proposal.model';
 import { summarizeRanges, type RangeLike } from './reference-range';
 import { agoWords } from '../instruments/instrument-config';
@@ -69,6 +70,12 @@ const STATUS: Record<string, string> = {
 };
 export function tmStatusLabel(status: string): string {
   return STATUS[status] ?? status;
+}
+
+/** The proposal Status cell as words (design D): approved = done; failed / stale / expired = late (rose); the rest normal. Line 2 = "Affects results" when a clinical field changes. */
+export function tmStatusWords(status: string, clinical = false): StatusWords {
+  const tone = status === 'approved' ? 'done' : status === 'failed' || status === 'stale' || status === 'expired' ? 'late' : 'normal';
+  return statusWords(tmStatusLabel(status), clinical ? 'Clinical' : null, tone);
 }
 
 /** Engine name from "gemini:gemini-2.5-flash" → "Gemini". */

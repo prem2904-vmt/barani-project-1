@@ -160,6 +160,7 @@ exports[`non-OPD routes are exactly today's lab set > matches the snapshot 1`] =
   "reports",
   "reports/view/:id",
   "billing-counter",
+  "notifications",
   "messages",
   "dashboard",
   "insights",

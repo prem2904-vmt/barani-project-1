@@ -258,6 +258,16 @@
   border-top-right-radius: calc(var(--pf-radius-card) - 1px);
 }
 
+/* Pill fit (owner 2026-11-20): a card head that carries a pill group is ONE row at every width — the
+   pill (pf-segmented) tightens, then collapses to its selected-pill menu, instead of wrapping the head. */
+.pf-card__head:has(> pf-segmented) {
+  flex-wrap: nowrap;
+}
+
+.pf-card__head:has(> pf-segmented) > .pf-card__label {
+  white-space: nowrap;
+}
+
 .pf-card__icon {
   display: inline-flex;
   align-items: center;

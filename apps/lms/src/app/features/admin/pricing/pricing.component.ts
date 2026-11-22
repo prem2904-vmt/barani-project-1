@@ -1,3 +1,5 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { SKELETON_FRAME } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
@@ -26,6 +28,8 @@ import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { moneyCol, numComparator, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { SheetRoundtripService } from '../../files/roundtrip/sheet-roundtrip.service';
 import { PRICES_DATASET_ID } from '../../files/roundtrip/prices-dataset';
 
@@ -82,7 +86,7 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [AgGridAngular, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [...SKELETON_FRAME, AgGridAngular, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -144,7 +148,7 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
           </header>
           <div class="pf-2p__body">
             @if (loading()) {
-              <pf-skeleton-table class="pf-2p__skel" [rows]="12" [cols]="4" label="Loading prices…"></pf-skeleton-table>
+              <pf-skel-grid class="pf-2p__skel" [rows]="30" [columns]="4" label="Loading prices…"></pf-skel-grid>
             }
             <ag-grid-angular
               class="pf-2p__grid"
@@ -467,16 +471,16 @@ export class PricingComponent implements OnInit {
   readonly prRowClass = (p: RowClassParams<PriceGridRow>) => (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? 'pf-pr__row--off' : '');
   readonly prDefaultCol: ColDef<PriceGridRow> = { sortable: true, resizable: true, suppressMovable: true };
   readonly prCols: ColDef<PriceGridRow>[] = [
-    { headerName: 'Test', field: 'name', flex: 2, minWidth: 150, autoHeight: true,
+    textCol<PriceGridRow>({ headerName: 'Test', field: 'name', colId: 'name', flex: 2, minWidth: 150, autoHeight: true,
       cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
         const w = document.createElement('div'); w.className = 'pf-pr__cell' + (p.data?.spec ? ' pf-pr__spec' : '');
         const n = document.createElement('span'); n.className = 'pf-pr__name'; n.textContent = p.data?.name ?? '';
         const m = document.createElement('span'); m.className = 'pf-pr__meta';
         m.textContent = (p.data?.meta ?? '') + (this.phone() && p.data && p.data.type !== 'Test' && p.data.type !== 'Specimen' && p.data.type !== p.data.meta ? ' · ' + p.data.type : '') + (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? ' · Not offered here' : '');
         w.append(n, m); return w;
-      } },
-    { headerName: 'Type', field: 'type', colId: 'type', width: 110, minWidth: 96 },
-    { headerName: 'Offered', colId: 'offered', width: 104, minWidth: 72, sortable: false,
+      } }, r => r.name ?? ''),
+    valuesCol<PriceGridRow>({ headerName: 'Type', field: 'type', colId: 'type', width: 110, minWidth: 96 }, r => r.type ?? '', WorkSetFilterComponent),
+    valuesCol<PriceGridRow>({ headerName: 'Offered', colId: 'offered', width: 104, minWidth: 72,
       cellClassRules: { 'pf-pr__dirty': p => !!p.data && !p.data.spec && this.offeredDirty(p.data.testId) },
       cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
         if (!p.data || p.data.spec) return '';
@@ -486,11 +490,10 @@ export class PricingComponent implements OnInit {
         b.innerHTML = '<span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>';
         b.addEventListener('click', ev => { ev.stopPropagation(); this.setOffered(id, !this.offeredNow(id)); });
         return b;
-      } },
-    { headerName: 'Price (₹)', colId: 'price', width: 140, minWidth: 96, editable: true, type: 'rightAligned',
+      } }, r => (r.spec ? '' : this.offeredNow(r.testId) ? 'Offered' : 'Not offered'), WorkSetFilterComponent),
+    { ...moneyCol<PriceGridRow>({ headerName: 'Price (₹)', colId: 'price', width: 140, minWidth: 96, editable: true, type: 'rightAligned',
       cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 },
       cellStyle: { fontVariantNumeric: 'tabular-nums' },
-      valueGetter: p => !p.data ? null : p.data.spec ? this.specimenPriceNow(p.data.testId, p.data.spec) : this.edits()[p.data.testId],
       valueFormatter: p => (p.value === '' || p.value == null ? (p.data?.spec ? 'base' : '') : '₹' + Number(p.value).toLocaleString('en-IN')),
       valueSetter: p => {
         if (!p.data) return false;
@@ -500,7 +503,15 @@ export class PricingComponent implements OnInit {
         return true;
       },
       cellClassRules: { 'pf-pr__dirty': p => !!p.data && (p.data.spec ? this.isSpecimenDirty(p.data.testId, p.data.spec) : this.priceDirty(p.data.testId)) } },
+      r => this.priceOf(r), 'right'),
+      // Editing reads the cell value: keep the editor's value in RUPEES (the helper sorts on paise), '' = "base" for a specimen.
+      valueGetter: p => !p.data ? null : this.priceOf(p.data), comparator: numComparator },
   ];
+  /** The price the row shows (rupees); null when a specimen follows the base price / nothing is set. */
+  private priceOf(r: PriceGridRow): number | null {
+    const v = r.spec ? this.specimenPriceNow(r.testId, r.spec) : this.edits()[r.testId];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
   onPrGridReady(e: GridReadyEvent<PriceGridRow>) { this.prApi = e.api; this.fitPhone(); }
   /** Phones: Test · Offered · Price only (the type rides in the Test cell's muted line). */
   private readonly phone = mediaSignal('(max-width: 640px)', inject(DestroyRef));
@@ -811,4 +822,8 @@ export class PricingComponent implements OnInit {
     }
     return [...byKey.values()];
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.pricing', { search: this.search, dept: this.selectedDeptId, scope: this.scope });
 }

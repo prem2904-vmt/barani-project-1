@@ -1,5 +1,5 @@
 import { PhotosValue, parsePhotos, shrinkSize } from '../../canvas/photo';
-import { ptr } from '../../canvas/canvas.component.spec';
+import { ptr } from '../../canvas/canvas.spec-helpers';
 import { examplesOf } from '../../testing/examples';
 import { f, renderKind, unnamed, untouchable } from '../../testing/render-kind';
 import { TestAssetStore } from '../../testing/test-assets';

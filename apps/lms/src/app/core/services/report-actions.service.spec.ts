@@ -37,6 +37,12 @@ function setup(o: { perms?: string[]; trackFails?: boolean; clip?: 'ok' | 'fail'
     ],
   });
   const svc = TestBed.inject(ReportActionsService);
+  // WhatsApp flows archive the PDF in the background (`void this.archive()` →
+  // a lazy import of report-blob). Left real, that import can land after this
+  // file's environment is torn down and fails the WHOLE unit run with
+  // EnvironmentTeardownError (blocked the dev release 2026-11-22). The archive
+  // is best-effort and covered by report-blob.spec; stub it here.
+  vi.spyOn(svc as unknown as { archive: () => Promise<void> }, 'archive').mockResolvedValue(undefined);
   const writeText = vi.fn(async () => { if (o.clip === 'fail') throw new Error('denied'); });
   const share = vi.fn(async () => {});
   svc.shareEnv = { capacitor: null, navigator: { share: o.webShare ? share : undefined, clipboard: { writeText } } as never, document: null };

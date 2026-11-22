@@ -66,6 +66,8 @@ export const LAB_PAGES = {
       { id: 'slots', label: 'Booking slots', scope: 'this branch' },
       { id: 'priority', label: 'Priority engine', scope: 'this branch' },
       { id: 'referring', label: 'Referring doctors', scope: 'one shared list' },
+      // Which columns the Frontdesk WORK grid shows for Lab, in which order (features/admin/fd-grid-columns).
+      { id: 'columns', label: 'Work grid columns', scope: 'this branch' },
     ],
   },
   alerts: {

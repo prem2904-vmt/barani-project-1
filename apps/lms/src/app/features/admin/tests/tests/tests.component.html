@@ -37,7 +37,8 @@
           {{ restoring() ? 'Restoring…' : 'Restore to default' }}
         </button>
         }
-        @if (dirtyCount() > 0) {
+        @if (gridSaveShown()) {
+          @if (dirtyCount() > 0) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="saving()"
                   (click)="discardChanges()" title="Discard changes" aria-label="Discard changes">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -46,17 +47,21 @@
             </svg>
             Discard
           </button>
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
-                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" [title]="sendWord" [attr.aria-label]="sendWord">
+          }
+          <!-- Owner 2026-11-19: the batch Save is always there, DISABLED until a cell really changed. -->
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-save press" data-testid="tm-save" [disabled]="saving() || dirtyCount() === 0"
+                  [pfBusyInactive]="saving() || dirtyCount() === 0"
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" [title]="dirtyCount() > 0 || saving() ? sendWord : NO_CHANGES" [attr.aria-label]="sendWord">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
             </svg>
-            {{ sendWord }} ({{ dirtyCount() }})
+            {{ sendWord }}@if (dirtyCount() > 0) { ({{ dirtyCount() }}) }
           </button>
         }
-        @if (pricingView() && pricingDirty() > 0) {
-          <!-- Pricing edits: the band owns Save (the ONE primary) + Discard. -->
+        @if (pricingView()) {
+          <!-- Pricing edits: the band owns Save (the ONE primary, disabled until a price changed) + Discard. -->
+          @if (pricingDirty() > 0) {
           <span class="pf-savestate pf-tm-pricestate" role="status" aria-live="polite">
             <span class="pf-savestate__dot" aria-hidden="true"></span>
             <span class="pf-num">{{ pricingDirty() }}</span>&nbsp;unsaved
@@ -67,8 +72,10 @@
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             Discard
           </button>
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
-                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" [title]="sendWord" [attr.aria-label]="sendWord">
+          }
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving() || pricingDirty() === 0"
+                  [pfBusyInactive]="pricingSaving() || pricingDirty() === 0"
+                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" [title]="pricingDirty() > 0 || pricingSaving() ? sendWord : NO_CHANGES" [attr.aria-label]="sendWord">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -114,8 +121,8 @@
       }
       @if (dirtyCount() > 0) {
         <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
       }
+      <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || dirtyCount() === 0" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()" [attr.title]="dirtyCount() > 0 ? 'Save changes' : NO_CHANGES">Save changes@if (dirtyCount() > 0) { ({{ dirtyCount() }}) }</pf-touch-btn>
       <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
         <span icon-left aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -274,17 +281,20 @@
       <div class="pf-tm-main__body">
         @if (listSkeleton()) {
           <!-- First load: the grid's shape, not an empty grid. -->
-          <pf-skeleton-table class="pf-tm-grid-skel" [rows]="12" [cols]="6" label="Loading tests…"></pf-skeleton-table>
+          <!-- The grid's own shape (header + rows at the theme's row height), over the mounted grid. -->
+          <pf-skel-grid class="pf-tm-grid-skel" [rows]="30" [columns]="6" label="Loading tests…"></pf-skel-grid>
         }
         <ag-grid-angular
           [singleClickEdit]="isCoarse"
           class="pf-tm-grid"
+          pfGridViewState="test-master.grid"
           [theme]="gridTheme()"
           [rowData]="rowData()"
           [columnDefs]="phoneTrim(colDefs())"
           [defaultColDef]="defaultColDef"
           [getRowId]="getRowId"
           [getRowClass]="getRowClass"
+          [postSortRows]="postSortRows"
           [context]="gridContext"
           [animateRows]="true"
           [stopEditingWhenCellsLoseFocus]="true"
@@ -318,8 +328,8 @@
   <ng-template #deptBody>
     @if (listSkeleton()) {
     <!-- First open: the departments are on their way with the grid. -->
-    <div class="pf-card__body">
-      <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
+    <div class="pf-card__body pf-tm-dept-skel">
+      <pf-skel-side-list [rows]="9" label="Loading departments…"></pf-skel-side-list>
     </div>
     } @else {
     <ul class="pf-card__body pf-tm-dept-list">

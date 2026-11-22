@@ -1,3 +1,4 @@
+import type { ProcedureToBook } from './desk.models';
 /**
  * OPD front-desk rules (Agent B) — PURE. The server is the source of truth
  * (Services/Opd/Frontdesk/OpdFeeRules.cs + OpdPaymentSplit.cs); these mirror
@@ -136,3 +137,11 @@ export function collectDiscountProblem(bill: Pick<OpdBillView, 'lines' | 'discou
   if (p.payable < (bill.totalPaid || 0)) return "The bill can't go below what has already been paid.";
   return null;
 }
+
+/** The price line the desk reads: "Set by Dr X (preset ₹Y) · reason" or "Preset price". Pure. */
+export function toBookPriceText(r: Pick<ProcedureToBook, 'price' | 'rulePrice' | 'doctorName' | 'priceReason'>): string {
+  if (r.price === r.rulePrice) return 'Preset price';
+  const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  return `Set by ${r.doctorName || 'the doctor'} (preset ${inr(r.rulePrice)})${r.priceReason?.trim() ? ' · ' + r.priceReason.trim() : ''}`;
+}
+

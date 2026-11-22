@@ -8,7 +8,8 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OpdAdminApi, OpdDepartmentRow, OpdFormListRow, OpdServiceRow } from './opd-admin.api';
-import { OpdDepartmentsPage } from './departments.page';
+import { OpdDepartmentsPage, svcPriceValue } from './departments.page';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 
 /**
  * OPD Master — departments (filter side card) + the services grid (batch
@@ -111,6 +112,19 @@ describe('OPD Master page', () => {
     const price = c.colDefs().find((d) => d.colId === 'price')!;
     expect((price.editable as (p: unknown) => boolean)({ data: SERVICES[1] })).toBe(false);
     expect((price.editable as (p: unknown) => boolean)({ data: SERVICES[0] })).toBe(true);
+  });
+
+  it('every data column sorts and filters on its real value; the edit button column is action-only', () => {
+    const { c } = render();
+    for (const d of c.colDefs()) {
+      if (d.colId === 'act') { expect(d.sortable).toBe(false); expect(d.filter).toBeFalsy(); continue; }
+      expect(sortsAndFilters(d as never), String(d.colId ?? d.field)).toBe(true);
+    }
+    const price = c.colDefs().find((d) => d.colId === 'price')!;
+    const get = price.valueGetter as (p: unknown) => unknown;
+    expect(get({ data: SERVICES[0] })).toBe(500);
+    expect(get({ data: SERVICES[1] })).toBe(600);
+    expect(svcPriceValue({ priceMode: 'per_doctor', commonPrice: 0, doctorPrices: [] })).toBeNull();
   });
 
   it('turning a department off asks first; No keeps it on', async () => {

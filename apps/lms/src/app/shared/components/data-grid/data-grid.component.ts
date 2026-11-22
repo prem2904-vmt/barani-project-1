@@ -3,12 +3,14 @@ import {
 } from '@angular/core';
 import {
   AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, GetRowIdFunc, GridApi, GridReadyEvent, ModuleRegistry,
-  RowClassParams, RowClickedEvent, RowDragEndEvent,
+  IsFullWidthRowParams, RowClassParams, RowClickedEvent, RowDragEndEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ThemeService } from '../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../../../features/admin/tests/tests/grid-theme';
 import { SkeletonTableComponent } from '../../primitives/skeleton-kit.component';
+import { ViewStateService } from '../../services/view-state.service';
+import { keepGridViewState } from '../../services/grid-view-state';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -38,6 +40,9 @@ export const DATA_GRID_DEFAULT_COLDEF: ColDef = { sortable: true, resizable: tru
                      [quickFilterText]="quickFilter()" [animateRows]="true" [suppressNoRowsOverlay]="true"
                      [suppressCellFocus]="suppressCellFocus()" [singleClickEdit]="singleClickEdit()"
                      [stopEditingWhenCellsLoseFocus]="true" [rowDragManaged]="rowDragManaged()" (rowDragEnd)="rowDragEnd.emit($event)"
+                     [isFullWidthRow]="isFullWidthRow()" [fullWidthCellRenderer]="fullWidthCellRenderer()"
+                     [fullWidthCellRendererParams]="fullWidthCellRendererParams()"
+                     [suppressColumnVirtualisation]="suppressColumnVirtualisation()"
                      (gridReady)="onReady($event)" (rowClicked)="rowClicked.emit($event)" (cellClicked)="cellClicked.emit($event)"
                      (cellValueChanged)="cellValueChanged.emit($event)"></ag-grid-angular>
     @if (loading()) {
@@ -56,6 +61,7 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly zone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly viewState = inject(ViewStateService);
 
   readonly rowData = input<T[] | null>([]);
   readonly columnDefs = input<ColDef<T>[]>([]);
@@ -76,6 +82,17 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   readonly singleClickEdit = input(false, { transform: booleanAttribute });
   /** Rows reorder by dragging a column marked `rowDrag: true`; read the new order on rowDragEnd. */
   readonly rowDragManaged = input(false, { transform: booleanAttribute });
+  /** Full-width rows (an inline detail under a row): which rows, their renderer (usually
+   *  DataGridTemplateCellComponent with `{ tpl, measure: true }`) and its params. */
+  readonly isFullWidthRow = input<((p: IsFullWidthRowParams<T>) => boolean) | undefined>(undefined);
+  readonly fullWidthCellRenderer = input<unknown>(undefined);
+  readonly fullWidthCellRendererParams = input<unknown>(undefined);
+  /** Render every column (a short, fixed column list with template cells). */
+  readonly suppressColumnVirtualisation = input(false, { transform: booleanAttribute });
+  /** Keep this grid's column filters, sort and scroll across in-app navigation (ViewStateService; empty = off). */
+  readonly viewStateKey = input('');
+  /** Include the sort in the kept state — off for grids whose sort already persists elsewhere (per-user sort). */
+  readonly viewStateSort = input(true, { transform: booleanAttribute });
 
   readonly rowClicked = output<RowClickedEvent<T>>();
   readonly cellClicked = output<CellClickedEvent<T>>();
@@ -87,7 +104,8 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   readonly showEmpty = computed(() => !!this.emptyTitle() && !(this.rowData()?.length));
   private api: GridApi<T> | null = null;
 
-  onReady(e: GridReadyEvent<T>): void { this.api = e.api; this.gridReady.emit(e); }
+  onReady(e: GridReadyEvent<T>): void { this.api = e.api; keepGridViewState(e.api, this.viewState, this.viewStateKey(), { sort: this.viewStateSort() }); this.gridReady.emit(e); }
+
   /** The grid API, for pages that start an edit or refresh cells. */
   gridApi(): GridApi<T> | null { return this.api; }
 

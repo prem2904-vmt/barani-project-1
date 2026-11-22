@@ -7,6 +7,12 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { NumpadService } from '../../../shared/components/numpad/numpad.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /**
  * Culture bench AST × the touch numpad: zone boxes (mm) get a digits-only
  * pad, Next walks the zones down the table (the same boxes Enter walks),

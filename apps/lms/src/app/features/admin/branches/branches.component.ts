@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
@@ -19,6 +20,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgBare, sgByStatus, sgCell, sgMedia, sgPillCol, sgRowOff, sgStatusOptions } from '../../../shared/settings-grid/settings-grid';
+import { textCol } from '../../../shared/utils/work-grid';
 import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import type { ColDef, GetRowIdParams, ICellRendererParams } from 'ag-grid-community';
 
@@ -73,7 +75,9 @@ interface GstRow { branchId: string; gstin: string; }
                 <h3 class="pf-card__label">New branch</h3>
                 <span class="pf-card__spacer"></span>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
+                <button type="button" class="pf-btn pf-btn--primary press" data-testid="branch-create" [disabled]="creatingBranch() || !hasUnsavedChanges()"
+                        [pfBusyInactive]="creatingBranch() || !hasUnsavedChanges()" [title]="creatingBranch() || hasUnsavedChanges() ? 'Create branch' : 'Nothing entered yet'"
+                        [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="requestCloseForm()" aria-label="Close">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
@@ -101,7 +105,7 @@ interface GstRow { branchId: string; gstin: string; }
               <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
             </header>
             <div class="pf-sg-main__body">
-              <pf-data-grid [rowData]="gridBranches()" [columnDefs]="colDefs()" [getRowId]="getRowId" [getRowClass]="rowClass"
+              <pf-data-grid viewStateKey="admin.branches.g1" [rowData]="gridBranches()" [columnDefs]="colDefs()" [getRowId]="getRowId" [getRowClass]="rowClass"
                             [loading]="listSkeleton()" loadingLabel="Loading branches…"
                             [emptyTitle]="branches().length === 0 ? 'No branches yet.' : 'No branches match your search.'"></pf-data-grid>
             </div>
@@ -131,7 +135,7 @@ interface GstRow { branchId: string; gstin: string; }
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
     .pf-br-new__body { gap: 12px; }
-    .pf-br-panels { grid-template-columns: 360px minmax(0, 1fr); }
+    .pf-br-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-br-panels.pf-sg-panels--single, .pf-br-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-br-card { overflow: visible; }
     .pf-br-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
@@ -182,17 +186,27 @@ export class BranchesComponent implements OnInit, HasUnsavedChanges {
     this._gst();
     const web = !this.phone();
     const cols: ColDef<Branch>[] = [
-      { colId: 'name', headerName: 'Branch', flex: 1.4, minWidth: 180, sort: 'asc', valueGetter: p => p.data?.name ?? '',
-        cellRenderer: (p: ICellRendererParams<Branch>) => sgCell(p.data?.name, p.data?.hasPfBox ? 'PF Box' : null, true) },
-      { colId: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num', valueGetter: p => p.data?.code || '—' },
-      { colId: 'place', headerName: 'City, State', flex: 1, minWidth: 150, valueGetter: p => [p.data?.city, p.data?.state].filter(Boolean).join(', ') || '—' },
-      { colId: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 160,
-        valueGetter: p => (p.data ? this.gstinOf(p.data.id) : ''),
+      textCol<Branch>({ colId: 'name', headerName: 'Branch', flex: 1.4, minWidth: 180, sort: 'asc',
+        cellRenderer: (p: ICellRendererParams<Branch>) => sgCell(p.data?.name, p.data?.hasPfBox ? 'PF Box' : null, true) }, b => b.name ?? ''),
+      textCol<Branch>({ colId: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
+        valueFormatter: p => (p.value as string) || '—' }, b => b.code || ''),
+      textCol<Branch>({ colId: 'place', headerName: 'City, State', flex: 1, minWidth: 150,
+        valueFormatter: p => (p.value as string) || '—' }, b => [b.city, b.state].filter(Boolean).join(', ')),
+      textCol<Branch>({ colId: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 160,
         cellRenderer: (p: ICellRendererParams<Branch>) => { const g = p.data ? this.gstinOf(p.data.id) : ''; const el = sgCell(g || null, g ? null : 'Not set'); if (!g) el.firstElementChild?.remove(); else el.classList.add('pf-num'); return el; } },
+        b => this.gstinOf(b.id) ?? ''),
       sgPillCol<Branch>(b => b.isActive !== false),
     ];
-    if (this.canRetireBranch()) cols.push(sgActionsCol<Branch>(web, [], 1, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
-    if (this.phone()) return cols.filter(c => ['name', 'status', 'actions'].includes(c.colId ?? ''));
+    // Phone (owner 2026-11-21: the power button was cut off at the right edge): Branch + the action only — the status
+    // rides the name's second line. The action column is pinned at every size so it always shows in full.
+    if (this.canRetireBranch()) cols.push(sgActionsCol<Branch>(web, [], 1, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), true));
+    if (this.phone()) {
+      return cols.filter(c => ['name', 'actions'].includes(c.colId ?? '')).map(c => c.colId !== 'name' ? c : {
+        ...c, minWidth: 120,
+        cellRenderer: (p: ICellRendererParams<Branch>) => sgCell(p.data?.name,
+          [p.data?.isActive === false ? 'Inactive' : 'Active', p.data?.code, p.data?.hasPfBox ? 'PF Box' : null].filter(Boolean).join(' · '), true),
+      });
+    }
     return cols;
   });
 
@@ -300,4 +314,8 @@ export class BranchesComponent implements OnInit, HasUnsavedChanges {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.branches', { q: this.q, status: this.status });
 }

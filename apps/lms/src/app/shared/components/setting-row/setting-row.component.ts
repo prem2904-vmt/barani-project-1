@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, effect, inject, input, model, viewChild } from '@angular/core';
+import { SETTINGS_HOST, SettingsHostAction } from '../../utils/settings-host';
 import { NgTemplateOutlet } from '@angular/common';
 
 /**
@@ -73,12 +74,15 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
   },
   template: `
     <ng-template #rows><ng-content></ng-content></ng-template>
+    <!-- The tools live in ONE template: drawn in this head, or — when the frame's main card shows this group alone —
+         in that card's head (SETTINGS_HOST.headGroup), never as a second row under it. -->
+    <ng-template #tools><ng-content select="[group-tools]"></ng-content></ng-template>
     @if (label()) {
       <section class="pf-sgroup__sec" [attr.aria-label]="label()">
-        <header class="pf-sgroup__head">
+        <header class="pf-sgroup__head" [class.pf-sgroup__head--hoisted]="hoisted()">
           <h3 class="pf-sgroup__label">{{ label() }}</h3>
           @if (scope()) { <span class="pf-sgroup__scope">{{ scope() }}</span> }
-          <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
+          @if (!hoisted()) { <span class="pf-sgroup__tools"><ng-container *ngTemplateOutlet="tools"></ng-container></span> }
         </header>
         @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
         <div class="pf-sgroup__rows"><ng-container *ngTemplateOutlet="rows"></ng-container></div>
@@ -91,10 +95,10 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
     :host { display: block; min-width: 0; scroll-margin-top: 8px; }
     :host(.pf-sgroup--plain) { display: contents; }
     :host + :host:not(.pf-sgroup--plain) .pf-sgroup__sec { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
-    .pf-sgroup__head { display: flex; align-items: center; gap: 10px; min-height: 36px; padding-top: 8px; }
-    .pf-sgroup__label { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-sgroup__head { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-height: 36px; padding-top: 8px; }
+    .pf-sgroup__label { margin: 0; min-width: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-sgroup__scope { font-size: 12px; color: var(--text-tertiary); opacity: .85; }
-    .pf-sgroup__tools { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; flex: none; }
+    .pf-sgroup__tools { margin-left: auto; display: inline-flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; align-items: center; flex: 1 1 0; min-width: 0; }
     .pf-sgroup__tools:empty { display: none; }
     .pf-sgroup__hint { margin: 2px 0 2px; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
   `],
@@ -111,6 +115,19 @@ export class SettingGroupComponent {
   /** Span the whole grid row. */
   readonly wide = input(false);
   protected readonly defaultIcon = SETTING_GROUP_ICON;
+
+  private readonly host = inject(SETTINGS_HOST, { optional: true });
+  private readonly toolsTpl = viewChild<TemplateRef<unknown>>('tools');
+  /** The frame's main card shows this group alone: its tools ride in that card's head. */
+  readonly hoisted = computed(() => !!this.label() && !!this.id() && !!this.host?.headGroup && this.host.headGroup() === this.id());
+  private readonly hoist = effect((onCleanup) => {
+    const tpl = this.toolsTpl();
+    const host = this.host;
+    if (!this.hoisted() || !tpl || !host) return;
+    const entry: SettingsHostAction = { tpl, group: this.id() };
+    host.actions.update((a) => [entry, ...a]);
+    onCleanup(() => host.actions.update((a) => a.filter((x) => x !== entry)));
+  });
 }
 
 /** The on / off switch for a row (the kit's `.pf-toggle`, a real `role="switch"` button). */

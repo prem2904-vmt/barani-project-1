@@ -78,7 +78,7 @@ export type OrgSettingsTab = 'identity' | 'patient';
             </label>
             <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press"
                     [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()" [pfBusy]="orgNameSaving()"
-                    (click)="saveOrgName()">
+                    (click)="saveOrgName()" [pfBusyInactive]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()" [attr.title]="(!orgNameSaving() && orgName().trim() === orgNameOriginal()) ? 'No changes to save' : 'Save name'">
               {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
             </button>
           </div>
@@ -105,7 +105,7 @@ export type OrgSettingsTab = 'identity' | 'patient';
                      placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
             </label>
             <button type="button" class="pf-btn pf-btn--primary pf-save-slug pf-ls__save pf-classic-only press"
-                    [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" [pfBusy]="slugSaving()" (click)="saveSlug()">
+                    [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" [pfBusy]="slugSaving()" (click)="saveSlug()" [pfBusyInactive]="slugSaving() || !slug() || slug() === slugOriginal()" [attr.title]="(!slugSaving() && slug() === slugOriginal()) ? 'No changes to save' : 'Save handle'">
               {{ slugSaving() ? 'Saving…' : 'Save handle' }}
             </button>
           </div>

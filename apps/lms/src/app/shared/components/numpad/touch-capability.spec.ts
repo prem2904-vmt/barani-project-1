@@ -6,6 +6,12 @@ import { NumpadDirective, isTypedKey } from './numpad.directive';
 import { Component } from '@angular/core';
 import { AuthService } from '../../../core/auth/auth.service';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /**
  * Real-device bug (owner, iPad, Capacitor iOS app): tapping a numeric result
  * opened the SYSTEM keyboard — the numpad was gated on `(pointer: coarse)`

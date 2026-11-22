@@ -82,52 +82,47 @@ describe('Admin band — Workflow forms list', () => {
   });
 });
 
-describe('Admin band — Process builder', () => {
+describe('Admin band — Process builder (Work steps)', () => {
   const wfs = [
     { id: 'w1', name: 'Main', isActive: true, branchId: null, configJson: '{"categories":[],"actions":[]}' },
     { id: 'w2', name: 'Evening', isActive: false, branchId: null, configJson: '{"categories":[],"actions":[]}' },
   ];
-  const make = () => renderBandPage(ProcessBuilderComponent, {
-    getFor: (u) => (u.startsWith('/api/process-workflows') ? wfs : u === '/api/tenants/branches' ? [{ id: 'b1', name: 'Anna Nagar' }] : []),
-  });
-  const visibleChips = (el: HTMLElement) =>
-    Array.from(el.querySelectorAll('.pb-palette-list .pb-chip:not(.pb-chip--hidden)')).map((c) => c.textContent?.trim());
+  const make = async () => {
+    const p = renderBandPage(ProcessBuilderComponent, {
+      getFor: (u) => (u === '/api/process-workflows' ? wfs : u === '/api/tenants/branches' ? [{ id: 'b1', name: 'Anna Nagar' }] : []),
+    });
+    for (let i = 0; i < 4; i++) { await new Promise(r => setTimeout(r, 0)); await p.f.whenStable(); p.f.detectChanges(); }
+    return p;
+  };
 
-  it('band + body; the custom title bar and hint are classic-only (no emoji lock)', () => {
-    const p = make();
+  it('band + fill body; no classic title bar or hint left behind', async () => {
+    const p = await make();
     expect(p.band()).not.toBeNull();
-    expect(p.body()).not.toBeNull();
-    expect(p.el.querySelector('.pb-bar')?.classList.contains('pf-classic-only')).toBe(true);
-    const hint = p.el.querySelector('.pb-hint')!;
-    expect(hint.classList.contains('pf-classic-only')).toBe(true);
-    expect(hint.textContent).not.toContain('🔒');
-    expect(hint.querySelector('svg')).not.toBeNull();
+    expect(p.el.querySelector('.pf-band-body.pf-band-body--fill pf-wf-editor')).not.toBeNull();
+    expect(p.el.querySelector('.pb-bar, .pb-hint, .pb-palette')).toBeNull();
   });
 
-  it('pill search HIDES non-matching palette chips (palette array untouched for drag indices)', () => {
-    const p = make();
-    const total = p.cmp.palette().length;
-    expect(visibleChips(p.el).length).toBe(total);
+  it('pill search finds actions and says where (jump), never filtering the editor\'s lists', async () => {
+    const p = await make();
     p.type('register patient');
-    expect(visibleChips(p.el).length).toBe(1);
-    expect(visibleChips(p.el)[0]).toContain('Register Patient');
-    expect(p.cmp.palette().length).toBe(total);
-    expect(p.el.querySelectorAll('.pb-palette-list .pb-chip').length).toBe(total);
+    await p.f.whenStable(); p.f.detectChanges();
+    // An empty workflow: every action is unused → it is found in Add action.
+    expect(p.el.querySelector('[data-testid="wf-search-note"]')?.textContent).toBe('1 match — not used yet — in Add action');
     p.type('zzz');
-    expect(p.el.querySelector('.pb-palette-list .pb-empty')?.textContent).toContain('No actions match');
+    await p.f.whenStable(); p.f.detectChanges();
+    expect(p.el.querySelector('[data-testid="wf-search-note"]')?.textContent).toBe('No match');
   });
 
-  it('pickers in the pill (pf-select, no native select in the new design); actions in the band', () => {
-    const p = make();
+  it('pickers in the pill (pf-select + the Workflow menu, no native select); only the Save in the band corner', async () => {
+    const p = await make();
     const tools = p.tools()!;
-    expect(tools.querySelectorAll('pf-select').length).toBe(2);
+    expect(tools.querySelectorAll('pf-select').length).toBe(2);   // Branch + See it as
+    expect(tools.querySelector('[data-testid="wf-workflow"]')).not.toBeNull();
     expect(tools.querySelector('select')).toBeNull();
-    expect(p.cmp.scopeOptions().map((o: any) => o.label)).toEqual(['All branches (default)', 'Anna Nagar']);
-    expect(p.cmp.workflowOptions().map((o: any) => o.label)).toEqual(['Main · active', 'Evening']);
-    const labels = p.actions().map((b) => b.textContent?.trim());
-    expect(labels).toEqual(['New', 'Duplicate', 'Set active', 'Save']);
-    p.cmp.selectWorkflow('w2');
-    expect(p.cmp.currentId()).toBe('w2');
+    expect(p.actions().map((b) => b.textContent?.trim())).toEqual([]);
+    expect(p.bandSave()).not.toBeNull();
+    await (p.cmp as any).page.selectWorkflow('w2');
+    expect((p.cmp as any).page.currentId()).toBe('w2');
   });
 });
 
@@ -187,48 +182,30 @@ describe('Admin band — KPI configuration', () => {
 });
 
 describe('Admin band — Audit trail', () => {
+  // Audit trail v2 (2026-11-19): the band holds the ONE search + Export; the filters moved to the SHOW side card
+  // (see audit-log.component.spec.ts for the timeline, the merge and every filter).
   const page = { items: [{ id: 'l1', entityType: 'OrderEntity', entityId: 'ord-1', action: 'update', userName: 'Asha', at: '2026-09-20T10:00:00Z', changes: null }], total: 1 };
   const make = () => renderBandPage(AuditLogComponent, { getFor: (u) => (u.startsWith('/api/audit/logs') ? page : []) });
-  const lastUrl = (p: ReturnType<typeof make>) => String(p.api.get.mock.calls.at(-1)![0]);
+  const lastLogUrl = (p: ReturnType<typeof make>) => p.api.get.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/audit/logs')).at(-1)!;
 
-  it('band + body; header and filter card are classic-only; no native select in the pill', () => {
+  it('band + body; header is classic-only; the band has the search and Export only (no filters in the pill)', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.body()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.el.querySelector('.pf-band-body > pf-tile')?.classList.contains('pf-classic-only')).toBe(true);
-    const tools = p.tools()!;
-    expect(tools.querySelectorAll('pf-select').length).toBe(3);
-    expect(tools.querySelector('select')).toBeNull();
-    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Clear']);
+    expect(p.el.querySelector('pf-hero-band pf-select, pf-hero-band select')).toBeNull();
+    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Export']);
+    expect(p.el.querySelector('[data-testid="audit-side"] pf-select')).not.toBeNull();
   });
 
-  it('record id is the pill search: Enter reloads with entityId', () => {
+  it('the pill search: Enter reloads the first page with q', () => {
     const p = make();
     const input = p.bandInput()!;
-    input.value = 'ord-1';
+    input.value = 'LAB-2611';
     input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    expect(lastUrl(p)).toContain('entityId=ord-1');
-    expect(lastUrl(p)).toContain('page=1');
-  });
-
-  it('pill filters apply at once: type, action, quick range; Clear resets', () => {
-    const p = make();
-    p.cmp.setFilter({ entityType: 'OrderEntity' });
-    expect(lastUrl(p)).toContain('entityType=OrderEntity');
-    p.cmp.setFilter({ action: 'delete' });
-    expect(lastUrl(p)).toContain('action=delete');
-    p.cmp.setRange('7d');
-    expect(lastUrl(p)).toContain('from=');
-    expect(lastUrl(p)).toContain('to=');
-    expect(p.cmp.hasFilters()).toBe(true);
-    p.cmp.setRange('custom');
-    p.f.detectChanges();
-    expect(p.tools()!.querySelectorAll('input[type=date]').length).toBe(2);
-    p.cmp.clearAll();
-    expect(lastUrl(p)).toBe('/api/audit/logs?page=1&pageSize=50');
-    expect(p.cmp.range()).toBe('');
+    expect(lastLogUrl(p)).toContain('q=LAB-2611');
+    expect(lastLogUrl(p)).toContain('page=1');
   });
 });
 

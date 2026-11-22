@@ -124,6 +124,12 @@ export const isPhone = (): boolean => formFactor() === 'phone';
 export const isTablet = (): boolean => formFactor() === 'tablet';
 /** Phone or tablet: a finger, the touch layout (html.device-touch), the share sheet / wa.me for WhatsApp. */
 export const isTouch = (): boolean => isPhone() || isTablet();
+/** Below 1024px (phone, iPad portrait — on any engine): work lists are the shared <pf-work-list>, not a grid
+ *  (owner 2026-11-21, small-screens). Use this instead of matching project names, which misses phone-webkit /
+ *  tablet-webkit. */
+export const belowGrid = (): boolean => isPhone() || (isTablet() && orientation() === 'portrait');
+/** Chromium-only tooling (CDP touch events): webkit / firefox projects skip those steps. */
+export const hasCdp = (): boolean => engine() === 'chromium';
 export const isDesktopApp = (): boolean => formFactor() === 'desktop-app';
 /** The web app in a desktop browser (not the desktop app). */
 export const isDesktopWeb = (): boolean => formFactor() === 'desktop';
@@ -335,8 +341,32 @@ export async function expectRowFits(page: Page, selector: string, tag = ''): Pro
 }
 
 /** `test` with the desktop-app bridge on every context of the desktop-app project. */
+// ───────────────────────── the spec clock ─────────────────────────
+/**
+ * Specs build their mock rows from "now" (a visit 7 h ago, an order 6 h 59 m ago) and the app judges "today" by the
+ * lab's day. Run between 00:00 and 08:00 UTC (05:30–13:30 IST) those older rows fall on YESTERDAY, so whole sections
+ * of the Frontdesk went empty and ~15 specs failed purely because of the hour they ran. In that window the clock is
+ * ANCHORED to 12:00 UTC (17:30 IST) of the same day: this process's `Date` (so every module-level `new Date()` in a spec
+ * and the shared mock backend agree) and, per context, the page's clock. Outside the window nothing changes.
+ */
+const REAL_AT_LOAD = new Date();
+export const CLOCK_ANCHOR: Date | null = REAL_AT_LOAD.getUTCHours() < 8
+  ? new Date(Date.UTC(REAL_AT_LOAD.getUTCFullYear(), REAL_AT_LOAD.getUTCMonth(), REAL_AT_LOAD.getUTCDate(), 12, 0, 0)) : null;
+if (CLOCK_ANCHOR && !(globalThis as { __pfAnchored?: boolean }).__pfAnchored) {
+  (globalThis as { __pfAnchored?: boolean }).__pfAnchored = true;
+  const RealDate = Date;
+  const offset = CLOCK_ANCHOR.getTime() - RealDate.now();
+  class ShiftedDate extends RealDate {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(...a: any[]) { if (a.length === 0) super(RealDate.now() + offset); else super(...(a as [number])); }
+    static override now(): number { return RealDate.now() + offset; }
+  }
+  (globalThis as unknown as { Date: DateConstructor }).Date = ShiftedDate as unknown as DateConstructor;
+}
+
 export const test = base.extend({
   context: async ({ context }, use) => {
+    if (CLOCK_ANCHOR) await context.clock.setFixedTime(CLOCK_ANCHOR);
     if (isDesktopApp()) await installDesktopBridge(context);
     await use(context);
   },

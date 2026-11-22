@@ -22,13 +22,10 @@ import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
 import {
-  describeAllRanges,
   normalizeSex,
   selectReferenceRange,
-  isLegacyGroup,
-  summarizeRanges,
 } from "../../../shared/utils/reference-range";
-import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
+import { criticalBadge, entryRangeText, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { isInvalidNumericValue, liveRangeFlag, rangeAllowed, rangeKeyAllowed, rangePasteText, rangeValueFor } from "../../../shared/utils/result-value";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, isMultiChoice, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
@@ -285,7 +282,7 @@ export class SampleResultEntryComponent {
   private readonly _info = signal<string | null>(null);
   private infoTimer: ReturnType<typeof setTimeout> | null = null;
   hasInfo(t: OrderTest, p: TestParameter): boolean {
-    return !!this.refLabelFor(p) || !!p.unit || this.methodologyOf(p, t.test) !== "—";
+    return !!this.refLabelFor(p, t) || !!p.unit || this.methodologyOf(p, t.test) !== "—";
   }
   infoOpen(testId: string, name: string): boolean {
     return this._info() === `${testId}::${name}`;
@@ -311,7 +308,7 @@ export class SampleResultEntryComponent {
   private renderPeek(t: OrderTest, p: TestParameter, anchor: HTMLElement | null) {
     if (typeof document === "undefined") return;
     const rows: Array<[string, string]> = [];
-    const range = this.refLabelFor(p);
+    const range = this.refLabelFor(p, t);
     const method = this.methodologyOf(p, t.test);
     if (range) rows.push(["Range", range]);
     if (p.unit) rows.push(["Unit", p.unit]);
@@ -1396,22 +1393,16 @@ export class SampleResultEntryComponent {
   /** Pretty-formatted reference range for the grid's Range column. Handles
    *  the standard {min,max} pair plus the `ref_range` text fallback used
    *  for sex-segmented + qualitative ranges. */
-  refLabelFor(p: TestParameter): string {
+  refLabelFor(p: TestParameter, t?: { profileCode?: string | null } | null): string {
     // A family's expected answer(s) — the root nodes marked normal.
     if (resolveParamEntryKind(p) === "family")
       return (this.familySvc?.find(p.familyCode)?.nodes ?? []).filter((n) => n.normal).map((n) => n.label).join(" / ");
     const r = (p as TestParameter & { ref_range?: string }).ref_range;
     if (r) return r;
-    // Every band, labelled ("Adult Male 13–17 · Adult Female 12–15"). This
-    // showed referenceRanges[0] alone, so a tech entering a FEMALE patient's
-    // haemoglobin was shown the MALE band to judge it against. This screen has
-    // no patient sex/age in scope, so naming a single band would be a guess —
-    // showing them all is the honest form, and the backend still decides the
-    // flag that gets persisted and printed.
-    // A typed report text keeps its own line breaks (the cell is pre-line).
-    const bands = (p.referenceRanges ?? []).some(b => b.reportText?.trim() || !isLegacyGroup(b))
-      ? summarizeRanges(p.referenceRanges, p.unit, { keepLines: true })
-      : describeAllRanges(p.referenceRanges).join(" · ");
+    // ONLY the patient's matching band (sex + age), as the report prints it;
+    // no match on merit -> every band (shared entryRangeText / one resolver).
+    const { sex, age } = this.patientSexAge();
+    const bands = entryRangeText(p.referenceRanges, p.unit, sex, age, t?.profileCode);
     if (bands) return bands;
     if (p.normalValue) return p.normalValue;
     return "";
