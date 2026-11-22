@@ -16,6 +16,7 @@ import { CommsShareService, looksLikeEmail } from './comms-share.service';
 import { WhatsAppService } from './whatsapp.service';
 import type { EmailRecipient } from '../../shared/utils/email-share';
 import { smsDoctorReportMessage, smsReportMessage } from '../../shared/utils/sms-link';
+import { backgroundReportLoadsOn } from '../../shared/utils/background-report-loads';
 
 /** What a report row needs for the link / share / delivery actions. */
 export interface ReportRef {
@@ -297,6 +298,7 @@ export class ReportActionsService {
    *  file). A no-op when it already is; otherwise it is rendered once from
    *  the saved snapshot and stored. Best-effort. */
   private async archive(rep: ReportRef & Record<string, unknown>): Promise<void> {
+    if (!backgroundReportLoadsOn()) return;
     try {
       const { storedReportBlob } = await import('../../shared/utils/report-blob');
       await storedReportBlob(rep, this.api, this.injector);
