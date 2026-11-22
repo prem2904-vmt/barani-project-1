@@ -1,4 +1,4 @@
-import { ptr } from '../../canvas/canvas.component.spec';
+import { ptr } from '../../canvas/canvas.spec-helpers';
 import { CanvasAnswer } from '../../canvas/answer';
 import { examplesOf } from '../../testing/examples';
 import { f, renderKind, unnamed, untouchable } from '../../testing/render-kind';
