@@ -1,9 +1,16 @@
 import {
   STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, linkBarcodeBody, linkableCode,
-  qty, signedQty, stockLevel, testsCovered,
+  qty, signedQty, stockLevel, stockWords, testsCovered,
 } from './inventory-view';
 
 describe('inventory-view', () => {
+  it('stockWords: out and low are late words with the reorder level; in stock is normal; phone shortens Out', () => {
+    expect(stockWords({ onHand: 0, reorderLevel: 10 })).toEqual({ now: 'Out of stock', detail: 'Reorder at 10', tone: 'late' });
+    expect(stockWords({ onHand: 0, reorderLevel: 10 }, true).now).toBe('Out');
+    expect(stockWords({ onHand: 5, reorderLevel: 10 })).toEqual({ now: 'Low', detail: 'Reorder at 10', tone: 'late' });
+    expect(stockWords({ onHand: 50, reorderLevel: 10 })).toEqual({ now: 'In stock', detail: null, tone: 'normal' });
+  });
+
   it('stockLevel: out at 0, low at / under reorder (or server flag), else in stock', () => {
     expect(stockLevel({ onHand: 0, reorderLevel: 10 })).toBe('out');
     expect(stockLevel({ onHand: 10, reorderLevel: 10 })).toBe('low');

@@ -1,51 +1,576 @@
+@if (theme.isNewDesign()) {
+<!-- Reports v2 (owner 2026-11-19, docs/PF-PATTERN.md → "Reports list"): Test Master's frame. Band = lab + search
+     (no band-corner buttons on web). LEFT side card FILTERS (owner 2026-11-20, the Expenses filter: Dates (IST),
+     Status + To send breakdowns, Referring doctor, Delivered via), RIGHT main card = the reports grid (pf-data-grid;
+     Send / Retry in the row, Send all in the head). ≤900px: the same filter card is a sheet opened from the Filters
+     button inside the search. ≤640px: two-line rows, a tap opens the actions sheet. -->
+<section class="pf-rq2 pf-band-page" data-testid="rq-page">
+  <pf-hero-band
+    placeholder="Search by patient, MRN, phone, or order/report id…"
+    [value]="query()"
+    (valueChange)="setQuery($event)">
+    <ng-container band-inline>
+      @if (narrow()) {
+      <button type="button" class="pf-rq2-filter__btn press" data-testid="rq-filters-btn" aria-haspopup="dialog"
+              [attr.aria-expanded]="filtersOpen()" (click)="filtersOpen.set(true)"
+              [attr.aria-label]="activeFilters() ? 'Filters, ' + activeFilters() + ' on' : 'Filters'" title="Filters">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+        <span class="pf-rq2-filter__t">Filters</span>
+        @if (activeFilters()) { <span class="pf-rq2-filter__n pf-num" data-testid="rq-filters-n">{{ activeFilters() }}</span> }
+      </button>
+      }
+    </ng-container>
+    <ng-container band-actions>
+      @if (phone()) {
+      <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rq2-bandrefresh press" (click)="refresh()" aria-label="Refresh" title="Refresh">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+        </svg>
+      </button>
+      }
+    </ng-container>
+  </pf-hero-band>
+  <pf-kpi-strip screen="report_queue"></pf-kpi-strip>
+
+  <div class="pf-band-body pf-band-body--fill pf-rq2__body">
+    <div class="pf-2p pf-rq2__cols" [class.pf-2p--narrow]="narrow()">
+      @if (!narrow()) {
+      <!-- ── SIDE card (LEFT): FILTERS — choose on the left, see the result on the right (owner 2026-11-20) ── -->
+      <aside class="pf-card pf-2p__side pf-rq2-side" data-testid="rq-side" aria-label="Filters">
+        <ng-container *ngTemplateOutlet="filtersTpl; context: { sheet: false }"></ng-container>
+      </aside>
+      }
+
+      <!-- ── MAIN card (RIGHT): the reports grid ── -->
+      <section class="pf-card pf-2p__main pf-rq2-main" data-testid="rq-main" aria-label="Reports">
+        <header class="pf-card__head pf-2p__head pf-rq2-main__head">
+          <span class="pf-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </span>
+          <span class="pf-card__label">Reports</span>
+          @if (filter() !== 'all') {
+          <span class="pf-card__note pf-rq2-scope" data-testid="rq-scope">{{ activeFilterLabel() }}</span>
+          }
+          <span class="pf-2p__count pf-rq2-count pf-num" aria-live="polite">{{ headCount() }}</span>
+          <span class="pf-2p__tools">
+            @if (canDeliver()) {
+            <!-- Send all: every WhatsApp Auto report in the CURRENT filter (asks first; opted-out / Chat-only skipped). -->
+            <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-rq2-q__all press" data-testid="rq-send-all"
+                    [disabled]="sendingAll() || !sendAllInView().length" [pfBusy]="sendingAll()" pfBusyLabel="Sending…"
+                    [title]="sendAllInView().length ? 'Send ' + sendAllInView().length + ' on WhatsApp' : 'Nothing to send with WhatsApp Auto in this filter'"
+                    (click)="sendAll()">Send all</button>
+            }
+            @if (sheets.available() && !phone()) {
+            <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn press" data-testid="open-in-sheet" (click)="openInSheet()"
+                    title="Pull lab results into a sheet">Open in sheet</button>
+            }
+            @if (canGenerate()) {
+            <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-rq-generate press" (click)="promptGenerate()"
+                    [disabled]="generatingReport()" [pfBusy]="generatingReport()" pfBusyLabel="Generating…"
+                    aria-label="Generate a report" title="Generate a report for an order">Generate</button>
+            } @else if (viewOnly()) {
+            <span class="pf-chip pf-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
+            }
+            @if (!phone()) {
+            <button type="button" class="pf-btn pf-btn--secondary pf-btn--icon pf-2p__hbtn pf-rq2-refresh press" (click)="refresh()" aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+            </button>
+            }
+          </span>
+        </header>
+
+        <div class="pf-2p__body pf-rq2-main__body">
+          @if (listMode()) {
+          <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — patient + token, the grid's facts in its
+               column order, the status in words; Open (the actions sheet) at the right edge. -->
+          @if (gridRows().length === 0 && !(loading() && items().length === 0 && filter() !== 'partial')) {
+          <ng-container *ngTemplateOutlet="emptyTpl"></ng-container>
+          } @else {
+          <div class="pf-rq2-listscroll pf-wl-scroll">
+          <div class="pf-rq2-listhead pf-wl-head pf-wl-head--sticky">
+            <span class="pf-rq2-listhead__n pf-num">{{ listItems().length }} {{ listItems().length === 1 ? 'report' : 'reports' }}</span>
+            <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
+          </div>
+          <pf-work-list data-testid="rq-list" label="Reports" [items]="listItems()" [loading]="loading() && items().length === 0 && filter() !== 'partial'"
+            (open)="openSheet($any($event.data))" (primary)="openSheet($any($event.data))" />
+          <div #listEnd class="pf-rq2-listend" aria-hidden="true"></div>
+          </div>
+          }
+          } @else {
+          <pf-data-grid #rqGrid class="pf-rq2-grid" data-testid="rq-grid" viewStateKey="reports.grid"
+                        [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="rqDefaultColDef"
+                        [getRowId]="$any(rqRowId)" [getRowClass]="rqRowClass" [suppressColumnVirtualisation]="true"
+                        [isFullWidthRow]="rqFullWidth" [fullWidthCellRenderer]="rqFullWidthRenderer"
+                        [fullWidthCellRendererParams]="rqFullWidthParams()"
+                        [loading]="loading() && items().length === 0 && filter() !== 'partial'" loadingLabel="Loading reports…"
+                        (rowClicked)="onGridRowClicked($event)" (gridReady)="onGridReady($event)"></pf-data-grid>
+          @if (!(loading() && items().length === 0) && gridRows().length === 0) {
+          <div class="pf-rq2-emptywrap"><ng-container *ngTemplateOutlet="emptyTpl"></ng-container></div>
+          }
+          }
+        </div>
+      </section>
+    </div>
+  </div>
+
+
+  <!-- ── FILTERS: the side card (wide) or the sheet (≤900px) — the Expenses filter card's building blocks ── -->
+  <ng-template #filtersTpl let-sheet="sheet">
+    <header class="pf-card__head pf-rq2-f__head">
+      <span class="pf-card__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+      </span>
+      <h2 class="pf-card__label">Filters</h2>
+      <span class="pf-card__spacer"></span>
+      @if (activeFilters()) {
+      <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn pf-rq2-f__clear press" data-testid="rq-clear" (click)="clearFilters()">Clear</button>
+      }
+      @if (sheet) {
+      <button type="button" class="pf-btn pf-btn--icon press" (click)="filtersOpen.set(false)" aria-label="Close filters">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      }
+    </header>
+    <div class="pf-card__body pf-rq2-f" data-testid="rq-filters">
+      <div class="pf-field">
+        <span class="pf-field__lbl" [id]="'pf-rq-range-lbl' + (sheet ? '-s' : '')">Dates (IST)</span>
+        <span class="pf-seg pf-rq2-f__seg" role="radiogroup" [attr.aria-labelledby]="'pf-rq-range-lbl' + (sheet ? '-s' : '')" data-testid="rq-dates">
+          <button type="button" class="pf-seg__item" role="radio" data-preset="all" [attr.aria-checked]="datePreset() === 'all'" (click)="setPreset('all')">All</button>
+          <button type="button" class="pf-seg__item" role="radio" data-preset="today" [attr.aria-checked]="datePreset() === 'today'" (click)="setPreset('today')">Today</button>
+          <button type="button" class="pf-seg__item" role="radio" data-preset="7d" [attr.aria-checked]="datePreset() === '7d'" (click)="setPreset('7d')">7 days</button>
+          <button type="button" class="pf-seg__item" role="radio" data-preset="month" [attr.aria-checked]="datePreset() === 'month'" (click)="setPreset('month')">This month</button>
+        </span>
+        <div class="pf-rq2-f__dates" [attr.data-custom]="datePreset() === 'custom'">
+          @if (datePreset() === 'custom') { <span class="pf-rq2-f__custom">Custom range</span> }
+          <pf-back-to-today [show]="datePreset() === 'custom' && !!dateTo() && dateTo()! < today" (reset)="setPreset('today')" />
+          <label class="pf-rq2-f__dates-lbl" [for]="'pf-rq-from' + (sheet ? '-s' : '')">From</label>
+          <pf-date label="From" [inputId]="'pf-rq-from' + (sheet ? '-s' : '')" [value]="dateFrom()" [max]="dateTo() || today" (valueChange)="setFrom($event)"></pf-date>
+          <label class="pf-rq2-f__dates-lbl" [for]="'pf-rq-to' + (sheet ? '-s' : '')">To</label>
+          <pf-date label="To" [inputId]="'pf-rq-to' + (sheet ? '-s' : '')" [value]="dateTo()" [min]="dateFrom()" [max]="today" (valueChange)="setTo($event)"></pf-date>
+        </div>
+      </div>
+
+      <div class="pf-field">
+        <span class="pf-field__lbl">Status</span>
+        <ul class="pf-rq2-f__totals" data-testid="rq-statuses" aria-label="Reports by status">
+          @for (b of statusRows(); track b.key) {
+          <ng-container *ngTemplateOutlet="bRow; context: { $implicit: b }"></ng-container>
+          }
+        </ul>
+      </div>
+
+      @if (canDeliver()) {
+      <div class="pf-field">
+        <span class="pf-field__lbl">To send</span>
+        @if (toSendFiltered().notSent.length + toSendFiltered().failed.length === 0 && filter() !== 'notsent' && filter() !== 'wafailed') {
+        <p class="pf-rq2-f__done" data-testid="rq-tosend-empty">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>All reports delivered</span>
+        </p>
+        } @else {
+        <ul class="pf-rq2-f__totals" data-testid="rq-tosend" aria-label="Reports to send">
+          @for (b of toSendRowsBreakdown(); track b.key) {
+          <ng-container *ngTemplateOutlet="bRow; context: { $implicit: b }"></ng-container>
+          }
+        </ul>
+        }
+      </div>
+      }
+
+      @if (doctorOptions().length) {
+      <div class="pf-field">
+        <label class="pf-field__lbl" [for]="'pf-rq-doc' + (sheet ? '-s' : '')">Referring doctor</label>
+        <pf-select [id]="'pf-rq-doc' + (sheet ? '-s' : '')" size="sm" data-testid="rq-doctor" [options]="doctorOptions()" [value]="doctor()" [searchable]="true"
+                   (valueChange)="setDoctor($any($event))"></pf-select>
+      </div>
+      }
+      @if (viaOptions().length) {
+      <div class="pf-field">
+        <label class="pf-field__lbl" [for]="'pf-rq-via' + (sheet ? '-s' : '')">Delivered via</label>
+        <pf-select [id]="'pf-rq-via' + (sheet ? '-s' : '')" size="sm" data-testid="rq-via" [options]="viaOptions()" [value]="via()"
+                   (valueChange)="setVia($any($event))"></pf-select>
+      </div>
+      }
+    </div>
+  </ng-template>
+
+  <!-- One breakdown row (the Expenses "By category" row): dot · name · count, a hairline share bar under it.
+       Tap = filter the grid by it, tap again = clear. -->
+  <ng-template #bRow let-b>
+    <li>
+      <button type="button" class="pf-rq2-f__totrow press" [attr.data-filter]="b.key" [attr.aria-pressed]="filter() === b.key" (click)="toggleStatus(b.key)"
+              [attr.aria-label]="b.label + ', ' + b.count + (filter() === b.key ? ' — filtering, tap to clear' : '')">
+        <span class="pf-rq2-f__totname"><span class="pf-rq2-dot" [style.background]="b.dot" aria-hidden="true"></span>{{ b.label }}</span>
+        <span class="pf-rq2-f__totn pf-num">
+          @if (loading() && items().length === 0 && b.count === 0) { <pf-skeleton variant="line" width="18px" height="10px"></pf-skeleton> } @else { {{ b.count }} }
+        </span>
+        <span class="pf-rq2-f__totbar" aria-hidden="true"><span [style.width.%]="b.share"></span></span>
+      </button>
+    </li>
+  </ng-template>
+
+  <!-- A report's TO SEND control in its row: Send / Retry (WhatsApp Auto or Chat), Opted out, Sent ✓ or No WhatsApp. -->
+  <ng-template #sendCtlTpl let-x>
+    <span class="pf-rq2-q__ctl" [attr.data-report]="x.id">
+      @if (x.optOut) {
+      <span class="pf-rq2-q__note" data-testid="rq-optout">Opted out</span>
+      } @else if (x.result === 'sent') {
+      <span class="pf-rq2-q__ok" data-testid="rq-sent">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Sent
+      </span>
+      } @else if (x.mode) {
+      <button type="button" class="pf-btn pf-btn--secondary pf-rq2-q__send press" [attr.data-verb]="x.verb"
+              [disabled]="x.sending || sendingAll()" [pfBusy]="x.sending" pfBusyLabel="Sending…"
+              [title]="x.auto ? 'WhatsApp Auto' : 'WhatsApp Chat'" (click)="sendOne(x.r)">{{ x.result === 'failed' ? 'Retry' : x.verb }}</button>
+      } @else {
+      <span class="pf-rq2-q__note">No WhatsApp</span>
+      }
+    </span>
+  </ng-template>
+
+  @if (narrow() && filtersOpen()) {
+  <div class="pf-rq2-sheetbd" pfModalPortal aria-hidden="true" (click)="filtersOpen.set(false)"></div>
+  <div class="pf-card pf-rq2-sheet pf-rq2-f__sheet" pfModalPortal role="dialog" aria-modal="true" aria-label="Filters"
+       data-testid="rq-filters-sheet" (keydown.escape)="filtersOpen.set(false)">
+    <span class="pf-rq2-sheet__handle" aria-hidden="true"></span>
+    <ng-container *ngTemplateOutlet="filtersTpl; context: { sheet: true }"></ng-container>
+  </div>
+  }
+
+  <!-- ── Cell templates (pf-data-grid template cells) ── -->
+  <ng-template #cNo let-row>
+    <span class="pf-rq2-no">
+      @if (row.kind === 'report') { <pf-daily-no [of]="row.r.order" /> } @else { <pf-daily-no [of]="row.po" /> }
+    </span>
+  </ng-template>
+
+  <ng-template #cPatient let-row>
+    @if (row.kind === 'report') {
+    <span class="pf-rq2-who" [pfZoomSource]="[row.r.id, row.r.orderId]">
+      <span class="pf-rq2-who__name">{{ reportPatientName(row.r) }}</span>
+      <span class="pf-rq2-who__meta pf-num">{{ whoMeta(row.r) }}@if (compact()) { · {{ orderNo(row.r) }} · {{ when(row.r.createdAt) }} }</span>
+    </span>
+    } @else {
+    <span class="pf-rq2-who">
+      <span class="pf-rq2-who__name">{{ row.po.patientName }}</span>
+      <span class="pf-rq2-who__meta pf-num">{{ row.po.whoMeta }}@if (compact()) { · {{ row.po.orderNo }} }</span>
+      <span class="pf-rq2-who__meta pf-rq-card__count pf-num">{{ row.po.countLabel }}</span>
+    </span>
+    }
+  </ng-template>
+
+  <ng-template #cOrder let-row>
+    <span class="pf-rq2-muted pf-num">{{ row.kind === 'report' ? orderNo(row.r) : row.po.orderNo }}</span>
+  </ng-template>
+
+  <ng-template #cStatus let-row>
+    @if (row.kind === 'report') {
+    @let st = rowStatus(row.r);
+    <span class="pf-rq2-status">
+      <pf-status-words [words]="statusWordsOf(row.r)" />
+      @if (st.unpaid) { <span class="pf-rq2-unpaid">Unpaid</span> }
+      @if (slimActs() && sendCtl(row.r); as x) { <ng-container *ngTemplateOutlet="sendCtlTpl; context: { $implicit: x }"></ng-container> }
+    </span>
+    } @else {
+    <span class="pf-rq2-status">
+      <pf-status-words [words]="partialWords" />
+    </span>
+    }
+  </ng-template>
+
+  <ng-template #cGen let-row>
+    <span class="pf-rq2-muted pf-num">{{ row.kind === 'report' ? when(row.r.createdAt) : (row.r ? when(row.r.createdAt) : '—') }}</span>
+  </ng-template>
+
+  <ng-template #cSent let-row>
+    @let sx = row.kind === 'report' ? sendCtl(row.r) : null;
+    @let sm = row.kind === 'report' ? sentMeta(row.r) : (row.r ? sentMeta(row.r) : '');
+    <span class="pf-rq2-sentcell">
+      <span class="pf-rq2-sent">{{ sm || sx?.reason || (sx ? 'Not sent' : '—') }}</span>
+      @if (sx) { <ng-container *ngTemplateOutlet="sendCtlTpl; context: { $implicit: sx }"></ng-container> }
+    </span>
+  </ng-template>
+
+  <ng-template #cActs let-row>
+    <span class="pf-rq2-acts">
+      @if (row.kind === 'partial') {
+      <button type="button" class="pf-rowact pf-rq2-details" [class.pf-rowact--icon]="iconActs()" (click)="toggle(row.po.id)"
+              [attr.aria-expanded]="expanded() === row.po.id" [attr.aria-controls]="'pf-rq-po-' + row.po.id"
+              [attr.aria-label]="(expanded() === row.po.id ? 'Hide' : 'Show') + ' departments'" title="Departments">
+        <svg class="pf-rq2-details__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        <span class="pf-rowact__t">Details</span>
+      </button>
+      }
+      @if (row.r; as r) {
+      <ng-container *ngTemplateOutlet="reportActs; context: { $implicit: r }"></ng-container>
+      }
+    </span>
+  </ng-template>
+
+  <!-- View · Download · (view-only Print) · Share ▾ · ⋯ — same permissions, busy states and deliveries as before. -->
+  <ng-template #reportActs let-r>
+    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="iconActs()" aria-label="View" title="View on screen" (click)="view(r)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+      </svg>
+      <span class="pf-rowact__t">View</span>
+    </button>
+    <!-- Tablet widths (901–1279px, slimActs): View · Share · ⋯ only — Download / Print / the share choice live in ⋯
+         (the same rows), so the actions never clip at the card's right edge. -->
+    @if (!slimActs()) {
+    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="iconActs()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
+            [disabled]="isRowBusy(r.id, 'download')" [pfBusy]="isRowBusy(r.id, 'download')" pfBusyLabel="Preparing the PDF…">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+      </svg>
+      <span class="pf-rowact__t">Download</span>
+    </button>
+    }
+    <!-- View-only Results can PRINT (not a delivery: nothing recorded); the delivery desk prints from Share ▾. -->
+    @if (!slimActs() && !canDeliver() && canPrint()) {
+    <button type="button" class="pf-rowact pf-rq-print" [class.pf-rowact--icon]="iconActs()" aria-label="Print" title="Print"
+            [disabled]="isRowBusy(r.id, 'print')" [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
+            (click)="printReport(r)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      <span class="pf-rowact__t">Print</span>
+    </button>
+    }
+    @if (canDeliver()) {
+    <span class="pf-rq-split pf-rq-split--nd">
+      <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="iconActs()" aria-label="Share" [title]="waLabel(r) || 'Print'"
+              [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, waMode(r) ? 'whatsapp' : 'print')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
+        </svg>
+        <span class="pf-rowact__t">Share</span>
+      </button>
+      @if (!slimActs()) {
+      <button type="button" class="pf-rowact pf-rq-split__caret" [class.pf-rowact--icon]="iconActs()" (click)="toggleShare(r.id, $event)"
+              [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
+              [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      }
+      @if (shareFor() === r.id) {
+        <div class="pf-rq-menu__bd" pfModalPortal aria-hidden="true" (click)="toggleShare(r.id)"></div>
+        <div class="pf-rq-menu" pfModalPortal role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
+          @if (waMode(r)) {
+            <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                    (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waLabel(r) }}</button>
+          }
+          <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                  (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>
+        </div>
+      }
+    </span>
+    }
+    @if (actionsFor(r).length) {
+    <pf-actions-menu class="pf-rq-kebab" [actions]="actionsFor(r)" label="Report actions"
+                     [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
+      <button pfActionsTrigger type="button" class="pf-rowact pf-rq-more" [class.pf-rowact--icon]="iconActs()"
+              [pfBusy]="isRowBusy(r.id, 'regenerate')" pfBusyLabel="Regenerating…"
+              aria-label="Report actions" title="Report actions">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h.01"/><path d="M12 12h.01"/><path d="M19 12h.01"/>
+        </svg>
+        <span class="pf-rowact__t">More</span>
+      </button>
+    </pf-actions-menu>
+    }
+  </ng-template>
+
+  <!-- A partly-reported order, open: "Generate partial PDF" at the TOP, then the departments side by side (flat). -->
+  <ng-template #cDetail let-row>
+    <div class="pf-rq2-detail" [id]="'pf-rq-po-' + row.po.id" data-testid="rq-detail">
+      <div class="pf-rq2-detail__top">
+        <span class="pf-rq2-detail__sum pf-num">{{ row.po.countLabel }}</span>
+        @if (canGenerate()) {
+        <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-rq-genpartial press" [disabled]="generating() === row.po.id"
+                [pfBusy]="generating() === row.po.id" pfBusyLabel="Generating…" (click)="generatePartial(row.po)">
+          {{ generating() === row.po.id ? 'Generating…' : 'Generate partial PDF' }}
+        </button>
+        }
+      </div>
+      <div class="pf-rq2-depts">
+        @for (d of row.po.shownDepts; track d.key) {
+        <section class="pf-rq-dept" [attr.data-state]="d.state">
+          <header class="pf-rq-dept__head">
+            <span class="pf-rq-dept__name">{{ d.name }}</span>
+            @if (d.code) { <span class="pf-chip pf-chip--static pf-rq-dept__code pf-num">{{ d.code }}</span> }
+            <span class="pf-rq-dept__note pf-num" [attr.data-ready]="d.state === 'ready'">
+              @if (d.state === 'ready') { Ready } @else { {{ d.readyTests }} of {{ d.tests.length }} tests ready }
+            </span>
+          </header>
+          @for (t of d.tests; track t.id) {
+          <div class="pf-rq-test" [attr.data-ready]="t.ready">
+            <p class="pf-rq-test__name">
+              @if (d.state === 'partial') {
+              <span class="pf-rq-test__mark" [class.pf-rq-test__mark--ready]="t.ready" aria-hidden="true"></span>
+              }
+              {{ t.name }}
+              @if (d.state === 'partial') {
+              <span class="pf-rq-test__state">{{ t.ready ? 'Ready' : 'Pending' }}</span>
+              }
+            </p>
+            @if (!t.ready) {
+            <p class="pf-rq-test__status">{{ t.status }}</p>
+            } @else if (t.culture) {
+            @if (t.cultureLines.length) {
+            <dl class="pf-rq-culture">
+              @for (l of t.cultureLines; track l.label) {
+              <div class="pf-rq-culture__row"><dt>{{ l.label }}</dt><dd class="pf-num">{{ l.value }}</dd></div>
+              }
+            </dl>
+            } @else {
+            <p class="pf-rq-test__status">Culture signed out — open the report for the findings.</p>
+            }
+            } @else if (t.values.length) {
+            <ul class="pf-rq-values" role="list">
+              @for (v of t.values; track v.name) {
+              <li class="pf-rq-value" [attr.data-flag]="v.flag">
+                <span class="pf-rq-value__name">{{ v.title }}@if (v.range) { <span class="pf-rq-value__range pf-num">{{ v.range }}</span> }</span>
+                <span class="pf-rq-value__val pf-num">{{ v.value }}@if (v.unit) { <span class="pf-rq-value__unit">{{ v.unit }}</span> }</span>
+                <span class="pf-rq-value__flag" [attr.data-flag]="v.flag">
+                  @switch (v.flag) {
+                    @case ('critical') { {{ v.code || 'C' }} }
+                    @case ('abnormal') { {{ v.code === 'H' ? 'High' : v.code === 'L' ? 'Low' : 'Abnormal' }} }
+                  }
+                </span>
+              </li>
+              }
+            </ul>
+            } @else {
+            <p class="pf-rq-test__status">Result recorded — open the report for details.</p>
+            }
+          </div>
+          }
+        </section>
+        }
+        @if (row.po.pending.length) {
+        <section class="pf-rq-dept pf-rq-dept--pending" data-state="pending">
+          <header class="pf-rq-dept__head pf-rq-pending" role="note">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+            <span class="pf-rq-dept__name">Still pending</span>
+          </header>
+          @for (pd of row.po.pending; track pd.name) {
+          <p class="pf-rq-pending__row"><strong class="pf-rq-pending__dept">{{ pd.name }}</strong>@if (pd.detail) { <span class="pf-num pf-rq2-muted">{{ pd.detail }}</span> }</p>
+          }
+        </section>
+        }
+      </div>
+    </div>
+  </ng-template>
+
+  <ng-template #emptyTpl>
+    @if (filter() === 'partial') {
+    <div class="pf-empty pf-rq-empty">
+      <span class="pf-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>
+      </span>
+      <p class="pf-empty__title">No partial reports</p>
+      <p class="pf-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
+    </div>
+    } @else {
+    <div class="pf-empty pf-rq-empty">
+      <span class="pf-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      </span>
+      <p class="pf-empty__title">{{ query() ? 'No matching reports' : 'No reports here' }}</p>
+      <p class="pf-empty__body">{{ query() ? 'Try a patient name, MRN, phone or order number.' : 'Reports appear here as soon as an order is validated.' }}</p>
+    </div>
+    }
+  </ng-template>
+
+  <!-- ── Phone: tap a row → every action in one sheet (ONE primary: Share on WhatsApp, else Print) ── -->
+  @if (sheet(); as row) {
+  <div class="pf-rq2-sheetbd" pfModalPortal aria-hidden="true" (click)="closeSheet()"></div>
+  <div class="pf-card pf-rq2-sheet" pfModalPortal role="dialog" aria-modal="true" data-testid="rq-sheet"
+       [attr.aria-label]="'Report actions — ' + (row.kind === 'report' ? reportPatientName(row.r) : row.po.patientName)"
+       (keydown.escape)="closeSheet()">
+    <span class="pf-rq2-sheet__handle" aria-hidden="true"></span>
+    <div class="pf-rq2-sheet__head">
+      <div class="pf-rq2-sheet__who">
+        @if (row.kind === 'report') {
+        <span class="pf-rq2-sheet__name">{{ reportPatientName(row.r) }}</span>
+        <span class="pf-rq2-sheet__meta pf-num">{{ reportMeta(row.r) }}</span>
+        } @else {
+        <span class="pf-rq2-sheet__name">{{ row.po.patientName }}</span>
+        <span class="pf-rq2-sheet__meta pf-num">{{ row.po.patientMeta }}</span>
+        }
+      </div>
+      @if (row.kind === 'report') {
+      @let st = rowStatus(row.r);
+      <pf-status-words [words]="statusWordsOf(row.r)" />
+      } @else {
+      <pf-status-words [words]="partialWords" />
+      }
+      <button type="button" class="pf-btn pf-btn--icon pf-rq2-sheet__close press" (click)="closeSheet()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="pf-rq2-sheet__body">
+      @if (reportOf(row); as r) {
+      @if (isUnpaid(r)) { <p class="pf-rq2-sheet__unpaid">Unpaid — collect the balance before handing over</p> }
+      @if (sheetPrimary(r); as p) {
+      <button type="button" class="pf-btn pf-btn--primary pf-rq2-sheet__primary press" data-testid="rq-sheet-primary"
+              [pfBusy]="waSending(r.id) || isRowBusy(r.id, 'print')" pfBusyLabel="Working…" (click)="sheetDeliver(r, p.via)">{{ p.label }}</button>
+      }
+      <div class="pf-rq2-sheet__trio" [class.pf-rq2-sheet__trio--2]="!sheetShowsPrint(r)">
+        <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeSheet(); view(r)">View</button>
+        <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="isRowBusy(r.id, 'download')"
+                [pfBusy]="isRowBusy(r.id, 'download')" pfBusyLabel="Preparing the PDF…" (click)="downloadPdf(r)">Download</button>
+        @if (sheetShowsPrint(r)) {
+        <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="isRowBusy(r.id, 'print')"
+                [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…" (click)="closeSheet(); printReport(r)">Print</button>
+        }
+      </div>
+      @if (sheetMore(r).length) {
+      <ul class="pf-rq2-sheet__more" role="list">
+        @for (a of sheetMore(r); track a.id) {
+        <li><button type="button" class="pf-rq2-sheet__item press" [attr.data-action]="a.id" (click)="sheetRun(r, a.id)">
+          <span>{{ a.label }}</span>@if (a.hint) { <span class="pf-rq2-sheet__hint">{{ a.hint }}</span> }
+        </button></li>
+        }
+      </ul>
+      }
+      }
+      @if (row.kind !== 'report') {
+      <ng-container *ngTemplateOutlet="cDetail; context: { $implicit: row }"></ng-container>
+      }
+    </div>
+  </div>
+  }
+
+  @if (editOrderId(); as oid) {
+  <pf-edit-result-dialog
+    [orderId]="oid"
+    title="Edit this report's results"
+    (edited)="onEdited()"
+    (closed)="editOrderId.set(null)">
+  </pf-edit-result-dialog>
+  }
+</section>
+} @else {
 <section class="pf-rq-page px-4 md:px-8 pt-6" [class.pf-rq-page--nd]="theme.isNewDesign()">
   <div class="pf-rq-chrome">
-    @if (theme.isNewDesign()) {
-    <!-- ND band (docs/PF-PATTERN.md → "Reports list"): the pill = search +
-         ONE status filter (neutral segmented, plain tabular counts, no
-         colour dots). No second stats strip. No primary here: Generate is a
-         manual fallback (reports generate themselves on validation). -->
-    <pf-hero-band
-      placeholder="Search by patient, MRN, phone, or order/report id…"
-      [value]="query()"
-      (valueChange)="setQuery($event)">
-      <ng-container band-tools>
-        <pf-segmented class="pf-rq-seg" [options]="ndFilters()" [value]="filter()" mode="text"
-                      (valueChange)="setFilter($any($event))" />
-      </ng-container>
-      <ng-container band-actions>
-        @if (sheets.available()) {
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="open-in-sheet" (click)="openInSheet()"
-                aria-label="Open in sheet" title="Pull lab results into a sheet">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M3 10h18M3 14.5h18M9 5v14"/></svg>
-          Open in sheet
-        </button>
-        }
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()" aria-label="Refresh" title="Refresh">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
-            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
-          </svg>
-          Refresh
-        </button>
-        @if (canGenerate()) {
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rq-generate" (click)="promptGenerate()"
-                [disabled]="generatingReport()" [pfBusy]="generatingReport()" pfBusyLabel="Generating…"
-                aria-label="Generate a report" title="Generate a report for an order">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/>
-          </svg>
-          Generate
-        </button>
-        } @else if (viewOnly()) {
-        <span class="pf-chip pf-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
-        }
-      </ng-container>
-    </pf-hero-band>
-    }
     <pf-kpi-strip screen="report_queue"></pf-kpi-strip>
     @if (!theme.isNewDesign()) {
     <pf-screen-header eyebrow="Delivery queue" title="Report queue"
@@ -86,9 +611,9 @@
         <span class="pf-rq-stat__label">Total</span>
         <span class="pf-rq-stat__value">{{ allCount() }}</span>
       </span>
-      <span class="pf-rq-stat" data-color="amber">
+      <span class="pf-rq-stat" data-color="violet">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-        <span class="pf-rq-stat__label">Completed</span>
+        <span class="pf-rq-stat__label">Ready</span>
         <span class="pf-rq-stat__value">{{ counts().pending }}</span>
       </span>
       <span class="pf-rq-stat" data-color="sky">
@@ -144,8 +669,8 @@
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
         </button>
-        <button type="button" class="pf-rq-filticon" [class.is-active]="filter() === 'pending'" aria-label="Completed"
-          title="Completed" (click)="setFilter('pending')">
+        <button type="button" class="pf-rq-filticon" [class.is-active]="filter() === 'pending'" aria-label="Ready to send"
+          title="Ready to send" (click)="setFilter('pending')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -202,7 +727,7 @@
             <span class="pf-rq-card__meta pf-num">{{ po.patientMeta }}</span>
             <span class="pf-rq-card__meta pf-rq-card__count pf-num">{{ po.countLabel }}</span>
           </span>
-          <span class="pf-rq-status" data-status="preliminary" data-tone="amber">
+          <span class="pf-rq-status" data-status="preliminary" data-tone="sky">
             <span class="pf-rq-status__dot" aria-hidden="true"></span>
             Preliminary
           </span>
@@ -305,21 +830,6 @@
     </ul>
     }
     @if (loading() && items().length === 0) {
-    @if (theme.isNewDesign()) {
-    <ul class="pf-rq-list" role="list" aria-busy="true">
-      @for (i of [0, 1, 2, 3]; track i) {
-      <li class="pf-rq-card pf-rq-card--skel">
-        <div class="pf-rq-card__head">
-          <div class="pf-rq-card__who">
-            <pf-skeleton variant="line" width="40%"></pf-skeleton>
-            <pf-skeleton variant="line" width="65%" height="10px"></pf-skeleton>
-          </div>
-          <pf-skeleton variant="line" width="160px" height="30px"></pf-skeleton>
-        </div>
-      </li>
-      }
-    </ul>
-    } @else {
     <div class="space-y-2.5">
       @for (i of [0, 1, 2, 3]; track i) {
       <pf-tile tone="default" padding="md">
@@ -334,7 +844,6 @@
       </pf-tile>
       }
     </div>
-    }
     } @else if (filter() === "partial") {
     <!-- Partial tab — orders with at least one tube fully validated, grouped
          by DEPARTMENT (report-queue.partial.ts): ready departments with their
@@ -342,15 +851,6 @@
          pending ones are named. "Generate partial PDF" releases a preliminary
          report of the ready tubes (latest supersedes previous). -->
     @if (visiblePartials().length === 0) {
-    @if (theme.isNewDesign()) {
-    <div class="pf-empty pf-rq-empty">
-      <span class="pf-empty__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>
-      </span>
-      <p class="pf-empty__title">No partial reports</p>
-      <p class="pf-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
-    </div>
-    } @else {
     <pf-tile tone="default" padding="xl">
       <div class="text-center py-6">
         <p class="text-[14px]" style="color: var(--text-secondary);">
@@ -359,7 +859,6 @@
         </p>
       </div>
     </pf-tile>
-    }
     } @else {
     <ul class="pf-rq-list" role="list">
       @for (po of visiblePartials(); track po.id) {
@@ -368,15 +867,6 @@
     </ul>
     }
     } @else if (visible().length === 0 && allTabPartials().length === 0) {
-    @if (theme.isNewDesign()) {
-    <div class="pf-empty pf-rq-empty">
-      <span class="pf-empty__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-      </span>
-      <p class="pf-empty__title">{{ query() ? 'No matching reports' : 'No reports here' }}</p>
-      <p class="pf-empty__body">{{ query() ? 'Try a patient name, MRN, phone or order number.' : 'Reports appear here as soon as an order is validated.' }}</p>
-    </div>
-    } @else {
     <pf-tile tone="default" padding="xl">
       <div class="text-center py-6">
         <p class="text-[14px]" style="color: var(--text-secondary);">
@@ -384,111 +874,6 @@
         </p>
       </div>
     </pf-tile>
-    }
-    } @else if (theme.isNewDesign()) {
-    <ul class="pf-rq-list" role="list">
-      @for (r of visible(); track r.id) {
-      <li class="pf-rq-card pf-rq-card--report" [attr.data-status]="r.deliveryStatus" [pfZoomSource]="[r.id, r.orderId]">
-        <div class="pf-rq-card__head">
-          <div class="pf-rq-card__who">
-            <p class="pf-rq-card__name"><pf-daily-no [of]="r.order" />{{ reportPatientName(r) }}</p>
-            <p class="pf-rq-card__meta pf-num">{{ reportMeta(r) }}</p>
-          </div>
-          <!-- ONE status: dot + coloured word, no chip, in a fixed right column
-               so status and actions line up on every row (PF-PATTERN §20).
-               Preliminary replaces Completed; hidden facts go in the meta. -->
-          @let st = cardStatus(r);
-          <span class="pf-rq-status" [attr.data-status]="st.key" [attr.data-tone]="st.tone">
-            @if (st.key === 'delivered') {
-            <svg class="pf-rq-status__mark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-            } @else {
-            <span class="pf-rq-status__dot" aria-hidden="true"></span>
-            }
-            {{ st.label }}
-          </span>
-          <div class="pf-rq-card__acts">
-            <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="View" title="View on screen" (click)="view(r)">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-              <span class="pf-rowact__t">View</span>
-            </button>
-            <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
-                    [disabled]="isRowBusy(r.id, 'download')" [pfBusy]="isRowBusy(r.id, 'download')" pfBusyLabel="Preparing the PDF…">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
-              </svg>
-              <span class="pf-rowact__t">Download</span>
-            </button>
-            <!-- View-only Results can PRINT (not a delivery: nothing recorded);
-                 the delivery desk prints from the Share menu below. -->
-            @if (!canDeliver() && canPrint()) {
-            <button type="button" class="pf-rowact pf-rq-print" [class.pf-rowact--icon]="!web()" aria-label="Print" title="Print"
-                    [disabled]="isRowBusy(r.id, 'print')" [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
-                    (click)="printReport(r)">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-              </svg>
-              <span class="pf-rowact__t">Print</span>
-            </button>
-            }
-            <!-- Sending needs deliver_report; a view_report-only viewer sees the
-                 SAME list with View / Download / More only (route-access.ts). -->
-            @if (canDeliver()) {
-            <span class="pf-rq-split pf-rq-split--nd">
-              <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="!web()" aria-label="Share" [title]="waLabel(r) || 'Print'"
-                      [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, waMode(r) ? 'whatsapp' : 'print')">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
-                </svg>
-                <span class="pf-rowact__t">Share</span>
-              </button>
-              <button type="button" class="pf-rowact pf-rq-split__caret" [class.pf-rowact--icon]="!web()" (click)="toggleShare(r.id, $event)"
-                      [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
-                      [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-              @if (shareFor() === r.id) {
-                <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleShare(r.id)"></div>
-                <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                  @if (waMode(r)) {
-                    <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                            (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waLabel(r) }}</button>
-                  }
-                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>
-                </div>
-              }
-            </span>
-            }
-            <!-- ⋮ — EVERY action for this report in one place (share, the PDF,
-                 workflow steps, go-to), by permission + state. Popover on
-                 web / iPad, a bottom sheet on phones. -->
-            @if (rowActions().get(r.id)?.length) {
-            <pf-actions-menu class="pf-rq-kebab" [actions]="rowActions().get(r.id) ?? []" label="Report actions"
-                             [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
-              <button pfActionsTrigger type="button" class="pf-rowact pf-rq-more" [class.pf-rowact--icon]="!web()"
-                      [pfBusy]="isRowBusy(r.id, 'regenerate')" pfBusyLabel="Regenerating…"
-                      aria-label="Report actions" title="Report actions">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/>
-                </svg>
-                <span class="pf-rowact__t">More</span>
-              </button>
-            </pf-actions-menu>
-            }
-          </div>
-        </div>
-      </li>
-      }
-    </ul>
     } @else {
     <div class="space-y-2.5">
       @for (r of visible(); track r.id) {
@@ -679,9 +1064,9 @@
               <span class="pf-rq-stat__label">Total</span>
               <span class="pf-rq-stat__value">{{ counts().all }}</span>
             </span>
-            <span class="pf-rq-stat" data-color="amber">
+            <span class="pf-rq-stat" data-color="violet">
               <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Completed</span>
+              <span class="pf-rq-stat__label">Ready</span>
               <span class="pf-rq-stat__value">{{ counts().pending }}</span>
             </span>
             <span class="pf-rq-stat" data-color="sky">
@@ -707,3 +1092,5 @@
           }
         </div>
       </ng-template>
+
+}

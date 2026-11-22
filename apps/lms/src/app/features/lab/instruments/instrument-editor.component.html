@@ -3,7 +3,7 @@
     <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
       <ng-container band-actions>
         <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>
-        @if (dirty() || mapsDirty() || imageMapsDirty()) {
+        @if (changed()) {
           <span class="pf-savestate"><span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-ie-vh-phone">Unsaved changes</span></span>
         }
         @if (!isNew()) {
@@ -14,8 +14,9 @@
           </button>
         }
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ie-save press"
-                [disabled]="saving() || loading()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                [attr.aria-label]="primaryLabel()" [title]="primaryLabel()">
+                [disabled]="saving() || loading() || !changed()" [pfBusyInactive]="saving() || loading() || !changed()"
+                [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" data-testid="ie-save"
+                [attr.aria-label]="primaryLabel()" [title]="changed() || saving() ? primaryLabel() : NO_CHANGES">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
           {{ saving() ? 'Saving…' : primaryLabel() }}
         </button>

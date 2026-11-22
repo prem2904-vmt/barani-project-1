@@ -6,6 +6,7 @@ import { ReferringNetworkComponent } from '../referring-network/referring-networ
 import { labPageTab } from './lab-page.component';
 import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import { FdGridColumnsComponent } from '../fd-grid-columns/fd-grid-columns.component';
 
 /**
  * Lab › Front desk: lab appointments and queue (token or walk-up, booking
@@ -17,7 +18,7 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
 @Component({
   selector: 'pf-lab-front-desk-page',
   standalone: true,
-  imports: [AppointmentsConfigComponent, ReferringNetworkComponent, SettingGroupComponent, SegmentedComponent],
+  imports: [AppointmentsConfigComponent, ReferringNetworkComponent, SettingGroupComponent, SegmentedComponent, FdGridColumnsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- ONE page (owner 2026-11-17): Queue mode · Booking slots · Priority engine as group cards in the grid, then the
@@ -27,7 +28,29 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
       <pf-setting-group label="Referring doctors and hospitals" scope="one shared list" id="referring" [wide]="true"
                         icon="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01">
         <pf-segmented group-tools size="sm" ariaLabel="Hospitals or doctors" [options]="rn.viewOptions()" [value]="rn.view()" (valueChange)="rn.setView($any($event))"></pf-segmented>
+        <!-- The list's actions in the group head (the grid inside is bare, so its own head is hidden): outlined,
+             Save stays the page's one primary. -->
+        <button group-tools type="button" class="pf-btn pf-btn--secondary pf-sg-act press" data-testid="rn-add"
+                [disabled]="rn.editorOpen()" (click)="rn.addNew()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          {{ rn.view() === 'hospitals' ? 'Add hospital' : 'Add doctor' }}
+        </button>
+        <button group-tools type="button" class="pf-btn pf-btn--secondary pf-sg-act press" data-testid="rn-paste-open"
+                [disabled]="rn.editorOpen()" (click)="rn.openPaste()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          Paste from sheet
+        </button>
         <pf-referring-network #rn></pf-referring-network>
+      </pf-setting-group>
+      <!-- Work grid columns (owner mock grid-settings-v3, 2026-11-21): the Lab Frontdesk grid's columns for this branch. -->
+      <pf-setting-group label="Work grid columns" scope="this branch" id="columns" [wide]="true" hint="What the Frontdesk list shows for Lab."
+                        icon="M3 4h18v16H3zM3 10h18M9 10v10M15 10v10">
+        <button group-tools type="button" class="pf-btn pf-btn--secondary pf-fd__reset" data-testid="fdgc-reset"
+                [disabled]="!gc.canReset()" (click)="gc.reset()" aria-label="Reset columns to default">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+          Reset to default
+        </button>
+        <pf-fd-grid-columns #gc module="lab"></pf-fd-grid-columns>
       </pf-setting-group>
     </div>
   `,
@@ -35,9 +58,18 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
 export class LabFrontDeskPage implements HasUnsavedChanges {
   /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
   private readonly appointments = viewChild(AppointmentsConfigComponent);
+  private readonly columns = viewChild(FdGridColumnsComponent);
   readonly unsavedLabel = 'the front desk settings';
-  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
-  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  hasUnsavedChanges(): boolean {
+    return (this.appointments()?.hasUnsavedChanges() ?? false) || (this.columns()?.hasUnsavedChanges() ?? false);
+  }
+  async saveChanges(): Promise<boolean> {
+    const colsDirty = this.columns()?.hasUnsavedChanges() ?? false;
+    // Only the columns changed: leave the booking settings alone (they save on their own when they change).
+    const a = !colsDirty || this.appointments()?.hasUnsavedChanges() ? await (this.appointments()?.saveChanges() ?? Promise.resolve(true)) : true;
+    const c = this.columns()?.hasUnsavedChanges() ? await this.columns()!.saveChanges() : true;
+    return a && c;
+  }
   private readonly _unloadGuard = guardUnsavedOnUnload(this);
   protected readonly tab = labPageTab(LAB_PAGES.frontDesk).tab;
 }

@@ -132,6 +132,13 @@
   </nav>
   }
 
+  @if (themeService.isNewDesign() && themeService.bottomNav() && serviceShelf.visible()) {
+  <!-- Services shelf (owner 2026-11-19): Frontdesk area only, and only for a user with 2+ services (a lab-only
+       user sees exactly today's bar). Same pattern + stylesheet as the Drafts shelf below; a pick filters both
+       Frontdesk panels. Each area owns its shelf: Lab keeps Drafts and never shows this. -->
+  <pf-services-shelf [viewportW]="barWidth()" />
+  }
+
   @if (themeService.isNewDesign() && themeService.bottomNav() && draftShelf.items().length) {
   <!-- Draft tray (owner): pages | divider | the current work area's
          unfinished drafts, one click to resume. Tablet + web only —

@@ -2,13 +2,18 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { MySignatureComponent } from '../../../features/user-signature/my-signature.component';
 import { REGNO_PROMPT_TEXT, RegnoPromptComponent, needsRegistrationNumber } from './regno-prompt.component';
+
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
 
 /**
  * Doctor registration number (owner 2026-09-29: "If the admin has missed the

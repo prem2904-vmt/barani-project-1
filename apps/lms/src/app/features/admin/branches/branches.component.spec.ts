@@ -7,6 +7,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 
 /**
  * Departments and lab spaces moved to Lab (owner 2026-11-17): Branches keeps
@@ -122,7 +123,7 @@ describe('Branches — OPS-11 deactivate a branch', () => {
     await Promise.resolve(); await Promise.resolve();
     expect(dialog.confirm).toHaveBeenCalled();
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: false });
-    expect((c.colDefs().find((d: any) => d.colId === 'status').cellRenderer({ data: c.branches()[0] }) as HTMLElement).textContent).toBe('Inactive');
+    expect(c.colDefs().find((d: any) => d.colId === 'status').cellRendererParams.statusWords(c.branches()[0]).now).toBe('Inactive');
   });
 
   it('declining the confirm changes nothing', async () => {
@@ -140,5 +141,17 @@ describe('Branches — OPS-11 deactivate a branch', () => {
     await Promise.resolve();
     expect(dialog.confirm).not.toHaveBeenCalled();
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: true });
+  });
+});
+
+describe('Branches grid — every data column sorts and filters on its real value', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  it('data columns sort + filter; the actions column is exempt', () => {
+    const { c } = render();
+    const cols = c.colDefs() as any[];
+    const data = cols.filter(x => x.colId !== 'actions');
+    expect(data.map(x => x.colId)).toEqual(['name', 'code', 'place', 'gstin', 'status']);
+    for (const col of data) expect(sortsAndFilters(col), col.colId).toBe(true);
+    for (const col of cols.filter(x => x.colId === 'actions')) { expect(col.sortable).toBe(false); expect(col.filter).toBe(false); }
   });
 });

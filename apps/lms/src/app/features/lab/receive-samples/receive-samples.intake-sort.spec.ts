@@ -75,7 +75,7 @@ describe('Lab Intake (sample-focused) — sort order', () => {
       { barcode: '26125', status: 'dispatched' },
     ]);
     const { el } = render([o1, o2]);
-    const samples = [...el.querySelectorAll('.pf-rs-row__sample')].map(n => n.textContent?.trim());
+    const samples = [...el.querySelectorAll('.pf-wl__lead')].map(n => n.textContent?.trim());
     expect(samples).toEqual(['26120', '26122', '26125', '26126', '26141']);
   });
 
@@ -86,12 +86,12 @@ describe('Lab Intake (sample-focused) — sort order', () => {
       { barcode: '26126', status: 'dispatched' },
     ]);
     const { el } = render([o1]);
-    const samples = [...el.querySelectorAll('.pf-rs-row__sample')].map(n => n.textContent?.trim());
+    const samples = [...el.querySelectorAll('.pf-wl__lead')].map(n => n.textContent?.trim());
     expect(samples).toEqual(['26120', '26121', '26126']); // NOT ['26120', '26126', '26121']
 
-    const rows = [...el.querySelectorAll('.pf-rs-row')];
-    expect(rows[1].classList.contains('pf-rs-row--received')).toBe(true); // still greyed
-    expect(rows[1].textContent).toContain('Received');
+    const rows = [...el.querySelectorAll('.pf-wl__row')];
+    expect(rows[1].getAttribute('data-tone')).toBe('done'); // received = green words, still in place
+    expect(rows[1].querySelector('.pf-sw__now')?.textContent?.trim()).toBe('Received');
   });
 
   it('numeric compare handles differing digit counts correctly (not lexicographic)', () => {
@@ -103,8 +103,17 @@ describe('Lab Intake (sample-focused) — sort order', () => {
       { barcode: '26199', status: 'dispatched' },
     ]);
     const { el } = render([o1]);
-    const samples = [...el.querySelectorAll('.pf-rs-row__sample')].map(n => n.textContent?.trim());
+    const samples = [...el.querySelectorAll('.pf-wl__lead')].map(n => n.textContent?.trim());
     expect(samples).toEqual(['26199', '26200']);
+  });
+});
+
+describe('Lab Intake — the Sort chip (no dropdown)', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+  it('shows the Sort chip with the saved choice and no pf-lab-sort picker', () => {
+    const { el } = render([dispatchedOrder('o1', 'Zed', [{ barcode: '26001', status: 'dispatched' }])]);
+    expect(el.querySelector('pf-lab-sort')).toBeNull();
+    expect(el.querySelector('[data-testid="sort-chip"]')?.textContent).toContain('Sort: Usual order');
   });
 });
 
@@ -115,7 +124,7 @@ describe('Lab Intake — OPS-52 remembered sort', () => {
     dispatchedOrder('o1', 'Zed', [{ barcode: '26001', status: 'dispatched' }]),
     dispatchedOrder('o2', 'Amy', [{ barcode: '26900', status: 'dispatched' }]),
   ];
-  const samples = (el: HTMLElement) => [...el.querySelectorAll('.pf-rs-row__sample')].map(n => n.textContent?.trim());
+  const samples = (el: HTMLElement) => [...el.querySelectorAll('.pf-wl__lead')].map(n => n.textContent?.trim());
 
   it('patient-name sort re-orders the rows; the choice is read from storage', () => {
     localStorage.setItem('pf.labSort.u1.intake', 'patient');

@@ -11,6 +11,11 @@ import { SETTINGS_SECTIONS, SettingsItem, settingsPages } from './settings-map';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
+
 /** A stand-in page: reports whether the shell hosts it (SETTINGS_HOST). */
 @Component({ standalone: true, template: '<span data-testid="page" [attr.data-hosted]="hosted">page</span>' })
 class PageStub { readonly hosted = injectSettingsHosted(); }

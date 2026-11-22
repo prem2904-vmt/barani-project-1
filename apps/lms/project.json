@@ -54,7 +54,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "2.5mb"
+              "maximumError": "2.6mb"
             },
             {
               "type": "anyComponentStyle",
@@ -276,7 +276,8 @@
     "test": {
       "executor": "@angular/build:unit-test",
       "options": {
-        "include": ["**/*.spec.ts", "../../../libs/forms-engine/src/**/*.spec.ts", "../../../libs/shared/src/**/*.spec.ts"]
+        "include": ["**/*.spec.ts", "../../../libs/forms-engine/src/**/*.spec.ts", "../../../libs/shared/src/**/*.spec.ts"],
+        "setupFiles": ["apps/lms/src/test-setup.ts"]
       }
     },
     "serve-static": {

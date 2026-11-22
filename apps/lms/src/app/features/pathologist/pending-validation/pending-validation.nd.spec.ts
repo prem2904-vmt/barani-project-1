@@ -105,11 +105,19 @@ async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
+  await settle(f);
   const el = f.nativeElement as HTMLElement;
   const c = f.componentInstance as any;
   return { f, el, c, api, router };
 }
 
+/** Let the grid (pf-data-grid → AG-Grid) render its rows. */
+const settle = async (f: { detectChanges(): void }) => { for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 40)); f.detectChanges(); } };
+/** The queue's rows (one per tube) — grid rows since the grid redesign (owner 2026-11-20). */
+const tilesOf = (el: Element) => [...el.querySelectorAll<HTMLElement>('.ag-row.pv-row:not(.ag-opacity-zero)')];
+/** Rows leaving the grid fade out first (animateRows): wait them out. */
+const leave = async (f: { detectChanges(): void }) => { await new Promise(r => setTimeout(r, 600)); await settle(f); };
+const idsOf = (el: Element) => tilesOf(el).map(t => t.querySelector('.pv-tile__id')!.textContent!.trim());
 /** A segment's words: label + count, space-joined. */
 const words = (e: Element) => [...e.children].map(c => c.textContent!.trim()).join(' ');
 /** Component CSS with Angular's scoping attributes stripped. */
@@ -125,7 +133,7 @@ const primaries = (root: Element) =>
     .filter(b => !b.closest('.pf-bottombar'));
 
 describe('Pathologist queue (nd) — layout', () => {
-  it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the side card', async () => {
+  it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the band (owner 2026-11-21)', async () => {
     const { el } = await render();
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
     expect(el.querySelector('.pf-body.pf-body--split')).not.toBeNull();
@@ -133,10 +141,10 @@ describe('Pathologist queue (nd) — layout', () => {
     expect(cards.map(c => c.querySelector('.pf-card__label')?.textContent?.trim())).toEqual(['Pending validation', 'Your scope']);
     const p = primaries(el);
     expect(p.length).toBe(1);
-    expect(p[0].closest('.pv-side')).not.toBeNull();
+    expect(p[0].closest('pf-hero-band')).not.toBeNull();
     expect(p[0].textContent).toContain('Review next');
-    // The bottom bar carries at most the same one action.
-    expect(el.querySelectorAll('.pf-bottombar .pf-btn--primary').length).toBeLessThanOrEqual(1);
+    // Nothing clickable at the bottom of the side card or the phone bar for it any more.
+    expect(el.querySelector('.pv-side .pv-next, .pf-bottombar .pv-next')).toBeNull();
     // Refresh is a quiet ghost on the band.
     expect(el.querySelector('.pv-refresh')!.classList).toContain('pf-hb-btn--ghost');
   });
@@ -161,77 +169,118 @@ describe('Pathologist queue (nd) — layout', () => {
 });
 
 describe('Pathologist queue (nd) — tiles', () => {
-  it('one tile per tube: sample ID first (tabular), FULL name, meta joined with ·, one status word', async () => {
+  it('one ROW per tube: sample ID first (tabular), FULL name, meta joined with ·, one status word', async () => {
     const { el } = await render();
-    const tiles = [...el.querySelectorAll<HTMLElement>('.pv-tile')];
+    const tiles = tilesOf(el);
     expect(tiles.length).toBe(3);
+    expect(el.querySelector('pf-data-grid[data-testid="pv-grid"]')).not.toBeNull();
     const hae = tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
     expect(hae.querySelector('.pv-tile__id')!.classList).toContain('pf-num');
     expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
-    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007');
+    expect(hae.textContent).toContain('Haematology');   // its own Department column (or the meta line when folded)
     expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
-    expect(hae.querySelector('.pv-tile__tests')!.textContent).toContain('CBC · ESR');
-    // ONE status each: dot + word, no chip.
+    // No Tests column (owner 2026-11-20): department + count in the meta line, the names in its tooltip.
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('2 tests');
+    expect(hae.querySelector('.pv-tile__meta')!.getAttribute('title')).toBe('CBC · ESR');
+    expect(hae.querySelector('.pv-tile__tests')).toBeNull();
+    // ONE status each, in two lines of words (design D): no pill, no dot, no chip.
     for (const t of tiles) {
       expect(t.querySelectorAll('.pv-status').length).toBe(1);
-      expect(t.querySelector('.pv-status .pv-status__dot')).not.toBeNull();
+      expect(t.querySelector('.pv-status__dot, .wg-pill, .wg-dot')).toBeNull();
       expect(t.querySelector('.pf-chip, pf-chip')).toBeNull();
     }
-    const word = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
-      .querySelector('.pv-status')!.textContent!.trim();
-    expect(word('0126117')).toBe('On time');
+    const st = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!.querySelector('.pv-status')!;
+    const word = (id: string) => st(id).querySelector('.pf-sw__now')!.textContent!.trim();
+    expect(word('0126117')).toBe('To validate');
+    expect(st('0126117').querySelector('.pf-sw__detail')!.textContent!.trim()).toBe('On time');
     expect(word('0126118')).toBe('Overdue');
     expect(word('1126001')).toBe('Critical');
+    // Rose words for critical / overdue, never amber (owner: no yellow).
+    const tone = (id: string) => st(id).getAttribute('data-tone');
+    expect([tone('0126118'), tone('1126001')]).toEqual(['late', 'late']);
   });
 
-  it('groups: Urgent / Normal (order priority) with a neutral dot except Urgent (red)', async () => {
+  it('Urgent (order priority) rows come first with a rose leading rule + "Urgent"; never "High"', async () => {
     const { el } = await render({ queue: [...QUEUE, STAT_LINE] });
-    const groups = [...el.querySelectorAll<HTMLElement>('.pv-group')].map(g => g.getAttribute('data-priority'));
-    expect(groups).toEqual(['urgent', 'normal']);
-    const heads = [...el.querySelectorAll<HTMLElement>('.pv-group__h')].map(h => h.textContent!.replace(/\d+/g, '').trim());
-    expect(heads).toEqual(['Urgent', 'Normal']);
+    const rows = tilesOf(el);
+    const urgent = rows.filter(r => r.classList.contains('wg-row--urgent'));
+    expect(urgent.map(r => r.querySelector('.pv-tile__id')!.textContent!.trim())).toEqual(['0126120']);
+    expect(urgent[0].querySelector('.wg-prio[data-p="urgent"]')!.textContent!.trim()).toBe('Urgent');
+    // The grid keeps the old groups' order: Urgent first, then Normal (mine → priority → least time left).
+    expect(el.querySelector('.ag-row[row-index="0"]')!.classList).toContain('wg-row--urgent');
     expect(el.textContent).not.toMatch(/\bHigh\b/);
-    expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--pf-toggle-on\)/);
   });
 
-  it('row action is text on web, a 44px icon on touch; the whole tile opens the review', async () => {
+  it('header filters on every data column (not the actions) + the shared alignment; Due instead of a journey ring', async () => {
+    const { c, el } = await render();
+    const by = Object.fromEntries(c.cols().map((d: any) => [d.colId, d]));
+    expect(by['sample'].filter).toBe('agTextColumnFilter');
+    expect(by['patient'].filter).toBe('agTextColumnFilter');
+    expect(by['wait'].filter).toBe('agNumberColumnFilter');
+    expect(typeof by['status'].filter).toBe('function');
+    expect(by['acts'].filter).toBe(false);
+    expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass].map(h => [h].flat().join(' ')))
+      .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-right']);   // status words read left
+    // Every data column SORTS on its real value (owner 2026-11-21), asc → desc → none; the actions never.
+    for (const k of ['sample', 'patient', 'dept', 'status', 'due', 'wait']) {
+      expect(by[k].sortable, k).toBe(true);
+      expect(by[k].sortingOrder, k).toEqual(['asc', 'desc', null]);
+      expect(typeof by[k].comparator, k).toBe('function');
+    }
+    expect(by['acts'].sortable).toBe(false);
+    expect(typeof by['wait'].valueGetter({ data: c.gridRows()[0] })).toBe('number');
+    // Due (time left to TAT) instead of a journey ring: sortable, centred, rose once late.
+    expect(by['due'].sortable).toBe(true);
+    expect([by['due'].headerClass].flat().join(' ')).toBe('wg-h-center');
+    expect(by['journey']).toBeUndefined();
+    expect(el.querySelector('pf-journey-ring')).toBeNull();
+    const due = Object.fromEntries(tilesOf(el).map(t => [t.querySelector('.pv-tile__id')!.textContent!.trim(), t.querySelector('.pv-due')!]));
+    expect(due['0126118'].textContent!.trim()).toMatch(/late$/);
+    expect(due['0126118'].classList).toContain('wg-tat--late');
+    expect(due['0126117'].textContent!.trim()).toMatch(/^in /);
+  });
+
+  it('row action: ONE text "Review" (44px tall on touch, never icon-only); a tap anywhere on the row opens the review', async () => {
     const web = await render();
-    const btn = web.el.querySelector('.pv-review') as HTMLElement;
+    const btn = web.el.querySelector('.ag-row .pv-review') as HTMLElement;
     expect(btn.classList).toContain('pf-rowact');
     expect(btn.classList).not.toContain('pf-rowact--icon');
+    expect(btn.textContent!.trim()).toBe('Review');
     TestBed.resetTestingModule();
     const touch = await render({ touch: true });
-    expect(touch.el.querySelector('.pv-review')!.classList).toContain('pf-rowact--icon');
-    expect(touch.el.querySelector('.pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
-    // Tap a tube → the same sample screen the tech used, in validate mode.
-    const tile = [...touch.el.querySelectorAll<HTMLElement>('.pv-tile')]
-      .find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
-    tile.click();
+    expect(touch.el.querySelector('.ag-row .pv-review')!.classList).not.toContain('pf-rowact--icon');
+    expect(touch.el.querySelector('.ag-row .pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
+    // Touch sizing comes from the shared work-grid cells: ≥44px controls, 8px apart.
+    expect(css()).toMatch(/not \(\(hover: hover\) and \(pointer: fine\)\)[^{]*\{[^}]*\.wg-act\s*\{[^}]*min-height:\s*44px/);
+    expect(css()).toMatch(/\.wg-acts\s*\{[^}]*gap:\s*8px/);
+    // Tap a tube's row → the same sample screen the tech used, in validate mode.
+    const row = tilesOf(touch.el).find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
+    touch.c.onRow({ data: touch.c.gridRows().find((g: any) => g.sampleLabel === '0126117'), event: { target: row.querySelector('.pv-tile__who') } });
     expect(touch.router.navigate).toHaveBeenCalledWith(['/lab/sample', 's1'], { queryParams: { validate: 1 } });
   });
 
   it('Assigned to me filters locally; Review next opens mine first', async () => {
     const { el, c, f, router } = await render();
     (el.querySelector('[data-tab="mine"]') as HTMLElement).click();
-    f.detectChanges();
-    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
+    f.detectChanges(); await leave(f);
+    expect(idsOf(el)).toEqual(['1126001']);
     c.setTab('all'); f.detectChanges();
-    (el.querySelector('.pv-side .pv-next') as HTMLElement).click();
+    (el.querySelector('[data-testid="pv-review-next"]') as HTMLElement).click();
     expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's3'], { queryParams: { validate: 1 } });
   });
 
-  it('department filter appears only with more than one department and narrows the tiles', async () => {
-    const { el, f } = await render();
-    const seg = el.querySelector('.pv-depts') as HTMLElement;
-    expect([...seg.querySelectorAll('[role=radio]')].map(words))
-      .toEqual(['All', 'Haematology 2', 'Microbiology 1']);
-    ([...seg.querySelectorAll<HTMLElement>('[role=radio]')].find(r => r.textContent!.includes('Microbiology')))!.click();
-    f.detectChanges();
-    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
-
-    TestBed.resetTestingModule();
-    const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
-    expect(one.el.querySelector('.pv-depts')).toBeNull();
+  it('department: a Department COLUMN filter on the grid (the head pills are phones-only now, owner 2026-11-21)', async () => {
+    const { el, c } = await render();
+    expect(el.querySelector('.pv-depts')).toBeNull();
+    const dept = c.cols().find((x: { colId?: string }) => x.colId === 'dept')!;
+    expect(dept.headerName).toBe('Department');
+    expect(dept.filter).toBeTruthy();
+    // A department picked earlier on a phone never narrows the grid invisibly.
+    const before = c.visibleTiles().length;
+    c.dept.set(HAEM.id);
+    expect(c.visibleTiles().length).toBe(before);
+    expect(idsOf(el)).toContain('1126001');
   });
 
   it('first load: the side card numbers are placeholders and Review next says it is loading', async () => {
@@ -239,22 +288,22 @@ describe('Pathologist queue (nd) — tiles', () => {
     const { f, el } = await render({ queue$ });
     const stats = el.querySelector('.pv-stats')!;
     expect(stats.querySelectorAll('pf-skeleton').length).toBe(4);
-    expect(el.querySelector('.pv-next')!.textContent).toContain('Loading the queue');
+    expect(el.querySelector('.pv-next')!.getAttribute('aria-label')).toContain('Loading the queue');
     expect(el.textContent).not.toContain('Nothing to review');
     queue$.next(QUEUE); queue$.complete();
     f.detectChanges();
     expect(stats.querySelectorAll('pf-skeleton').length).toBe(0);
     expect(el.querySelector('.pv-next')!.textContent).toContain('Review next');
+    expect(el.querySelector('.pv-next')!.getAttribute('aria-label')).toMatch(/^Review next: /);
   });
 
-  it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {
+  it('empty queue: the kit empty state and a disabled Review next in the band', async () => {
     const { el } = await render({ queue: [] });
     expect(el.querySelector('.pf-empty')).not.toBeNull();
     expect(el.querySelector('.pf-empty__title')!.textContent).toContain('Nothing to validate');
-    const next = el.querySelector('.pv-side .pv-next') as HTMLButtonElement;
+    const next = el.querySelector('[data-testid="pv-review-next"]') as HTMLButtonElement;
     expect(next.disabled).toBe(true);
-    expect(next.classList).not.toContain('pf-btn--primary');
-    expect(primaries(el).length).toBe(0);
+    expect(next.getAttribute('aria-label')).toBe('Nothing to review');
   });
 });
 

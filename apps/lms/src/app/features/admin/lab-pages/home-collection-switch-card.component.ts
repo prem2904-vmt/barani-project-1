@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -25,7 +26,7 @@ export const DEFAULT_QUEUE_MODE: QueueMode = 'token_queue';
 @Component({
   selector: 'pf-home-collection-switch-card',
   standalone: true,
-  imports: [SettingRowComponent, RouterLink, SkeletonCardComponent],
+  imports: [SkelSettingRowsComponent, SettingRowComponent, RouterLink, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (variant() === 'strip') {
@@ -50,7 +51,7 @@ export const DEFAULT_QUEUE_MODE: QueueMode = 'token_queue';
         }
       </section>
     } @else if (!cfg()) {
-      <pf-skeleton-card [lines]="2" label="Loading home collection…"></pf-skeleton-card>
+      <pf-skel-setting-rows [rows]="2" label="Loading home collection…"></pf-skel-setting-rows>
     } @else {
       <div class="pf-hs" data-testid="hc-switch-card">
         <pf-setting-row label="Run this branch's queue as home collection"

@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
@@ -30,12 +31,12 @@ export const PAYMENT_GATE_OPTIONS: ReadonlyArray<{ value: PaymentGateStage; labe
 @Component({
   selector: 'pf-payment-rules-card',
   standalone: true,
-  imports: [SettingRowComponent, SegmentedComponent, SkeletonCardComponent],
+  imports: [SkelSettingRowsComponent, SettingRowComponent, SegmentedComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (canManage()) {
       @if (loading()) {
-        <pf-skeleton-card [lines]="2" label="Loading payment rules…"></pf-skeleton-card>
+        <pf-skel-setting-rows [rows]="2" label="Loading payment rules…"></pf-skel-setting-rows>
       } @else {
         <pf-setting-row class="pf-pr" data-testid="pr-gate" label="Require full payment to progress"
                         [hint]="gateDesc()">

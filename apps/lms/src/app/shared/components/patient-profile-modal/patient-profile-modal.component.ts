@@ -1,3 +1,4 @@
+import { stableJson } from '../../utils/dirty-snapshot';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import {
@@ -9,6 +10,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { PATIENT_TITLES, Patient, isBabyOfTitle, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
@@ -183,7 +185,8 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                   <button type="button" class="pf-pp-btn pf-pp-btn--ghost press"
                           [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
                   <button type="button" class="pf-pp-btn pf-pp-btn--primary press"
-                          [disabled]="saving() || !editValid()" [pfBusy]="saving()" pfBusyLabel="Saving…"
+                          [disabled]="saving() || !editValid() || !editChanged()" [pfBusyInactive]="saving() || !editValid() || !editChanged()"
+                          [attr.title]="editChanged() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…"
                           (click)="saveEdit()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
                 }
                 <button type="button" class="pf-pp-icon-btn press" aria-label="Close" (click)="close()">
@@ -965,6 +968,7 @@ export class PatientProfileModalComponent {
   private readonly auth = inject(AuthService);
   private readonly profile = inject(PatientProfileService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly sexOptions = SEX_OPTIONS;
   /** Honorifics — matches the registration form + server normalizer.
@@ -1147,7 +1151,11 @@ export class PatientProfileModalComponent {
       sex: p.sex ?? '',
       dobTouched: false
     });
+    this._draftBase.set(draftKey(this._draft()));
   }
+  /** Save only when something changed (owner 2026-11-19): the edit draft compared with the patient as loaded. */
+  private readonly _draftBase = signal('');
+  readonly editChanged = computed(() => draftKey(this._draft()) !== this._draftBase());
 
   enterEdit() { this.seedDraftFromPatient(); this._editMode.set(true); }
   cancelEdit() { this._editMode.set(false); this.seedDraftFromPatient(); }
@@ -1262,10 +1270,10 @@ export class PatientProfileModalComponent {
       }
     });
   }
-  unlinkAbha() {
+  async unlinkAbha() {
     const p = this._patient();
     if (!p) return;
-    if (!confirm('Unlink this ABHA from the patient?')) return;
+    if (!(await this.dialog.confirm({ title: 'Unlink this ABHA?', message: 'It will be removed from the patient.', confirmLabel: 'Unlink', tone: 'danger' }))) return;
     this._abhaBusy.set(true);
     this.api.delete<Patient>(`/api/patients/${p.id}/abha`).subscribe({
       next: updated => {
@@ -1381,4 +1389,10 @@ interface DraftPatient {
   /** The DOB box was edited in this session (else only the age is sent). */
   dobTouched?: boolean;
   sex: string;
+}
+
+/** The edit draft's compare text — what the person can change (the `dobTouched` bookkeeping flag is not a change). */
+function draftKey(d: object): string {
+  const { dobTouched: _t, ...rest } = d as { dobTouched?: boolean };
+  return stableJson(rest);
 }

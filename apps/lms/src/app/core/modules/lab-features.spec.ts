@@ -116,7 +116,12 @@ describe('lab-features — every surface follows the rule', () => {
     // Every Home collection tab (phone, classic desktop, and the ND segmented switch) sits behind showHome().
     const homeTabs = fdHtml.split('setLeftTab(\'home\')').length - 1 + (fdHtml.split('setMobileList(\'home\')').length - 1);
     expect(homeTabs).toBe(2);
-    expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(3);
+    // Phone tab + classic desktop tab sit behind @if (showHome()); the new-design side card is "Patient flow ↔ Bookings":
+    // its Bookings pills (Appointments · Home collection · Procedures) come from bookingPillOptions(), which only offers
+    // Home collection while showHome() is on (2026-11-21 fd-chart).
+    expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(2);
+    expect(fdHtml).toContain('[options]="bookingPillOptions()"');
+    expect(fd).toMatch(/bookingPillOptions = computed<SegmentedOption<LeftTab>\[\]>\(\(\) => sideTabOptions\(\{\s*who: false, appt: this\.showAppt\(\), home: this\.showHome\(\),[\s\S]*?procN: this\.procOn\(\)/);
     expect(src('features/admin/settings/settings-access.service.ts')).toMatch(/case 'homeCollection': return this\.labFeatures\.homeCollectionEnabled\(\)/);
     expect(src('features/frontdesk/book-appointment/book-appointment.component.ts').match(/@if \(features\.homeCollectionEnabled\(\)\) \{/g)?.length).toBe(2);
     // Home collection on/off moved from the Appointments queue-mode tile to Lab › Home collection.

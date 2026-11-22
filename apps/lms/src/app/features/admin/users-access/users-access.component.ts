@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { firstValueFrom } from 'rxjs';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -38,6 +39,8 @@ import { UserBranchScope, branchScopeChips } from './branch-scope';
 import { UserDepartmentsRow, departmentNames } from './consultant-departments';
 import { Department } from '../../../shared/models/tenant.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { actionCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { prefetch, prefetchWhenIdle } from '../../../shared/utils/prefetch';
@@ -182,11 +185,11 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
           </header>
           <div class="pf-sg-main__body pf-ua-grid">
             @if (tab() === 'users') {
-              <pf-data-grid [rowData]="gridUsers()" [columnDefs]="userColDefs()" [context]="gridContext" [getRowClass]="userRowClass"
+              <pf-data-grid viewStateKey="admin.users.g1" [rowData]="gridUsers()" [columnDefs]="userColDefs()" [context]="gridContext" [getRowClass]="userRowClass"
                             [loading]="listSkeleton()" loadingLabel="Loading users…" [clickable]="true"
                             [emptyTitle]="search() ? 'No users match.' : 'No users yet.'" (rowClicked)="onUserRow($event)"></pf-data-grid>
             } @else {
-              <pf-data-grid [rowData]="filteredRoles()" [columnDefs]="roleColDefs()" [context]="gridContext"
+              <pf-data-grid viewStateKey="admin.users.g2" [rowData]="filteredRoles()" [columnDefs]="roleColDefs()" [context]="gridContext"
                             [loading]="listSkeleton()" loadingLabel="Loading roles…" [clickable]="true"
                             [emptyTitle]="search() ? 'No roles match.' : 'No roles yet.'" (rowClicked)="onRoleRow($event)"></pf-data-grid>
             }
@@ -557,120 +560,91 @@ export class UsersAccessComponent implements OnInit {
     // Re-render the Departments column once the pools / names land.
     this._depts(); this._deptNames();
     return [
-    {
+    textCol<User>({
       headerName: 'User',
       colId: 'displayName',
-      field: 'displayName',
       cellRenderer: this.userCellRenderer,
       flex: 1.2,
       minWidth: 220,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, u => [u.displayName || u.firstName || u.username || '', u.email, u.username].filter(Boolean).join(' '), 'left',
+    u => u.displayName || u.firstName || u.username || ''),
+    textCol<User>({
       headerName: 'Branches',
       colId: 'branches',
-      valueGetter: p => branchScopeChips((p.data as { branchScope?: UserBranchScope } | undefined)?.branchScope).join(', '),
       cellRenderer: this.userBranchesCellRenderer,
       flex: 1.2,
       minWidth: 200,
       autoHeight: true,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, u => branchScopeChips((u as { branchScope?: UserBranchScope }).branchScope).join(', ')),
+    textCol<User>({
       // Consultants' departments (validator pools). Empty = every department.
       headerName: 'Departments',
       colId: 'departments',
-      valueGetter: p => this.userDepartments(p.data?.id).join(', '),
       cellRenderer: this.userDepartmentsCellRenderer,
       flex: 1,
       minWidth: 180,
       autoHeight: true,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, u => this.userDepartments(u.id).join(', ')),
+    textCol<User>({
       headerName: 'Phone',
       colId: 'phone',
-      valueGetter: p => p.data?.phone || 'no phone',
+      valueFormatter: p => (p.value as string) || 'no phone',
       width: 170, minWidth: 160, flex: 0, wrapText: false, autoHeight: false, cellClass: 'pf-num',
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, u => u.phone || ''),
+    valuesCol<User>({
       headerName: 'Status',
       colId: 'status',
-      field: 'isActive',
       cellRenderer: this.userStatusCellRenderer,
       width: 100,
-      sortable: true,
-      filter: false,
-    },
-    {
+    }, u => (u.isActive ? 'Active' : 'Inactive'), WorkSetFilterComponent, 'left', u => (u.isActive ? 0 : 1)),
+    actionCol<User>({
       headerName: '',
       colId: 'actions',
       cellRenderer: this.userActionsCellRenderer,
       width: web ? 144 : 176, minWidth: web ? 144 : 176, maxWidth: web ? 144 : 176, pinned: 'right',
       cellClass: 'pf-sg-acts-cell',
       editable: false,
-      sortable: false,
-      filter: false,
       resizable: false,
-    },
+    }),
   ]; });
 
   readonly roleColDefs = computed<ColDef<Role>[]>(() => { const web = this.web(); return [
-    {
+    textCol<Role>({
       headerName: 'Role Name',
       colId: 'name',
-      field: 'name',
       flex: 1,
       minWidth: 200,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, r => r.name ?? ''),
+    textCol<Role>({
       headerName: 'Who this is',
       colId: 'who',
-      valueGetter: p => ROLE_INFO[p.data?.name ?? ''] ?? 'Custom role — open it to see exactly what it grants.',
       flex: 2,
       minWidth: 320,
       wrapText: true,
       autoHeight: true,
-      sortable: false,
-      filter: false,
       cellStyle: { lineHeight: '1.5', fontSize: '12.5px', color: 'var(--text-tertiary)', paddingTop: '8px', paddingBottom: '8px' },
-    },
-    {
+    }, r => ROLE_INFO[r.name ?? ''] ?? 'Custom role — open it to see exactly what it grants.'),
+    valuesCol<Role>({
       headerName: 'Type',
       colId: 'isPreSeeded',
-      field: 'isPreSeeded',
       cellRenderer: this.roleTypeCellRenderer,
       width: 150,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, r => (r.isPreSeeded ? 'Pre-seeded' : 'Custom'), WorkSetFilterComponent),
+    valuesCol<Role>({
       headerName: 'Scope',
       colId: 'scope',
-      field: 'scope',
       cellRenderer: this.roleScopeCellRenderer,
       width: 150,
-      sortable: true,
-      filter: true,
-    },
-    {
+    }, r => (r.scope ? r.scope.charAt(0).toUpperCase() + r.scope.slice(1) : 'Tenant'), WorkSetFilterComponent),
+    actionCol<Role>({
       headerName: '',
       colId: 'actions',
       cellRenderer: this.roleActionsCellRenderer,
       width: web ? 96 : 120, minWidth: web ? 96 : 120, maxWidth: web ? 96 : 120, pinned: 'right',
       cellClass: 'pf-sg-acts-cell',
       editable: false,
-      sortable: false,
-      filter: false,
       resizable: false,
-    },
+    }),
   ]; });
 
   readonly gridContext = {
@@ -860,4 +834,8 @@ export class UsersAccessComponent implements OnInit {
     if (await this.accountActions.deactivate(u))
       this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.users', { tab: this._tab, search: this._search, status: this.status });
 }

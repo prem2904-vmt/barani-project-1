@@ -1,3 +1,4 @@
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
@@ -57,6 +58,14 @@ describe('OPD Doctors grid', () => {
     const ids = c.colDefs().map((d) => d.colId ?? d.field);
     expect(ids).toContain('fee:s-per');
     expect(ids).not.toContain('fee:s-common');
+  });
+
+  it('every data column sorts and filters on its real value; none is exempt (no action column)', () => {
+    const { c } = render();
+    for (const d of c.colDefs()) {
+      const id = String(d.colId ?? d.field);
+      expect(sortsAndFilters(d as never), id).toBe(true);
+    }
   });
 
   it('clearing a fee sends the row as not offered; reg. no. unchanged ⇒ no PATCH', () => {

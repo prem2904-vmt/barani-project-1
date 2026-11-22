@@ -1,4 +1,5 @@
 import { colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community';
+import { GRID_TOUCH_PART } from '../../features/admin/tests/tests/grid-theme';
 
 /**
  * AG-Grid skin for an ND card (a grid that IS the card's body, e.g. Expenses'
@@ -15,8 +16,9 @@ import { colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-communit
 export const ND_GRID_PARAMS = {
   fontFamily: 'inherit',
   fontSize: 13,
-  rowHeight: 48,
-  headerHeight: 40,
+  // Grid size = the shared variables (styles.scss): 56px rows on web, 64px on touch.
+  rowHeight: 'var(--pf-grid-row-h, 56px)',
+  headerHeight: 'var(--pf-grid-head-h, 40px)',
   borderRadius: 10,
   wrapperBorderRadius: 0,
   cellHorizontalPadding: 14,
@@ -40,5 +42,5 @@ export const ND_GRID_PARAMS = {
   selectedRowBackgroundColor: 'var(--pf-in-tint)',
 } as const;
 
-export const ndGridLight = themeQuartz.withPart(colorSchemeLight).withParams({ ...ND_GRID_PARAMS, accentColor: '#7c3aed' });
-export const ndGridDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...ND_GRID_PARAMS, accentColor: '#a855f7' });
+export const ndGridLight = themeQuartz.withPart(colorSchemeLight).withPart(GRID_TOUCH_PART).withParams({ ...ND_GRID_PARAMS, accentColor: '#7c3aed' });
+export const ndGridDark = themeQuartz.withPart(colorSchemeDark).withPart(GRID_TOUCH_PART).withParams({ ...ND_GRID_PARAMS, accentColor: '#a855f7' });

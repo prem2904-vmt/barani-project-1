@@ -1,3 +1,6 @@
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../shared/utils/save-shortcut';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -74,8 +77,8 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
              primary; pill = CONTEXT BAR (the field + where it lives). -->
         <pf-hero-band class="pf-fe-band" [back]="true" [backAction]="backFn" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-fe-save" [disabled]="!canSave()" (click)="submit()"
-                    [attr.aria-label]="mode() === 'edit' ? 'Save changes' : 'Add field'" [title]="mode() === 'edit' ? 'Save changes' : 'Add field'">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-fe-save" [disabled]="!canSave()" [attr.aria-disabled]="canSave() ? null : 'true'" (click)="submit()"
+                    [attr.aria-label]="mode() === 'edit' ? 'Save changes' : 'Add field'" [title]="!changed() ? NO_CHANGES : mode() === 'edit' ? 'Save changes' : 'Add field'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 @if (mode() === 'edit') { <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/> }
                 @else { <path d="M12 5v14"/><path d="M5 12h14"/> }
@@ -412,10 +415,15 @@ export class FieldEditorComponent implements OnInit {
   });
   readonly isCustom = computed(() => !this._draft().isStandard);
   readonly availableFields = computed<WorkflowField[]>(() => this.builder.allFields());
+  /** Owner 2026-11-19: Save only when the field differs from how it opened (a new field = the empty draft). */
+  private readonly draftSnap = dirtySnapshot(() => this._draft());
+  readonly changed = this.draftSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   readonly canSave = computed(() => {
     const d = this._draft();
-    return !!(d.title && d.title.trim() && d.name && d.name.trim() && d.type);
+    return this.changed() && !!(d.title && d.title.trim() && d.name && d.name.trim() && d.type);
   });
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.canSave(), save: () => this.submit() });
 
   ngOnInit() {
     const screen = this.route.snapshot.paramMap.get('screen');
@@ -445,6 +453,7 @@ export class FieldEditorComponent implements OnInit {
     } else {
       this._draft.set(emptyDraft());
     }
+    this.draftSnap.mark();
   }
 
   patch(updates: Partial<WorkflowField>): void {

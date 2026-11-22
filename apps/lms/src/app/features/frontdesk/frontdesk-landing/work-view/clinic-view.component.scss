@@ -1,0 +1,145 @@
+/* Frontdesk CLINIC view — places as rooms, people as chips. Tokens only (light + dark). No page scroll: the view
+   takes the card body's height and every room fits its people (clinic-view fitRoom). */
+:host {
+  display: block;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  --cv-lab: var(--pf-svc-lab, var(--sky-text, #0284c7));
+  --cv-opd: var(--pf-svc-opd, var(--violet-text, #6d28d9));
+  --cv-ipd: var(--blue-text, #2563eb);
+  --cv-scan: var(--teal-text, #0d9488);
+  --cv-er: var(--pink-text, #db2777);
+  --cv-late: color-mix(in srgb, var(--red-text) 80%, var(--text-primary));
+}
+
+.cv {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.cv-empty { grid-column: 1 / -1; margin: 24px auto; color: var(--text-tertiary); font-size: 13px; }
+
+.cv-svc {
+  --cv-c: var(--cv-lab);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cv-c) 7%, var(--pf-card-bg));
+  border: 1px solid color-mix(in srgb, var(--cv-c) 14%, var(--pf-line));
+  box-sizing: border-box;
+}
+.cv-svc[data-sec='opd'] { --cv-c: var(--cv-opd); }
+.cv-svc[data-sec='ipd'] { --cv-c: var(--cv-ipd); }
+.cv-svc[data-sec='scan'] { --cv-c: var(--cv-scan); }
+.cv-svc[data-sec='er'] { --cv-c: var(--cv-er); }
+.cv-svc__h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--text-primary); text-transform: uppercase; flex: none; }
+.cv-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--cv-c); flex: none; }
+.cv-svc__n { color: var(--text-tertiary); font-weight: 600; letter-spacing: 0; }
+.cv-svc__late { margin-left: auto; font-size: 11.5px; letter-spacing: 0; color: var(--cv-late); text-transform: none; }
+
+.cv-rooms {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  grid-auto-rows: minmax(0, 1fr);
+}
+.cv-room {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 11px;
+  background: var(--pf-card-bg);
+  border: 1px solid var(--pf-line);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.cv-room--tall { grid-row: span 2; }
+.cv-room__t {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+  flex: none;
+}
+.cv-room__title { overflow-wrap: normal; word-break: normal; }
+/* A doctor's room title is a link-like button: it shows that doctor's patients in the list. */
+.cv-room__doc { min-height: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.cv-room__doc:hover { color: var(--violet-text); }
+.cv-room__doc:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; border-radius: 4px; }
+.cv-room__who { font-size: 11.5px; line-height: 1.35; color: var(--text-tertiary); flex: none; }
+.cv-big { font-size: 20px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+/* "tight": the who lines step aside (kept in layout-free form so the fit measures the same box every time). */
+.cv-room--tight:not(.cv-room--wait) .cv-room__who { position: absolute; left: 8px; right: 8px; visibility: hidden; }
+.cv-st {
+  /* The room's state in WORDS (owner design D: no pill, no dot) — "Seeing" in normal text, "Free" quiet. */
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.cv-st--run { color: var(--text-primary); }
+
+.cv-chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-height: 0; overflow: hidden; }
+.cv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--pf-line);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.cv-chip:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
+.cv-chip:hover { border-color: color-mix(in srgb, var(--violet-text) 40%, var(--pf-line)); }
+.cv-chip__tok { font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+.cv-chip__t { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.cv-chip--now { background: color-mix(in srgb, var(--violet-text) 10%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
+.cv-chip--late { background: color-mix(in srgb, var(--red-text) 9%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--red-text) 40%, var(--pf-line)); }
+.cv-chip--late .cv-chip__t { color: var(--cv-late); font-weight: 700; }
+.cv-room--dense .cv-chip__nm { display: none; }
+.cv-more { font-weight: 700; color: var(--violet-text); background: transparent; border: 1px dashed color-mix(in srgb, var(--violet-text) 60%, transparent); }
+.cv-room__t .cv-more { height: 24px; min-height: 24px; padding: 0 8px; }
+
+/* Narrow card: tighter blocks and chips. */
+:host-context(.cv-compact) .cv { gap: 8px; padding: 8px; }
+
+@media (pointer: coarse) {
+  .cv-chip { height: 44px; min-height: 44px; }
+  /* Title-line controls keep the line's height (a 44px HIT AREA, never 44px of room): the "+N" count and a doctor's name. */
+  .cv-room__t .cv-more, .cv-room__doc { position: relative; min-height: 0; }
+  .cv-room__t .cv-more { height: 26px; }
+  .cv-room__t .cv-more::after, .cv-room__doc::after { content: ''; position: absolute; left: 50%; top: 50%; min-width: 44px; width: 100%; height: 44px; transform: translate(-50%, -50%); }
+}

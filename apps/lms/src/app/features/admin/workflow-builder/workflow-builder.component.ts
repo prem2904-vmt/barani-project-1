@@ -1,3 +1,5 @@
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../shared/utils/save-shortcut';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
@@ -153,8 +155,9 @@ interface HistoryRow {
                   </div>
                 }
               </span>
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-draft" [disabled]="!builder.isDirty() || saving()" [pfBusy]="savingKind() === 'draft'" pfBusyLabel="Saving draft…"
-                      (click)="saveDraft()" aria-label="Save draft" title="Save draft">
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-draft" data-testid="wf-save-draft" [disabled]="!builder.isDirty() || saving()" [pfBusy]="savingKind() === 'draft'" pfBusyLabel="Saving draft…"
+                      [pfBusyInactive]="!builder.isDirty() || saving()"
+                      (click)="saveDraft()" aria-label="Save draft" [title]="builder.isDirty() || saving() ? 'Save draft' : NO_CHANGES">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
                 Save draft
               </button>
@@ -881,6 +884,9 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
   // Save / publish
   /** Which of Save draft / Publish is running (its button shows the dots). */
   readonly savingKind = signal<'draft' | 'publish' | null>(null);
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
+  /** Ctrl/Cmd+S = Save draft, only when the workflow changed. */
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.builder.isDirty() && !this.saving(), save: () => this.saveDraft() });
   saveDraft() {
     this.saving.set(true);
     this.savingKind.set('draft');

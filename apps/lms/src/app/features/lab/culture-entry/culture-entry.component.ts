@@ -700,6 +700,9 @@ interface Breakpoint {
     :host-context(.light) .ce-sir-picked.ce-sir--s, :host-context(.light) .ce-abx__cell--s.ce-abx__cell--on { background: rgba(16,185,129,0.13); color: #065f46; }
     :host-context(.light) .ce-sir-picked.ce-sir--i, :host-context(.light) .ce-abx__cell--i.ce-abx__cell--on { background: rgba(245,158,11,0.14); color: #92400e; }
     :host-context(.light) .ce-sir-picked.ce-sir--r, :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { background: rgba(239,68,68,0.12); color: #991b1b; }
+    /* New design light: no yellow (owner) — Intermediate reads soft violet, Resistant soft rose. */
+    :host-context(.light.design-new) .ce-sir-picked.ce-sir--i, :host-context(.light.design-new) .ce-abx__cell--i.ce-abx__cell--on { background: rgba(124,58,237,0.10); color: #5b21b6; }
+    :host-context(.light.design-new) .ce-sir-picked.ce-sir--r, :host-context(.light.design-new) .ce-abx__cell--r.ce-abx__cell--on { background: #fdecf1; color: #a3274b; }
     :host-context(.dark) .ce-sir-picked.ce-sir--s, :host-context(.dark) .ce-abx__cell--s.ce-abx__cell--on { background: rgba(16,185,129,0.20); color: #6ee7b7; }
     :host-context(.dark) .ce-sir-picked.ce-sir--i, :host-context(.dark) .ce-abx__cell--i.ce-abx__cell--on { background: rgba(245,158,11,0.20); color: #fcd34d; }
     :host-context(.dark) .ce-sir-picked.ce-sir--r, :host-context(.dark) .ce-abx__cell--r.ce-abx__cell--on { background: rgba(239,68,68,0.20); color: #fca5a5; }

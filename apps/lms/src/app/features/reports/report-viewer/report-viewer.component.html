@@ -132,6 +132,26 @@
   }
 
   <div class="pf-body pf-rv-body" [class.pf-rv-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-rv-body--narrow]="narrow()">
+    <!-- ─── REPORT details: the shared LEFT side card (owner 2026-11-19: details left, preview right) ─── -->
+    @if (!narrow()) {
+      @if (sideCollapsed()) {
+        <aside class="pf-card pf-rv-strip" aria-label="Report details">
+          <button type="button" class="pf-rv-strip__btn" (click)="toggleSide()"
+                  title="Show report details" aria-label="Show report details" aria-expanded="false">
+            <span class="pf-btn pf-btn--icon pf-rv-strip__expand" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </span>
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
+            <span class="pf-rv-strip__label">Report</span>
+          </button>
+        </aside>
+      } @else {
+        <aside class="pf-card pf-rv-side" aria-label="Report details">
+          <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: true }"></ng-container>
+          <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+        </aside>
+      }
+    }
     <!-- ─── PREVIEW: the main work card (the exact PDF) ─────────────── -->
     <!-- ONE element from skeleton to pages: it is the zoom target the
          Results row morphs into, so nothing is ever swapped mid-morph. -->
@@ -216,26 +236,6 @@
       </div>
     </section>
 
-    <!-- ─── REPORT: right action / summary card (billing-style) ─────── -->
-    @if (!narrow()) {
-      @if (sideCollapsed()) {
-        <aside class="pf-card pf-rv-strip" aria-label="Report details">
-          <button type="button" class="pf-rv-strip__btn" (click)="toggleSide()"
-                  title="Show report details" aria-label="Show report details" aria-expanded="false">
-            <span class="pf-btn pf-btn--icon pf-rv-strip__expand" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-            </span>
-            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
-            <span class="pf-rv-strip__label">Report</span>
-          </button>
-        </aside>
-      } @else {
-        <aside class="pf-card pf-rv-side" aria-label="Report details">
-          <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: true }"></ng-container>
-          <ng-container *ngTemplateOutlet="sideBody"></ng-container>
-        </aside>
-      }
-    }
   </div>
 
   <!-- ≤900px: the REPORT card opens as a sheet from the pill's Details. -->
@@ -263,7 +263,7 @@
       @if (collapsible) {
         <button type="button" class="pf-btn pf-btn--icon pf-rv-collapse" (click)="toggleSide()"
                 title="Hide report details" aria-label="Hide report details" aria-expanded="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
       } @else {
         <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="detailsOpen.set(false)" aria-label="Close">

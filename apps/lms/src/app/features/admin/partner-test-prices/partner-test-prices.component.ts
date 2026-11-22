@@ -1,9 +1,12 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
 import { NgTemplateOutlet } from '@angular/common';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SG_ICON, sgActions, sgActionsCol, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { dateCol, moneyCol, numComparator, textCol, textComparator } from '../../../shared/utils/work-grid';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { bandFilter } from '../../../shared/utils/band-search';
@@ -64,7 +67,7 @@ interface PriceRow {
             <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
           </header>
           <div class="pf-sg-main__body">
-            <pf-data-grid [rowData]="visibleRows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef" [singleClickEdit]="true"
+            <pf-data-grid viewStateKey="admin.partner-prices.g1" [rowData]="visibleRows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef" [singleClickEdit]="true"
                           [suppressCellFocus]="false" [loading]="loading()" loadingLabel="Loading prices…"
                           [emptyTitle]="referralLabId() ? (q() ? 'No prices match your search.' : 'No prices yet — Add price.') : 'Pick a referral lab'"
                           [emptyBody]="referralLabId() ? '' : 'What it charges per test is the cost Analytics resolves the outsourcing margin from.'"
@@ -128,17 +131,25 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
         path: SG_ICON.trash, run: () => { void this.deleteRow(params.data!); } }])
     : document.createElement('span'));
 
+  // Editable columns keep `field` (AG-Grid writes edits through it); the helpers' value getters return the SAME
+  // value the editor shows (rupees / the yyyy-mm-dd text), so sort + filter use the real value and editing is unchanged.
   readonly colDefs: ColDef<PriceRow>[] = [
-    { field: 'testCatalogKey', headerName: 'Test catalogue key', editable: true, minWidth: 180 },
-    { field: 'testName', headerName: 'Test name (label)', editable: true, minWidth: 180 },
+    textCol<PriceRow>({ field: 'testCatalogKey', colId: 'testCatalogKey', headerName: 'Test catalogue key', editable: true, minWidth: 180 }, r => r.testCatalogKey ?? ''),
+    textCol<PriceRow>({ field: 'testName', colId: 'testName', headerName: 'Test name (label)', editable: true, minWidth: 180 }, r => r.testName ?? ''),
     {
-      field: 'cost', headerName: 'Partner cost (₹)', editable: true, minWidth: 140, type: 'numericColumn',
-      valueParser: p => Number(p.newValue) || 0,
-      valueFormatter: p => p.value != null ? '₹' + Number(p.value).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '',
+      ...moneyCol<PriceRow>({
+        field: 'cost', colId: 'cost', headerName: 'Partner cost (₹)', editable: true, minWidth: 140, type: 'numericColumn',
+        valueParser: p => Number(p.newValue) || 0,
+        valueFormatter: p => p.value != null ? '₹' + Number(p.value).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '',
+      }, r => r.cost ?? null, 'right'),
+      valueGetter: p => p.data?.cost ?? null, comparator: numComparator,
     },
     {
-      field: 'effectiveFrom', headerName: 'Effective from', editable: true, minWidth: 140,
-      valueParser: p => /^\d{4}-\d{2}-\d{2}$/.test(p.newValue) ? p.newValue : p.oldValue,
+      ...dateCol<PriceRow>({
+        field: 'effectiveFrom', colId: 'effectiveFrom', headerName: 'Effective from', editable: true, minWidth: 140,
+        valueParser: p => /^\d{4}-\d{2}-\d{2}$/.test(p.newValue) ? p.newValue : p.oldValue,
+      }, r => r.effectiveFrom ?? null, 'left'),
+      valueGetter: p => p.data?.effectiveFrom ?? null, comparator: textComparator,
     },
     sgActionsCol<PriceRow>(true, [], 1, p => this.deleteRenderer(p), false),
   ];
@@ -160,7 +171,7 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     if (!labId) return;
     this.loading.set(true);
     this.api.get<PriceRow[]>(`/api/partner-test-prices?referralLabId=${labId}`).subscribe({
-      next: d => { this.rows.set(d ?? []); this.loading.set(false); },
+      next: d => { this.rows.set(this.remember(d ?? [])); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
   }
@@ -172,9 +183,15 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     }]);
   }
 
+  /** The editable fields of each row as loaded / saved — an edit back to them is no longer a change (owner 2026-11-19). */
+  private readonly loaded = new WeakMap<PriceRow, string>();
+  private snapOf(r: PriceRow): string { return stableJson({ k: r.testCatalogKey, n: r.testName ?? null, c: Number(r.cost) || 0, f: r.effectiveFrom }); }
+  private remember(list: PriceRow[]): PriceRow[] { for (const r of list) if (r.id !== null) { this.loaded.set(r, this.snapOf(r)); r._dirty = false; } return list; }
+
   onCellChanged(ev: CellValueChangedEvent<PriceRow>): void {
     if (!ev.data) return;
-    ev.data._dirty = true;
+    const was = this.loaded.get(ev.data);
+    ev.data._dirty = ev.data.id === null || was === undefined || was !== this.snapOf(ev.data);
     this.rows.set([...this.rows()]); // bump dirty() / template
   }
 
@@ -215,4 +232,8 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     });
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.partner-prices', { q: this.q });
 }

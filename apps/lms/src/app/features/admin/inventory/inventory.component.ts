@@ -1,3 +1,6 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -21,9 +24,12 @@ import { plural } from '../../../shared/utils/plural';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { InventoryEnableCardComponent } from './inventory-enable-card.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
 import {
-  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel,
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, stockWords,
 } from '../../stores/inventory-view';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -64,7 +70,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
+  imports: [GridViewStateDirective, BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
     HeroBandComponent, PfDateComponent, SelectComponent, InventoryEnableCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../stores/inv-layout.scss'],
@@ -138,7 +144,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                 @if (!visibleItems().length) {
                   <p class="pf-band-empty">No items match{{ q() ? ' "' + q() + '"' : ' this category' }}.</p>
                 }
-                <ag-grid-angular class="inv-grid pf-inv-grid" [class.pf-inv-grid--hidden]="!visibleItems().length"
+                <ag-grid-angular class="inv-grid pf-inv-grid" pfGridViewState="admin.inventory" [class.pf-inv-grid--hidden]="!visibleItems().length"
                                  [theme]="gridTheme()" [rowData]="visibleItems()" [columnDefs]="itemCols()"
                                  [getRowId]="rowId" [rowClassRules]="rowClassRules" [animateRows]="true" [suppressCellFocus]="true"
                                  (gridReady)="onGridReady($event)" (rowClicked)="onRowClicked($event)"></ag-grid-angular>
@@ -170,7 +176,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           <h3 class="pf-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
           <span class="pf-card__spacer"></span>
           <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving() || !itemChanged()" [pfBusyInactive]="!canSave() || itemSaving() || !itemChanged()"
+                  [attr.title]="itemChanged() || itemSaving() ? null : 'No changes to save'" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
 <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
@@ -462,22 +469,17 @@ export class InventoryComponent implements OnInit {
   readonly itemCols = computed<ColDef<InvItem>[]>(() => {
     const phone = this.phone();
     return [
-      { colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true, sortable: true,
-        valueGetter: p => p.data?.name ?? '',
+      textCol<InvItem>({ colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true,
         cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.isActive === false ? 'Off' : ''].filter(Boolean).join(' · ')) },
-      { colId: 'category', headerName: 'Category', width: 130, hide: phone, sortable: true,
-        valueGetter: p => p.data?.category ?? '', valueFormatter: p => (p.value ? String(p.value)[0].toUpperCase() + String(p.value).slice(1) : '') },
-      { colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', sortable: true, cellClass: 'inv-num',
-        valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
-      { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
-        valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
-      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
-        valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
-        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
-        cellRenderer: (p: { data?: InvItem }) => {
-          const l = p.data ? stockLevel(p.data) : 'ok';
-          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
-        } },
+        it => `${it.name ?? ''} ${it.sku ?? ''}`.trim(), 'left', it => it.name ?? ''),
+      valuesCol<InvItem>({ colId: 'category', headerName: 'Category', width: 130, hide: phone },
+        it => (it.category ? String(it.category)[0].toUpperCase() + String(it.category).slice(1) : ''), WorkSetFilterComponent),
+      numberCol<InvItem>({ colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', cellClass: 'inv-num',
+        valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() }, it => it.onHand ?? 0, 'right'),
+      numberCol<InvItem>({ colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
+        valueFormatter: p => qty(p.value) }, it => it.reorderLevel ?? 0, 'right'),
+      statusValuesCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140 },
+        it => stockWords(it, phone), it => ['out', 'low', 'ok'].indexOf(stockLevel(it))),
     ];
   });
   onGridReady(e: GridReadyEvent<InvItem>) { this.gridApi = e.api; }
@@ -488,6 +490,9 @@ export class InventoryComponent implements OnInit {
   tone(it: InvItem) { return STOCK_LEVEL_TONE[stockLevel(it)]; }
   levelLabel(it: InvItem) { return STOCK_LEVEL_LABEL[stockLevel(it)]; }
   expiry(daysLeft: number) { return expiryView(daysLeft); }
+
+  // Screen view state (owner 2026-11-21): search + category come back as left after in-app navigation.
+  private readonly _viewState = inject(ViewStateService).bind('admin.inventory', { q: this.q, category: this.category });
 
   async ngOnInit() { await Promise.all([this.load(), this.loadAlerts()]); }
 
@@ -514,7 +519,10 @@ export class InventoryComponent implements OnInit {
   setR(k: string, v: unknown) { this.rcv.update(r => ({ ...r, [k]: v })); }
 
   startNew() { this.itemError.set(null); this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); this.attnOpen.set(false); }
-  startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.editing.set(true); }
+  startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.formBase.set(stableJson(this.form())); this.editing.set(true); }
+  /** Save only when something changed (owner 2026-11-19): an item being edited compared with how it was opened. */
+  private readonly formBase = signal('');
+  readonly itemChanged = computed(() => !this.form().id || stableJson(this.form()) !== this.formBase());
 
   async saveItem() {
     if (!this.canSave() || this.itemSaving()) return;

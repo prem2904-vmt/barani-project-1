@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -52,7 +53,8 @@ interface InvItem { id: string; name: string; uom: string; }
           <div class="pf-tc__acts">
             <button type="button" class="pf-btn pf-btn--tertiary press" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
             <!-- Secondary: the editor's band owns the ONE primary (Save). -->
-            <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+            <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="saving() || !changed()" [pfBusyInactive]="saving() || !changed()" [attr.title]="changed() || saving() ? null : 'No changes to save'"
+                    [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save consumables' }}
             </button>
           </div>
@@ -99,8 +101,12 @@ export class TestConsumablesComponent {
         this.lines.set(rows.map((x: any) => ({ itemId: x.itemId, qtyPerTest: x.qtyPerTest })));
       }
     } catch { /* inventory may be unconfigured */ }
+    this.savedLines.set(stableJson(this.lines()));
     this.loading.set(false);
   }
+  /** Save only when something changed (owner 2026-11-19): the lines compared with the loaded / last saved ones. */
+  private readonly savedLines = signal('[]');
+  readonly changed = computed(() => stableJson(this.lines()) !== this.savedLines());
 
   addLine() { this.lines.update(l => [...l, { itemId: '', qtyPerTest: 1 }]); }
   removeLine(i: number) { this.lines.update(l => l.filter((_, idx) => idx !== i)); }
@@ -113,6 +119,7 @@ export class TestConsumablesComponent {
     try {
       const lines = this.lines().filter(l => l.itemId && l.qtyPerTest > 0);
       await firstValueFrom(this.http.put(`${environment.apiUrl}/api/inventory/tests/${id}/consumables`, { lines }));
+      this.savedLines.set(stableJson(this.lines()));
       this.toasts.success('Consumables saved');
     } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.saving.set(false);

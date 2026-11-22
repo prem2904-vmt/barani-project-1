@@ -35,6 +35,7 @@
             <pf-date label="To" inputId="pf-ins-to" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-date>
           </span>
         }
+        <pf-back-to-today [show]="customOn() && customTo() < today" (reset)="setPeriod('today')" />
         @if (branchOptions().length > 2) {
           <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
                      (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
@@ -212,7 +213,7 @@
               </div>
             } @else {
               @if (listLoading() && !rows().length) {
-                <pf-skeleton-table class="pf-ins-grid-skel" [rows]="10" [cols]="5" label="Loading the list…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-ins-grid-skel" [rows]="30" [columns]="5" label="Loading the list…"></pf-skel-grid>
               } @else if (!rows().length) {
                 <div class="pf-empty">
                   <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.list)"></svg></span>
@@ -225,7 +226,7 @@
                   }
                 </div>
               } @else {
-                <ag-grid-angular class="pf-ins-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
+                <ag-grid-angular class="pf-ins-grid" [pfGridViewState]="'insights.list.' + (listKey() ?? '')" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
                                  [defaultColDef]="defaultColDef" [quickFilterText]="q()" [animateRows]="true" [autoSizeStrategy]="phone() ? undefined : autoSize()"
                                  [suppressCellFocus]="true" [enableCellTextSelection]="true" [tooltipShowDelay]="300"></ag-grid-angular>
               }

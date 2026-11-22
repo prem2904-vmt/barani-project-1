@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -20,12 +21,21 @@ import { DialogService } from '../../../core/services/dialog.service';
 import {
   OpdAdminApi, OpdDepartmentInput, OpdDepartmentRow, OpdFormListRow, OpdServiceInput, OpdServiceRow,
 } from './opd-admin.api';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
+import { rawChoiceCol } from '../shared/opd-grid-cols';
 import { deptCode, inr, mq, opdGridDark, opdGridLight, priceText, readFlag, writeFlag } from './opd-admin.util';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 type Cat = 'all' | 'consultation' | 'procedure';
 interface SvcRow extends OpdServiceRow { _dirty?: boolean; }
+
+/** The number a service's Price column sorts / filters on. */
+export function svcPriceValue(s: Pick<OpdServiceRow, 'priceMode' | 'commonPrice' | 'doctorPrices'>): number | null {
+  if (s.priceMode !== 'per_doctor') return s.commonPrice ?? 0;
+  const p = (s.doctorPrices ?? []).filter((x) => x.isActive).map((x) => x.price);
+  return p.length ? Math.min(...p) : null;
+}
 const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
 
 /**
@@ -41,7 +51,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
 @Component({
   selector: 'pf-opd-departments',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent,
+  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent,
     SkeletonRowsComponent, SkeletonTableComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
@@ -104,7 +114,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
             </header>
             <div class="oa-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="oa-grid-skel" [rows]="10" [cols]="7" label="Loading services…"></pf-skeleton-table>
+                <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="7" label="Loading services…"></pf-skel-grid>
               }
               <ag-grid-angular class="oa-grid" [theme]="gridTheme()" [rowData]="visible()" [columnDefs]="colDefs()"
                                [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass"
@@ -271,31 +281,36 @@ export class OpdDepartmentsPage {
     const forms = this.forms();
     const all = !this.deptId();
     return [
-      { field: 'code', headerName: 'Code', editable: true, width: 100, flex: 0, cellClass: 'pf-num',
-        valueParser: (p) => String(p.newValue ?? '').trim().toUpperCase().slice(0, 32) || p.oldValue },
-      { field: 'name', headerName: 'Service', editable: true, flex: 1.4, minWidth: 150,
-        valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 160) || p.oldValue },
-      { field: 'category', headerName: 'Category', editable: true, width: 124, flex: 0,
+      textCol<SvcRow>({ field: 'code', headerName: 'Code', editable: true, width: 100, flex: 0, cellClass: 'pf-num',
+        valueParser: (p) => String(p.newValue ?? '').trim().toUpperCase().slice(0, 32) || p.oldValue }, (r) => r.code ?? ''),
+      textCol<SvcRow>({ field: 'name', headerName: 'Service', editable: true, flex: 1.4, minWidth: 150,
+        valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 160) || p.oldValue }, (r) => r.name ?? ''),
+      rawChoiceCol<SvcRow>({ field: 'category', headerName: 'Category', editable: true, width: 124, flex: 0,
         cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['consultation', 'procedure'] },
         valueFormatter: (p) => (p.value === 'procedure' ? 'Procedure' : 'Consultation') },
-      { field: 'departmentId', headerName: 'Department', editable: true, flex: 0.9, minWidth: 110, hide: !all,
+        (r) => r.category, (r) => (r.category === 'procedure' ? 'Procedure' : 'Consultation')),
+      rawChoiceCol<SvcRow>({ field: 'departmentId', headerName: 'Department', editable: true, flex: 0.9, minWidth: 110, hide: !all,
         cellEditor: 'agSelectCellEditor', cellEditorParams: { values: depts.map((d) => d.id) },
         refData: Object.fromEntries(depts.map((d) => [d.id, d.name])) },
-      { field: 'formId', headerName: 'Form', editable: true, flex: 1.2, minWidth: 160,
+        (r) => r.departmentId, (r) => depts.find((d) => d.id === r.departmentId)?.name ?? ''),
+      rawChoiceCol<SvcRow>({ field: 'formId', headerName: 'Form', editable: true, flex: 1.2, minWidth: 160,
         cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['', ...forms.filter((f) => f.isActive).map((f) => f.id)] },
         refData: { '': 'Department form', ...Object.fromEntries(forms.map((f) => [f.id, f.name])) },
-        valueGetter: (p) => p.data?.formId ?? '',
         valueSetter: (p) => { if (!p.data) return false; p.data.formId = p.newValue || null; return true; },
         cellRenderer: (p: ICellRendererParams<SvcRow>) => this.formCell(p.data) },
-      { field: 'priceMode', headerName: 'Price mode', editable: true, width: 156, flex: 0,
+        (r) => r.formId ?? '', (r) => this.formName(this.effectiveForm(r))),
+      rawChoiceCol<SvcRow>({ field: 'priceMode', headerName: 'Price mode', editable: true, width: 156, flex: 0,
         cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['common', 'per_doctor'] },
         valueFormatter: (p) => (p.value === 'per_doctor' ? 'Per doctor' : 'Common'),
         cellRenderer: (p: ICellRendererParams<SvcRow>) => this.modeCell(p.data) },
-      { colId: 'price', headerName: 'Price', width: 118, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
+        (r) => r.priceMode, (r) => (r.priceMode === 'per_doctor' ? 'Per doctor' : 'Common')),
+      // The price as a NUMBER (common price; per-doctor = the lowest active doctor price, none = blank, sorts last);
+      // the cell still reads "₹500" / "₹400 – ₹600" / "Set per doctor".
+      numberCol<SvcRow>({ colId: 'price', headerName: 'Price', width: 118, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
         editable: (p) => p.data?.priceMode !== 'per_doctor',
-        valueGetter: (p) => (p.data?.priceMode === 'per_doctor' ? priceText(p.data) : p.data?.commonPrice ?? 0),
-        valueFormatter: (p) => (typeof p.value === 'number' ? inr(p.value) : String(p.value ?? '')),
+        valueFormatter: (p) => (p.data?.priceMode === 'per_doctor' ? priceText(p.data) : typeof p.value === 'number' ? inr(p.value) : String(p.value ?? '')),
         valueSetter: (p) => { const n = Number(p.newValue); if (!p.data || !Number.isFinite(n) || n < 0) return false; p.data.commonPrice = Math.round(n * 100) / 100; return true; } },
+        (r) => svcPriceValue(r), 'right'),
       { colId: 'act', headerName: '', width: 84, flex: 0, sortable: false, resizable: false, pinned: this.narrow() ? 'right' : undefined,
         cellRenderer: (p: ICellRendererParams<SvcRow>) => this.editButton(p.data) },
     ];

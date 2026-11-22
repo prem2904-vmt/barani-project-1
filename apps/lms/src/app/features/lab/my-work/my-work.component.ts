@@ -53,12 +53,21 @@ import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
 import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
 import { applyLabSort } from '../../../shared/utils/lab-sort';
+import { mediaSignal } from '../../../shared/utils/media-query';
+import { WORK_LIST_MQ } from '../../../shared/components/work-list/work-list';
 import { LabSortService } from '../../../core/services/lab-sort.service';
 import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
 import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { MyWorkGridComponent, MwGridContext } from './my-work-grid.component';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { MwFiltersComponent } from './mw-filters.component';
+import {
+  MwRow, MwMode, MwTube, MwDoneTube, MwFilter, MwStatusKey, NO_MW_FILTER, countLabel, deptOptions, doneRowsOf, doneStatus, filterMwRows,
+  groupStatus, patientRowsOf, sampleRowsOf, statusKeyOf, statusOptions, tubeStatus,
+} from './my-work.grid';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -108,7 +117,7 @@ const COUNTERS: CounterSpec[] = [
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
-    ScanIconComponent],
+    ScanIconComponent, MyWorkGridComponent, MwFiltersComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
@@ -122,7 +131,7 @@ const COUNTERS: CounterSpec[] = [
            its own box inside the Lab Intake pane. Refresh rides the band
            as the screen's primary action. -->
       <pf-hero-band
-        [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
+        [placeholder]="(scanSvc.manualEntry() ? 'Type a sample ID (e.g. ' : 'Scan, or type a sample ID (e.g. ') + sampleIdExample() + '), patient or MRN…'"
         [value]="scan()"
         keys="sample" keysEnter="Open" keysEnterAria="Open this sample"
         (valueChange)="setScan($event)"
@@ -181,9 +190,8 @@ const COUNTERS: CounterSpec[] = [
           <pf-segmented class="pf-mw-seg" [options]="tabOptions()" [value]="tab()" size="sm"
                         (valueChange)="setTab($any($event))"></pf-segmented>
           }
-          @if (tab() !== 'culture') {
-          <pf-lab-sort class="pf-mw-sort" [scope]="tab() === 'completed' ? 'completed' : 'work'" data-testid="lab-sort-band"></pf-lab-sort>
-          }
+          <!-- No sort picker here any more (owner 2026-11-20): the grid's column headers sort (the same per-user
+               LabSortService key); phones, which have no headers, sort from the card head's Filters sheet. -->
         </ng-container>
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
@@ -507,6 +515,7 @@ const COUNTERS: CounterSpec[] = [
                 <path d="m14 6-6 6 6 6"/>
               </svg>
             </button>
+            <!-- Sort: the list's own Sort chip (owner 2026-11-21) — no sort dropdown in the pane head. -->
             }
             <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
               <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
@@ -626,9 +635,11 @@ const COUNTERS: CounterSpec[] = [
                 </button>
               }
             </div>
-            <p class="pf-mw-pane__meta">
+            <p class="pf-mw-pane__meta" aria-live="polite">
               @if (tab() === 'culture') {
-                {{ plural(cultureCount(), 'case') }}
+                {{ theme.isNewDesign() ? cultureCountLabel() : plural(cultureCount(), 'case') }}
+              } @else if (theme.isNewDesign()) {
+                {{ mwCountLabel() }}
               } @else {
               <!-- Sample-focused branches count TUBES — the unit of work on this
                    screen in that mode — not the tests inside them. -->
@@ -636,16 +647,80 @@ const COUNTERS: CounterSpec[] = [
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
+            @if (theme.isNewDesign() && tab() === 'culture' && isPhone()) {
+              <!-- Phones only (no column headers there): the culture status pill + Filters → department. Wider screens
+                   filter from the grid's column headers; the band search filters the list (owner 2026-11-21). -->
+              <pf-segmented class="mw-headpill" data-testid="cg-pill" size="sm" [options]="cultureHead().options" [value]="cultureFilter().status"
+                            aria-label="Filter by culture status" (valueChange)="setCultureStatus($any($event))"></pf-segmented>
+              <span class="mw-filterwrap">
+                <button type="button" class="pf-btn pf-btn--secondary mw-filterbtn press" data-testid="cg-filter-btn"
+                        [class.mw-filterbtn--on]="!!cultureFilter().dept" aria-haspopup="dialog" [attr.aria-expanded]="mwFiltersOpen()"
+                        [attr.aria-label]="'Filters' + (cultureFilter().dept ? ' (on)' : '')" (click)="mwFiltersOpen.set(!mwFiltersOpen())">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                  <span class="mw-filterbtn__t">Filters</span>
+                </button>
+                @if (mwFiltersOpen()) {
+                  <pf-mw-filters [filter]="$any({ q: cultureFilter().q, status: cultureFilter().status, priority: 'all', dept: cultureFilter().dept })"
+                                 [depts]="cultureHead().depts" [showPriority]="false" [showSort]="false"
+                                 (filterChange)="cultureFilter.set({ q: $event.q, status: $event.status, dept: $event.dept })"
+                                 (closed)="mwFiltersOpen.set(false)" />
+                }
+              </span>
+            }
+            @if (theme.isNewDesign() && tab() === 'completed' && !isPhone()) {
+              <!-- Completed's fetch window (Today · 7 days) is a date control, not a column duplicate: it stays. -->
+              <pf-segmented class="mw-headpill" data-testid="mw-window" size="sm" [options]="completedWindowOptions" [value]="completedWindow()"
+                            aria-label="Completed window" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
+            }
+            @if (theme.isNewDesign() && tab() !== 'culture' && isPhone()) {
+              <!-- Head = title + count (owner 2026-11-21): the band search filters this list, the grid's column headers
+                   filter Status / Department / Priority. Phones have no headers, so they keep the status pill + Filters. -->
+              <pf-segmented class="mw-headpill" data-testid="mw-pill" size="sm" [options]="mwStatusOptions()" [value]="mwFilter().status"
+                            aria-label="Filter by status" (valueChange)="setMwStatus($any($event))"></pf-segmented>
+              <span class="mw-filterwrap">
+                <button type="button" class="pf-btn pf-btn--secondary mw-filterbtn press" data-testid="mw-filter-btn"
+                        [class.mw-filterbtn--on]="mwFiltersOn()" aria-haspopup="dialog" [attr.aria-expanded]="mwFiltersOpen()"
+                        [attr.aria-label]="'Filters' + (mwFiltersOn() ? ' (on)' : '')" (click)="mwFiltersOpen.set(!mwFiltersOpen())">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                  <span class="mw-filterbtn__t">Filters</span>
+                </button>
+                @if (mwFiltersOpen()) {
+                  <pf-mw-filters [filter]="mwFilter()" [depts]="mwDepts()" [showPriority]="tab() !== 'completed'"
+                                 [windowValue]="tab() === 'completed' ? completedWindow() : null" [windowOptions]="completedWindowOptions"
+                                 [sortScope]="tab() === 'completed' ? 'completed' : 'work'"
+                                 (filterChange)="mwFilter.set($event)" (windowChange)="setCompletedWindow($any($event))"
+                                 (closed)="mwFiltersOpen.set(false)" />
+                }
+              </span>
+            }
           </header>
           <div class="pf-mw-pane__body">
       <!-- Kept mounted (not @if'd) so the bench keeps feeding its count to the
            tab pill even while another tab is showing. -->
       @if (cultureAsTab()) {
         <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
-          <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+          <pf-culture-panel [filter]="cultureFilterEff()" [phone]="narrow()" (headChange)="cultureHead.set($event)"
+                            (countChange)="cultureCount.set($event)"></pf-culture-panel>
         </div>
       }
       @if (tab() !== 'culture') {
+      @if (theme.isNewDesign()) {
+      <!-- New design (owner 2026-11-20): the work list is the Frontdesk / Results GRID — shared pf-data-grid, one
+           primary row action at the row end + ⋯, the row tap = the old tile tap; phones get card rows. -->
+      <pf-mw-grid class="pf-mw-gridhost" [rows]="mwShownRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx" viewStateKey="lab.my-work.grid"
+                  [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwFiltered() ? 'Nothing matches these filters.' : mwEmptyTitle()" [phone]="narrow()" />
+      @if (cardPeekId()) {
+        <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+             [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+          <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+          <ul>
+            @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+          </ul>
+        </div>
+      }
+      } @else {
       @if (tab() === 'completed') {
       <!-- ── Completed: this tech's finished tubes, newest first ──────
            Read-only history with ONE action: Edit re-opens the whole tube
@@ -1104,6 +1179,7 @@ const COUNTERS: CounterSpec[] = [
       }
       }
       }
+      }
           </div>
         </section>
 
@@ -1298,6 +1374,8 @@ const COUNTERS: CounterSpec[] = [
       padding: 10px 12px;
       flex-wrap: wrap;
     }
+    /* The intake sort rides the head row, at its right end (the scan bar wraps to its own row). */
+    .pf-mw-intake-sort { margin-left: auto; }
     .pf-mw-scan {
       margin-left: auto;
       display: inline-flex;
@@ -2419,6 +2497,9 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mtab__ico { display: block; }
       :host-context(.design-new) .pf-mtab__label { display: none; }
       :host-context(.design-new) .pf-mtab { gap: 5px; padding: 8px 4px; }
+      /* The ACTIVE tab keeps its label (owner 2026-11-21: icon-only tabs left people guessing). */
+      :host-context(.design-new) .pf-mtab--on { flex: 2.4 1 0; }
+      :host-context(.design-new) .pf-mtab--on .pf-mtab__label { display: inline; overflow: visible; text-overflow: clip; letter-spacing: 0; text-transform: none; font-size: 12.5px; }
       .pf-mtab__count {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
         font-size: 10.5px;
@@ -2762,6 +2843,64 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 40px; min-height: 40px; }
     }
 
+    /* Work list = the grid (owner 2026-11-20): the card body is the grid's frame — flush, no page scroll, the grid
+       scrolls inside it (phones: the card rows scroll in the body). The head stays ONE row; its pill collapses. */
+    .pf-mw-pane__body:has(> .pf-mw-gridhost) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+    .pf-mw-gridhost { flex: 1 1 auto; min-height: 0; }
+    :host-context(.design-new) .pf-mw-pane__body:has(> .pf-mw-culturetab:not(.pf-mw-culturetab--off)) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) { flex-wrap: nowrap; position: relative; container-type: inline-size; container-name: mwhead; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { white-space: nowrap; min-width: 0; overflow: hidden; }
+    /* Head = title + count (owner 2026-11-21); phones keep status pill · Filters at the RIGHT end (no headers there). */
+    .mw-headpill { min-width: 0; }
+    .mw-filterwrap { position: relative; flex: none; display: inline-flex; }
+    .mw-filterbtn { height: 36px; min-height: 36px; gap: 6px; padding: 0 12px; }
+    .mw-filterbtn--on { color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
+    .mw-filterbtn--on::after { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+    @media not ((hover: hover) and (pointer: fine)) {
+      .mw-filterbtn { height: 44px; min-height: 44px; min-width: 44px; }
+    }
+    /* Tight head: the count gives way, then Filters is icon-only. The pill collapses by itself (pill-fit). */
+    @container mwhead (max-width: 820px) { .pf-mw-pane__hdr--tabs .pf-mw-pane__meta { display: none; } }
+    @container mwhead (max-width: 520px) {
+      .mw-filterbtn { width: 44px; padding: 0; justify-content: center; }
+      .mw-filterbtn__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .pf-mw-pane__hdr--tabs .pf-mw-pane__title { display: none; }
+    }
+    /* Touch: the shared pill keeps its kit size; its items get a 44px-tall hit area (vertical only — neighbours
+       never overlap). */
+    @media not ((hover: hover) and (pointer: fine)) {
+      .mw-headpill ::ng-deep .seg-item { position: relative; }
+      .mw-headpill ::ng-deep .seg-item::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+    }
+    @media (max-width: 640px) {
+      .pf-mw-pane__body:has(> .pf-mw-gridhost) { overflow-y: auto; }
+      :host-context(.design-new) .pf-mw-pane__body:has(> .pf-mw-culturetab:not(.pf-mw-culturetab--off)) { overflow-y: auto; }
+      /* Phones hide the in-pane head (the tab strip above names the list) — the new design keeps it for the list's
+         own tools: search · status pill · Filters. */
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) { display: flex !important; padding: 6px 10px; gap: 8px; }
+      /* (styles.scss forces [role='tablist'] to flex !important on phones — this title block must still go.) */
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-tabs { display: none !important; }
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { display: none; }
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .mw-headpill { margin-right: auto; }
+    }
+    /* New design below 1024px: a pane body that holds a sticky list head (Lab Intake) has no top padding, so the head
+       sits flush under the pane title and no row shows above it while scrolling. */
+    @media (max-width: 1023.98px) {
+      :host-context(.design-new) .pf-mw-pane__body:has(.pf-wl-head--sticky) { padding-top: 0; }
+      :host-context(.design-new) .pf-mw-pane__body:has(.pf-wl-head--sticky) .pf-wl-head--sticky { padding-top: 8px; }
+    }
+    /* New design, phones: the page no longer scrolls as a whole (owner 2026-11-21: "the whole page scrolls away" —
+       band search, tabs and the list head were lost). The band + tab strip stay put, the visible pane fills the rest
+       and ONLY its body / list scrolls (the list head is sticky inside it). iPad portrait already works this way. */
+    @media (max-width: 640px) {
+      :host-context(.design-new) { height: 100%; min-height: 0; overflow: hidden; }
+      :host-context(.design-new) > section { flex: 1 1 auto; min-height: 0; }
+      :host-context(.design-new) .pf-mw-split { flex: 1 1 auto; min-height: 0; }
+      :host-context(.design-new) .pf-mw-pane,
+      :host-context(.design-new) .pf-mw-pane:first-of-type,
+      :host-context(.design-new) .pf-mw-pane:not(:first-of-type) { flex: 1 1 0 !important; min-height: 0 !important; }
+      :host-context(.design-new) .pf-mw-pane__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -3082,7 +3221,7 @@ export class MyWorkComponent implements OnInit {
 
   private readonly _tab = signal<Tab>('my_work');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); this.refresh(); }
+  setTab(t: Tab) { this._tab.set(t); this.mwFilter.update(f => ({ ...f, status: 'all' })); this.mwFiltersOpen.set(false); this.refresh(); }
 
   // ── Phone-only single-pane presentation state (<=640px) ──────────
   // Purely presentational. `mobileTab` picks which section the phone
@@ -3163,6 +3302,8 @@ export class MyWorkComponent implements OnInit {
    *  by the header Stats popover on phone). Kept in sync via matchMedia. */
   private readonly _phoneMq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 640px)') : null;
   protected readonly isPhone = signal<boolean>(this._phoneMq?.matches ?? false);
+  /** Below 1024px the work lists are the shared pf-work-list (owner 2026-11-21); the grid at 1024px and up. */
+  protected readonly narrow = mediaSignal(WORK_LIST_MQ);
   readonly currentYear = new Date().getFullYear();
 
   readonly vendorCode = computed(() => this.tenantState.tenant()?.vendorCode ?? '');
@@ -3448,6 +3589,102 @@ export class MyWorkComponent implements OnInit {
     const filtered = this.filterByCounter(enriched);
     return groupByPriority(filtered);
   });
+
+  // ── New design: the work list as a GRID (owner 2026-11-20) ───────────
+  // The same buckets / tubes / patient groups / completed tubes the tiles drew, as rows for pf-mw-grid. The rules
+  // (status word, journey, TAT, the ONE primary + ⋯) live in my-work.grid.ts; the handlers stay here, unchanged.
+  readonly mwGridMode = computed<MwMode>(() =>
+    this._tab() === 'completed' ? 'done' : this.labCfg.sampleFocused() ? 'sample' : 'patient');
+  readonly mwGridRows = computed<MwRow[]>(() => {
+    if (this._tab() === 'completed') return doneRowsOf(this.completedTubes() as MwDoneTube[]);
+    const buckets = this.buckets().filter(b => b.items.length > 0);
+    if (this.labCfg.sampleFocused()) {
+      return sampleRowsOf(buckets.map(b => ({ priority: b.priority, tubes: this.sampleRows(b.items) })));
+    }
+    const open = this._expanded();
+    return patientRowsOf(buckets.map(b => ({
+      priority: b.priority,
+      groups: this.patientGroups(b.items).map(g => {
+        const patient = g.items[0]?.subOrder?.order?.patient;
+        return {
+          group: { orderId: g.orderId, patientName: g.patientName, patientMeta: patient ? formatPatientMeta(patient) : '',
+                   items: g.items, priority: g.priority, remainingMin: g.remainingMin, dueAt: g.dueAt },
+          tubes: this.tubesIn(g.items),
+        };
+      }),
+    })), id => open.has(id));
+  });
+  // ── The card head's filters (owner 2026-11-20) ──
+  readonly mwFilter = signal<MwFilter>({ ...NO_MW_FILTER });
+  readonly mwFiltersOpen = signal(false);
+  private mwStatusOf = (r: MwRow): MwStatusKey => {
+    const rules = this.mwGridCtx.rules();
+    const owner = (id: string) => this.assigneeName(id);
+    if (r.kind === 'tube') return statusKeyOf(tubeStatus(r.tube, rules, owner).label);
+    if (r.kind === 'done') return statusKeyOf(doneStatus(r.done).label);
+    if (r.kind === 'patient') return statusKeyOf(groupStatus(r.tubes, rules, owner).label);
+    return 'all';
+  };
+  private readonly mwView = computed(() => this._tab() === 'completed' ? 'done' as const : this._tab() === 'service_queue' ? 'queue' as const : 'work' as const);
+  /** The list's filter as applied: the BAND search text is the list search (one search per screen, owner 2026-11-21);
+   *  the status / priority / department head filters are phones-only (wider screens filter from the column headers),
+   *  so they never narrow the grid invisibly. */
+  readonly mwFilterEff = computed<MwFilter>(() => {
+    const f = this.mwFilter();
+    return this.isPhone() ? { ...f, q: this._scan() } : { ...NO_MW_FILTER, q: this._scan() };
+  });
+  /** The culture panel's filter, the same way. */
+  readonly cultureFilterEff = computed(() => {
+    const f = this.cultureFilter();
+    return this.isPhone() ? { ...f, q: this._scan() } : { q: this._scan(), status: 'all', dept: null };
+  });
+  readonly mwShownRows = computed(() => filterMwRows(this.mwGridRows(), this.mwFilterEff(), this.mwStatusOf));
+  readonly mwStatusOptions = computed<SegmentedOption<MwStatusKey>[]>(() =>
+    statusOptions(this.mwGridRows(), this.mwFilterEff(), this.mwView(), this.mwStatusOf)
+      .map(o => ({ value: o.value, label: o.label, count: o.count })));
+  readonly mwDepts = computed(() => deptOptions(this.mwGridRows()));
+  /** Priority / department narrowed (the Filters button lights up). */
+  readonly mwFiltersOn = computed(() => this.mwFilterEff().priority !== 'all' || !!this.mwFilterEff().dept);
+  readonly mwFiltered = computed(() => { const f = this.mwFilterEff(); return !!f.q.trim() || f.status !== 'all' || this.mwFiltersOn(); });
+  /** "4 of 9 samples" while a filter narrows the list. */
+  readonly mwCountLabel = computed(() => {
+    const all = this.mwGridRows().filter(r => r.kind !== 'detail');
+    const shown = this.mwShownRows().filter(r => r.kind !== 'detail').length;
+    const unit = this.mwGridMode() === 'patient' ? 'patient' : 'sample';
+    const rej = this.countFor('rejected');
+    return countLabel(shown, all.length, unit) + (rej > 0 ? ` · ${rej} rejected` : '');
+  });
+  setMwQuery(q: string) { this.mwFilter.update(f => ({ ...f, q })); }
+  /** Culture tab: the same head over the culture cases (the panel filters; it reports options + counts back). */
+  readonly cultureFilter = signal<{ q: string; status: string; dept: string | null }>({ q: '', status: 'all', dept: null });
+  readonly cultureHead = signal<{ options: Array<{ value: string; label: string; count: number }>; depts: Array<{ id: string; name: string }>; shown: number; total: number }>(
+    { options: [{ value: 'all', label: 'All', count: 0 }], depts: [], shown: 0, total: 0 });
+  readonly cultureCountLabel = computed(() => countLabel(this.cultureHead().shown, this.cultureHead().total, 'case'));
+  setCultureQuery(q: string) { this.cultureFilter.update(f => ({ ...f, q })); }
+  setCultureStatus(s: string) { this.cultureFilter.update(f => ({ ...f, status: s })); }
+  setMwStatus(s: MwStatusKey) { this.mwFilter.update(f => ({ ...f, status: s })); }
+
+  /** Empty states keep their copy. */
+  readonly mwEmptyTitle = computed(() => this._tab() === 'completed'
+    ? `Nothing completed ${this.completedWindow() === 'today' ? 'today' : 'in the last 7 days'}.`
+    : 'Nothing in the queue.');
+  /** The grid's handlers = this screen's existing ones (tap, claim, scan gate, delegate, print, edit, view, peek). */
+  readonly mwGridCtx: MwGridContext = {
+    rules: () => ({ tab: this._tab(), myId: this.myUserId(), canReassign: this.canReassign(), canEdit: this.canEditResult() }),
+    ownerName: id => this.assigneeName(id),
+    activate: (tube: MwTube, name: string, ev?: Event) => this.onCardActivate(tube, name, ev),
+    toggle: id => this.toggleExpand(id),
+    delegate: tests => this.openDelegate(tests),
+    print: (d: MwDoneTube) => this.printCompletedTube(d),
+    edit: (d: MwDoneTube) => { void this.editCompletedTube(d); },
+    view: (d: MwDoneTube) => this.viewCompletedTube(d),
+    pending: id => this.pickingTubeId() === id || this.claimingTube(id),
+    printing: id => this.printingTubeId() === id,
+    reopening: id => this.reopeningTubeId() === id,
+    peekDown: (tube: MwTube, ev: PointerEvent) => this.onCardDown(tube, ev),
+    peekMove: ev => this.onCardMove(ev),
+    peekUp: () => this.onCardUp(),
+  };
 
   private enrich(rows: OrderTest[]): Enriched[] {
     return enrichWorkLines(rows);
@@ -4124,4 +4361,13 @@ export class MyWorkComponent implements OnInit {
       });
     }
   }
+
+  // ── Screen view state (owner 2026-11-21): tab, head filters, window, culture head and the queue's "Show claimed"
+  //    come back exactly as left after in-app navigation; fresh on reload / sign-out / branch switch. ──
+  private readonly _viewState = inject(ViewStateService).bind('lab.my-work', {
+    tab: this._tab, mobileTab: this.mobileTab, counter: this._counter, completedWindow: this._completedWindow,
+    mwFilter: this.mwFilter, cultureFilter: this.cultureFilter, showClaimed: this.showClaimed,
+    // The band search IS the list search now (owner 2026-11-21): its text comes back with the screen.
+    scan: this._scan,
+  });
 }

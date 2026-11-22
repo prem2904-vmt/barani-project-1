@@ -26,14 +26,18 @@ import { ScanIconComponent } from '../../shared/components/icons/scan-icon.compo
 import { webPointerSignal } from '../../shared/utils/pointer-mode';
 import { mediaSignal } from '../../shared/utils/media-query';
 import { plural } from '../../shared/utils/plural';
+import { statusValuesCol } from '../../shared/components/status-words/status-words.component';
+import { numberCol, textCol } from '../../shared/utils/work-grid';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
+import { ViewStateService } from '../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../shared/services/grid-view-state';
 import {
-  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel,
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel, stockWords,
 } from './inventory-view';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-interface InvItem { id: string; sku: string; barcode?: string; name: string; category?: string; uom: string; onHand: number; lowStock: boolean; reorderLevel: number; nearExpiryDays?: number; isActive?: boolean; }
+export interface InvItem { id: string; sku: string; barcode?: string; name: string; category?: string; uom: string; onHand: number; lowStock: boolean; reorderLevel: number; nearExpiryDays?: number; isActive?: boolean; }
 type StockStatus = 'all' | 'ok' | 'low' | 'out';
 type Mode = 'home' | 'scan';
 type StockAction = 'receive' | 'issue' | 'count';
@@ -74,10 +78,27 @@ const ICON = {
  * — on the Receive / Issue / Count tabs, in either lab mode (a connected
  * scanner is used whenever it is there). Normal typing is never touched.
  */
+/** The stock grid's columns: Item sorts by name, the quantities as numbers, Status by severity (Out → Low → OK) with a
+ *  set filter — every data column sorts and filters on its real value. */
+export function stockColumns(phone: boolean): ColDef<InvItem>[] {
+  const LEVELS = ['out', 'low', 'ok'];
+  return [
+    textCol<InvItem>({ colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true,
+      cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.category].filter(Boolean).join(' · ')) },
+      r => `${r.name ?? ''} ${r.sku ?? ''} ${r.category ?? ''}`.trim(), 'left', r => r.name ?? ''),
+    numberCol<InvItem>({ colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', cellClass: 'inv-num',
+      valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() }, r => r.onHand ?? 0, 'right'),
+    numberCol<InvItem>({ colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
+      valueFormatter: p => qty(p.value) }, r => r.reorderLevel ?? 0, 'right'),
+    statusValuesCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140 },
+      it => stockWords(it, phone), it => LEVELS.indexOf(stockLevel(it))),
+  ];
+}
+
 @Component({
   selector: 'pf-stores',
   standalone: true,
-  imports: [DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
+  imports: [GridViewStateDirective, DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
     BusyDirective, SkeletonTableComponent, HeroBandComponent, PfDateComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./inv-layout.scss'],
@@ -136,7 +157,7 @@ const ICON = {
                 } @else if (!items().length) {
                   <ng-container [ngTemplateOutlet]="noItems"></ng-container>
                 } @else {
-                  <ag-grid-angular class="inv-grid st-grid" [theme]="gridTheme()" [rowData]="stockRows()" [columnDefs]="stockCols()"
+                  <ag-grid-angular class="inv-grid st-grid" pfGridViewState="stores.stock" [theme]="gridTheme()" [rowData]="stockRows()" [columnDefs]="stockCols()"
                                    [getRowId]="rowId" [animateRows]="true" [suppressCellFocus]="true"
                                    [overlayNoRowsTemplate]="noMatchHtml"></ag-grid-angular>
                 }
@@ -607,28 +628,16 @@ export class StoresComponent implements OnInit, AfterViewInit {
 
   readonly rowId = (p: { data: InvItem }) => p.data.id;
   readonly noMatchHtml = '<span class="inv-sub">No items match — clear the search or the filter.</span>';
-  readonly stockCols = computed<ColDef<InvItem>[]>(() => {
-    const phone = this.phone();
-    return [
-      { colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true, sortable: true,
-        valueGetter: p => p.data?.name ?? '',
-        cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.category].filter(Boolean).join(' · ')) },
-      { colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', sortable: true, cellClass: 'inv-num',
-        valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
-      { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
-        valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
-      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
-        valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
-        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
-        cellRenderer: (p: { data?: InvItem }) => {
-          const l = p.data ? stockLevel(p.data) : 'ok';
-          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
-        } },
-    ];
+  readonly stockCols = computed<ColDef<InvItem>[]>(() => stockColumns(this.phone()));
+
+  // Screen view state (owner 2026-11-21): the open tab, stock action, stock search and status pill come back as left.
+  private readonly _viewRestored = inject(ViewStateService).bind('stores', {
+    mode: this.mode, action: this.action, stockQuery: this.stockQuery, stockStatus: this.stockStatus,
   });
 
   async ngOnInit() {
-    this.action.set(this.allowedActions()[0]?.key ?? 'receive');
+    const allowed = this.allowedActions();
+    if (!this._viewRestored || !allowed.some(a => a.key === this.action())) this.action.set(allowed[0]?.key ?? 'receive');
     await Promise.all([this.loadItems(), this.loadAlerts()]);
     this.stockHold.done();
   }

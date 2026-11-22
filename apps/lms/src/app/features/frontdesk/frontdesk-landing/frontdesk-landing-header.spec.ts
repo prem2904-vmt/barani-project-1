@@ -87,8 +87,10 @@ describe('Frontdesk landing — work card header', () => {
     expect(scss).toMatch(/\.pf-work-find--phone \.pf-work-find__input \{[^}]*min-height: 44px[^}]*font-size: 16px/);
   });
 
-  it('the filter scrolls inside its own container, never overflowing the card', () => {
-    expect(scss).toMatch(/\.pf-work-hdr__filter \{[^}]*min-width: 0;[^}]*overflow-x: auto/);
+  it('the status pill shrinks with its box (and collapses to its menu) — it never scrolls sideways (pill fit, 2026-11-20)', () => {
+    expect(scss).toMatch(/\.pf-work-hdr__filter \{[^}]*min-width: 0;/);
+    expect(scss).not.toMatch(/\.pf-work-hdr__filter \{[^}]*overflow-x: auto/);
+    expect(scss).toMatch(/\.pf-work-hdr__filter > pf-segmented \{[^}]*flex: 0 1 auto;[^}]*min-width: 0;/);
   });
 
   it('card-header filters use shared pf-segmented in the new design', () => {

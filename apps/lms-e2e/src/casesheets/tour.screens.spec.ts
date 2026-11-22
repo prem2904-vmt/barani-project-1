@@ -126,7 +126,7 @@ for (const vp of VPS) for (const theme of THEMES) {
       await done(p, 'public-sign-in', vp, theme);
 
       p = await open(browser, me, `${PUBLIC_URL}/`, vp, theme, true);
-      await expect(p.locator('.dp__row').first()).toBeVisible();
+      await expect(p.locator('.pf-tp__item').first()).toBeVisible();
       await done(p, 'public-departments', vp, theme);
 
       p = await open(browser, me, `${PUBLIC_URL}/?dept=General%20Medicine`, vp, theme, true);

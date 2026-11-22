@@ -69,12 +69,16 @@ describe('Billing › bill design asks before it is left', () => {
 });
 
 describe('Test editor asks before it is left', () => {
-  it('unsaved = dirty once the record has loaded; Save from the prompt waits for the save', async () => {
-    const self: any = { dirty: signal(true), recordSkeleton: signal(false), _saving: signal(false) };
+  it('unsaved = CHANGED (snapshot compare) once the record has loaded; Save from the prompt waits for the save', async () => {
+    const self: any = { changed: signal(true), recordSkeleton: signal(false), _saving: signal(false) };
     expect(te.hasUnsavedChanges.call(self)).toBe(true);
     self.recordSkeleton.set(true);
     expect(te.hasUnsavedChanges.call(self)).toBe(false);
-    self.saveTest = () => { self._saving.set(true); setTimeout(() => { self.dirty.set(false); self._saving.set(false); }, 150); };
+    self.recordSkeleton.set(false);
+    self.changed.set(false);                                  // an edit put back: nothing to ask about
+    expect(te.hasUnsavedChanges.call(self)).toBe(false);
+    self.changed.set(true);
+    self.saveTest = () => { self._saving.set(true); setTimeout(() => { self.changed.set(false); self._saving.set(false); }, 150); };
     expect(await te.saveChanges.call(self)).toBe(true);
   });
 });

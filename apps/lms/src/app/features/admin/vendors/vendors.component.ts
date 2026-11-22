@@ -1,3 +1,7 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -22,6 +26,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { moneyCol, textCol } from '../../../shared/utils/work-grid';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import {
@@ -87,7 +92,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 @Component({
   selector: 'pf-vendors',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
+  imports: [SkelGridComponent, BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
     HeroBandComponent, PfDateComponent, NgTemplateOutlet, DataGridComponent, SegmentedComponent
@@ -143,9 +148,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
             </header>
             <div class="pf-sg-main__body">
               @if (loadingShown()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading vendors…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" label="Loading vendors…"></pf-skel-grid>
               }
-              <pf-data-grid [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.vendors.g1" [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleVendors().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   @if (vendors().length === 0) {
@@ -169,7 +174,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
         <h3 class="pf-card__label">{{ draft().id ? 'Edit vendor' : 'New vendor' }}</h3>
         <span class="pf-card__spacer"></span>
         <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
+        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || !draftChanged() || saving()"
+                [pfBusyInactive]="!draft().name.trim() || !draftChanged() || saving()" [title]="draftChanged() || saving() ? (draft().id ? 'Save changes' : 'Create vendor') : NO_CHANGES"
+                [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
           {{ saving() ? (draft().id ? 'Saving…' : 'Creating…') : (draft().id ? 'Save changes' : 'Create vendor') }}
         </button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
@@ -382,7 +389,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     /* Palette only (PF-PATTERN §2): over the alert threshold = red, in credit = violet. */
     .pf-vendor__bal-amt--over { color: var(--red-text); }
     .pf-vendor__bal-amt--credit { color: var(--violet-text, #6d28d9); }
-    .pf-vn-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-vn-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-vn-panels.pf-sg-panels--single, .pf-vn-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-vn-row-end { display: flex; gap: 8px; justify-content: flex-end; }
     /* ── ND audit ── */
@@ -583,21 +590,21 @@ export class VendorsComponent implements OnInit {
     const money = (n: number) => { const el = sgCell(sgInr(n)); el.classList.add('pf-sg-money'); return el; };
     const sample = this.actionsFor({ id: '', name: '', isActive: true } as VendorRow, web);
     const cols: ColDef<VendorRow>[] = [
-      { colId: 'name', headerName: 'Account', flex: 1.5, minWidth: 190, sort: 'asc', valueGetter: p => p.data?.name ?? '',
+      textCol<VendorRow>({ colId: 'name', headerName: 'Account', flex: 1.5, minWidth: 190, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<VendorRow>) => {
           const v = p.data;
           // Two "Apollo D"s stay distinguishable: contact (+ code on phone) under the name.
           const sub = [phone ? v?.code : null, v?.contactName, v?.contactPhone].filter(this.isText).join(' · ') || (v?.gstin ? `GSTIN ${v.gstin}` : '');
           return sgCell(v?.name, sub || 'No contact', true);
-        } },
-      { colId: 'code', headerName: 'Code', field: 'code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
-        valueFormatter: p => p.value || '—' },
+        } }, v => [v.name, v.contactName, v.contactPhone, v.gstin].filter(this.isText).join(' '), 'left', v => v.name ?? ''),
+      textCol<VendorRow>({ colId: 'code', headerName: 'Code', field: 'code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
+        valueFormatter: p => p.value || '—' }, v => v.code ?? ''),
       sgPillCol<VendorRow>(v => v.isActive),
-      { colId: 'charged', headerName: 'Charged', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.usedCredit ?? 0,
-        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.usedCredit ?? 0) },
-      { colId: 'settled', headerName: 'Settled', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.totalCredit ?? 0,
-        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.totalCredit ?? 0) },
-      { colId: 'outstanding', headerName: 'Outstanding', flex: 1, minWidth: 210, type: 'rightAligned', valueGetter: p => p.data?.outstanding ?? 0,
+      moneyCol<VendorRow>({ colId: 'charged', headerName: 'Charged', width: 130, minWidth: 110, flex: 0, type: 'rightAligned',
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.usedCredit ?? 0) }, v => v.usedCredit ?? 0, 'right'),
+      moneyCol<VendorRow>({ colId: 'settled', headerName: 'Settled', width: 130, minWidth: 110, flex: 0, type: 'rightAligned',
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.totalCredit ?? 0) }, v => v.totalCredit ?? 0, 'right'),
+      moneyCol<VendorRow>({ colId: 'outstanding', headerName: 'Outstanding', flex: 1, minWidth: 210, type: 'rightAligned',
         cellRenderer: (p: ICellRendererParams<VendorRow>) => {
           const v = p.data!;
           const over = this.overThreshold(v);
@@ -608,7 +615,7 @@ export class VendorsComponent implements OnInit {
           el.classList.add('pf-sg-money');
           el.firstElementChild?.classList.add('pf-sg-tone--' + tone, 'pf-vn-out');
           return el;
-        } },
+        } }, v => v.outstanding ?? 0, 'right'),
       sgActionsCol<VendorRow>(web, sample.filter(a => !a.icon).map(a => a.label), sample.filter(a => a.icon).length,
         (p) => (p.data ? sgActions(web, this.actionsFor(p.data, web)) : document.createElement('span'))),
     ];
@@ -636,6 +643,7 @@ export class VendorsComponent implements OnInit {
       id: v.id, name: v.name, code: v.code ?? '', contactName: v.contactName ?? '', contactPhone: v.contactPhone ?? '',
       contactEmail: v.contactEmail ?? '', gstin: v.gstin ?? '', address: v.address ?? '', openingCredit: '', notifyThreshold: '',
     });
+    this.draftSnap.mark();
     this.newVendorOpen.set(true);
   }
 
@@ -663,6 +671,7 @@ export class VendorsComponent implements OnInit {
         this.toasts.success('Vendor updated');
         this.newVendorOpen.set(false);
         this.draft.set({ ...EMPTY_DRAFT });
+        this.draftSnap.mark();
         this.refresh();
       },
       error: e => {
@@ -682,6 +691,10 @@ export class VendorsComponent implements OnInit {
   protected readonly saving = signal<boolean>(false);
   protected readonly newVendorOpen = signal<boolean>(false);
   protected readonly draft = signal<NewVendorDraft>({ ...EMPTY_DRAFT });
+  /** Save / Create only when the form differs from the vendor as opened (owner 2026-11-19); new = the empty form. */
+  private readonly draftSnap = (() => { const s = dirtySnapshot(() => this.draft()); s.mark({ ...EMPTY_DRAFT }); return s; })();
+  protected readonly draftChanged = this.draftSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   protected readonly nameError = signal<string | null>(null);
   protected readonly codeError = signal<string | null>(null);
   protected readonly fieldErr = signal<Record<string, string>>({});
@@ -730,6 +743,7 @@ export class VendorsComponent implements OnInit {
     this.closeMoney();
     this.newVendorOpen.update(v => !v);
     if (!this.newVendorOpen()) { this.draft.set({ ...EMPTY_DRAFT }); this.clearFieldErrors(); }
+    this.draftSnap.mark();
   }
   patchDraft(patch: Partial<NewVendorDraft>) {
     if ('name' in patch) this.nameError.set(null);
@@ -769,6 +783,7 @@ export class VendorsComponent implements OnInit {
         this.toasts.success('Vendor created');
         this.newVendorOpen.set(false);
         this.draft.set({ ...EMPTY_DRAFT });
+        this.draftSnap.mark();
         this.refresh();
       },
       error: e => {
@@ -928,4 +943,8 @@ export class VendorsComponent implements OnInit {
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${dd}/${mm} ${hh}:${min}`;
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.vendors', { q: this.q, status: this.status });
 }

@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { computed, signal } from '@angular/core';
 import { vi } from 'vitest';
+import { By } from '@angular/platform-browser';
 import { OutsourcedListComponent } from './outsourced-list.component';
+import { OutsourcedActionsComponent } from './outsourced-actions.component';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -24,6 +26,12 @@ const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
   tests: [{ orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'outsourced', completed: false }],
   ...o,
 });
+
+/** The phone list's row actions (owner 2026-11-21): ONE primary + the ⋯ menu's labels. */
+function rowActs(f: { debugElement: import('@angular/core').DebugElement; nativeElement: HTMLElement }): { primary: string; more: string[] } {
+  const a = f.debugElement.query(By.directive(OutsourcedActionsComponent)).componentInstance as OutsourcedActionsComponent;
+  return { primary: (f.nativeElement as HTMLElement).querySelector('[data-testid="out-act-primary"]')?.textContent?.trim() ?? '', more: a.moreActs().map(x => x.label) };
+}
 
 function setup(rows: OutsourcedTube[], confirm = true) {
   const rowsSig = signal(rows);
@@ -65,54 +73,54 @@ function setup(rows: OutsourcedTube[], confirm = true) {
 }
 
 describe('Frontdesk Outsourced tab', () => {
-  it('lists each outsourced tube: sample, full patient name, order, tests, partner, dispatched date, status chip', () => {
+  it('lists each outsourced tube in the shared work list: sample, full name, order, tests, partner, status in words, dispatched time', () => {
     const { el, svc } = setup([row()]);
     expect(svc.ensureLoaded).toHaveBeenCalled();
-    const r = el.querySelector('.pf-out__row') as HTMLElement;
-    expect(r.querySelector('.pf-out__sample')?.textContent).toContain('OUT-0001');
-    expect(r.querySelector('.pf-out__who')?.textContent).toContain('Ms. Paravai Munusamy');
-    expect(r.querySelector('.pf-out__who')?.textContent).toContain('LAB-2609-000001');
-    expect(r.querySelector('.pf-out__tests')?.textContent).toContain('Vitamin D');
-    expect(r.querySelector('.pf-out__partner')?.textContent).toContain('Apollo Diagnostics');
-    expect(r.querySelector('.pf-out__date')?.textContent).toContain('Dispatched');
-    const chip = r.querySelector('.pf-out__status') as HTMLElement;
-    expect(chip.classList).toContain('pf-chip');
-    expect(chip.textContent?.trim()).toBe('Outsourced');
-    expect(chip.querySelector('.pf-out__check')).toBeNull();
+    const r = el.querySelector('[data-testid="out-list"] .pf-wl__row') as HTMLElement;
+    expect(r.querySelector('.pf-wl__lead')?.textContent).toContain('OUT-0001');
+    expect(r.querySelector('.pf-wl__name')?.textContent).toContain('Ms. Paravai Munusamy');
+    const facts = r.querySelector('.pf-wl__l2')?.textContent ?? '';
+    expect(facts).toContain('LAB-2609-000001');
+    expect(facts).toContain('Vitamin D');
+    expect(facts).toContain('Apollo Diagnostics');
+    expect(r.querySelector('.pf-sw__now')?.textContent?.trim()).toBe('Outsourced');
+    expect(r.querySelector('.pf-wl__time')).not.toBeNull();
+    expect(r.querySelector('.pf-chip, .pf-pill')).toBeNull();
   });
 
   it('each row delegates its actions to pf-outsourced-actions (ONE home — outsourced-actions.component.spec.ts)', () => {
-    const { el } = setup([row()]);
-    const r = el.querySelector('.pf-out__row') as HTMLElement;
-    expect(r.querySelector('pf-outsourced-actions')).not.toBeNull();
-    // The real child renders for this tube's state — Upload report, no report yet.
-    expect([...r.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim())).toEqual(['Upload report']);
+    const { el, f } = setup([row()]);
+    const r = el.querySelector('.pf-wl__row') as HTMLElement;
+    expect(r.querySelector('.pf-wl__act pf-outsourced-actions')).not.toBeNull();
+    // Compact (owner 2026-11-21): ONE primary + ⋯ — nothing else to do here, so no menu.
+    expect(rowActs(f)).toEqual({ primary: 'Upload', more: [] });
+    expect(r.querySelectorAll('.pf-wl__act button').length).toBe(1);
   });
 
-  it('Completed = neutral chip with a violet check (no green); the childs buttons for a completed tube', () => {
-    const { el } = setup([row({ status: 'completed', hasReport: true, tests: [
+  it('Completed = green status WORDS (no chip); the childs buttons for a completed tube', () => {
+    const { el, f } = setup([row({ status: 'completed', hasReport: true, tests: [
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] })]);
-    const chip = el.querySelector('.pf-out__status') as HTMLElement;
-    expect(chip.textContent?.trim()).toBe('Completed');
-    expect(chip.querySelector('.pf-out__check')).not.toBeNull();
-    expect(chip.getAttribute('style') ?? '').not.toMatch(/green|#10b981|#22c55e/i);
-    const labels = [...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim());
-    expect(labels).toEqual(expect.arrayContaining(['View', 'Undo', 'Replace report']));
+    const sw = el.querySelector('.pf-wl__row pf-status-words') as HTMLElement;
+    expect(sw.querySelector('.pf-sw__now')?.textContent?.trim()).toBe('Completed');
+    expect(sw.getAttribute('data-tone')).toBe('done');
+    const acts = rowActs(f);
+    expect(acts.primary).toBe('View');
+    expect(acts.more).toEqual(expect.arrayContaining(['Undo completed', 'Replace report']));
   });
 
   it('a partner file the server no longer has (410) is flagged on the row with "upload it again"', () => {
     const tube = () => row({ status: 'completed', hasReport: true, tests: [
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] });
-    expect(setup([tube()]).el.querySelector('[data-testid="out-file-missing"]')).toBeNull();
+    expect(setup([tube()]).el.querySelector('.pf-wl__row[data-key="file-missing"]')).toBeNull();
 
     TestBed.resetTestingModule();
     const spy = vi.spyOn(UploadsService.prototype, 'isMissing').mockImplementation(u => u === '/uploads/t/p.pdf');
     try {
-      const { el } = setup([tube()]);
-      expect(el.querySelector('[data-testid="out-file-missing"]')?.textContent).toContain('upload it again');
-      expect([...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim())).toContain('Replace report');
+      const { el, f } = setup([tube()]);
+      expect(el.querySelector('.pf-wl__row[data-key="file-missing"] .pf-wl__note')?.textContent).toContain('upload it again');
+      expect(rowActs(f).more).toContain('Replace report');
     } finally {
       spy.mockRestore();
     }
@@ -125,9 +133,8 @@ describe('Frontdesk Outsourced tab', () => {
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: true, attachProblem: problem, inReport: false } },
     ] });
     const { el } = setup([locked]);
-    const chip = el.querySelector('.pf-out__attach') as HTMLElement;
-    expect(chip.textContent?.trim()).toBe('Separate file');
-    expect(chip.getAttribute('data-attach')).toBe('problem');
+    expect(el.querySelector('.pf-wl__l2')?.textContent).toContain('Separate file');
+    expect(el.querySelector('.pf-wl__note')?.textContent).toContain('password-protected');
   });
 
   it('the attach chip reflects "In our report" / "Separate file" per row', () => {
@@ -136,11 +143,11 @@ describe('Frontdesk Outsourced tab', () => {
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: attach, inReport: attach } },
     ] });
     const a = setup([withReport(true)]);
-    expect(a.el.querySelector('.pf-out__attach')?.textContent?.trim()).toBe('In our report');
-    expect(a.el.textContent).toContain('Detach from report'); // the child's own button label
+    expect(a.el.querySelector('.pf-wl__l2')?.textContent).toContain('In our report');
+    expect(rowActs(a.f).more).toContain('Detach from report'); // the child's own action (in its ⋯ menu)
     TestBed.resetTestingModule();
     const b = setup([withReport(false)]);
-    expect(b.el.textContent).toContain('Attach to report');
+    expect(rowActs(b.f).more).toContain('Attach to report');
   });
 
   it('classic design shows status + partner filters; the search narrows the list', () => {
@@ -161,12 +168,12 @@ describe('Frontdesk Outsourced tab', () => {
     expect(el.querySelector('pf-segmented')).toBeNull();
     expect(el.querySelector('pf-select')).toBeNull();
     expect(el.querySelector('input[type="search"]')).toBeNull();
-    const samples = [...el.querySelectorAll('.pf-out__sample')].map(n => n.textContent?.trim());
+    const samples = [...el.querySelectorAll('.pf-wl__lead')].map(n => n.textContent?.trim());
     expect(samples).toEqual(['OUT-0001', 'OUT-0002']);
-    expect([...el.querySelectorAll('.pf-out__status')].map(n => n.textContent?.trim())).toEqual(['Outsourced', 'Completed']);
+    expect([...el.querySelectorAll('.pf-wl__row .pf-sw__now')].map(n => n.textContent?.trim())).toEqual(['Outsourced', 'Completed']);
     svc.query.set('arun');
     f.detectChanges();
-    expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
+    expect(el.querySelectorAll('.pf-wl__row').length).toBe(1);
   });
 
   it('new design pins the fetch to "all" on init — Completed tubes are never left unloaded just because there\'s no status control to pick them', () => {

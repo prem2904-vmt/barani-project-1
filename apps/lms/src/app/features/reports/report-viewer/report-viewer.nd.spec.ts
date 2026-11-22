@@ -148,7 +148,7 @@ describe('Report view (nd) — band + CONTEXT BAR', () => {
     expect(ctx.querySelector('.pf-rv-chip--patient .pf-rv-chip__meta')?.textContent).toContain('29/M');
     expect(ctx.querySelector('.pf-rv-chip--order')?.textContent).toContain('LAB-2609-000123');
     expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Final');
-    expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Completed');
+    expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Ready');
     expect(ctx.querySelector('.pf-rv-ctx__date')?.textContent?.trim()).toContain('2026');
   });
 
@@ -328,14 +328,14 @@ describe('Report view (nd) — PREVIEW card, skeleton + zoom', () => {
 });
 
 describe('Report view (nd) — REPORT side card', () => {
-  it('sits on the right with the status line and collapses to a strip (remembered) and back', async () => {
+  it('sits on the LEFT with the status line and collapses to a strip (remembered) and back', async () => {
     const { el, f } = await render();
     const side = el.querySelector('.pf-rv-side') as HTMLElement;
     expect(side.querySelector('.pf-card__label')?.textContent?.trim()).toBe('Report');
     expect(side.querySelector('.pf-rv-state')?.textContent).toContain('Ready to deliver');
-    // Side card comes AFTER the preview (an action / summary companion → RIGHT).
+    // Side card comes FIRST: the two-panel standard (owner 2026-11-19) — details left, the preview right.
     const body = el.querySelector('.pf-rv-body') as HTMLElement;
-    expect(body.lastElementChild).toBe(side);
+    expect([...body.children].find(k => k.classList.contains('pf-card'))).toBe(side);
     (el.querySelector('.pf-rv-collapse') as HTMLButtonElement).click();
     f.detectChanges();
     expect(el.querySelector('.pf-rv-side')).toBeNull();
@@ -675,3 +675,27 @@ describe('Report view (nd) — ⋮ Edit referral', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 });
+
+describe('Report view (nd) — two-panel standard (owner 2026-11-19)', () => {
+  it('REPORT details = the LEFT side card (--pf-side-w); PREVIEW = the main card on the right', async () => {
+    const { el } = await render();
+    const body = el.querySelector('.pf-rv-body') as HTMLElement;
+    const kids = [...body.children].filter(k => k.classList.contains('pf-card'));
+    expect(kids[0].classList).toContain('pf-rv-side');
+    expect(kids[1].classList).toContain('pf-rv-card');
+    expect(ReportViewerScss()).toMatch(/grid-template-columns: var\(--pf-side-w, 340px\) minmax\(0, 1fr\)/);
+    expect(ReportViewerScss()).toMatch(/grid-template-columns: 52px minmax\(0, 1fr\)/);
+    // The collapse chevron points the way the card moves: a left card hides ‹ and its strip expands ›.
+    expect(el.querySelector('.pf-rv-collapse path')!.getAttribute('d')).toBe('M15 18l-6-6 6-6');
+  });
+
+  it('phones keep the stacking: one column, details as a sheet', async () => {
+    const { el } = await render({ phone: true });
+    expect(el.querySelector('.pf-rv-body')!.classList).toContain('pf-rv-body--narrow');
+    expect(el.querySelector('.pf-rv-side')).toBeNull();
+  });
+});
+
+function ReportViewerScss(): string {
+  return ((ReportViewerComponent as any).ɵcmp.styles as string[]).join('\n').replace(/\[_ng(content|host)-%COMP%\]/g, '');
+}

@@ -1,4 +1,6 @@
 import { DatePipe } from '@angular/common';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
 import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
@@ -79,6 +81,8 @@ import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advan
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 type DateRange = 'today' | 'yesterday' | 'tomorrow' | '7d' | 'month' | 'custom';
+/** The side card's tabs: "Who is where" (2+ services only), Appointments, Home collection. */
+type LeftTab = SideTab;
 
 /** Mirrors the AdvancedFilters shape inside the modal — kept in this file
  *  so we don't pull a heavy import just for typing. */
@@ -143,6 +147,31 @@ import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { isSignedOrSkipped } from '../../../shared/utils/line-status';
+import { FlowGridComponent } from './flow-grid/flow-grid.component';
+import { WorkViewComponent, type WorkViewMode } from './work-view/work-view.component';
+import { sectionOrderKey } from './work-view/sections';
+import { FlowGridContext } from './flow-grid/flow-cells';
+import { FlowShareApi, FlowShareMenuComponent } from './flow-grid/flow-share-menu.component';
+import { MoreFiltersComponent } from './flow-grid/more-filters.component';
+import { FlowActionId, FlowPredicates, FlowRow, draftFlowRow, orderFlowRow, orderIsLate } from './flow-grid/flow-row';
+import { flowListItems } from './flow-grid/flow-list';
+import { FlowNextCellComponent } from './flow-grid/flow-cells';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
+import { columnSortOptions, sortItems } from '../../../shared/components/work-list/work-list';
+import { NO_WORK_FILTERS, WorkFilters, activeWorkFilterCount, branchChoices, doctorChoices, sortFlowRows } from './flow-grid/work-filters';
+import { PaneSplitterComponent } from '../../../shared/components/pane-splitter/pane-splitter.component';
+import { ServiceShelfService } from '../../../core/services/service-shelf.service';
+import { ServiceFilter, ServiceId, inService, serviceOfModule, tallyServices } from '../../../core/services/service-shelf';
+import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.component';
+import { OpdDeskApi } from '../../opd/frontdesk/desk-api.service';
+import type { OpdVisitRow, PaymentDue, ProcedureToBook, QueueDoctor } from '../../opd/frontdesk/desk.models';
+import { toBookPriceText } from '../../opd/frontdesk/desk-rules';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { addDays, labToday } from '../../../shared/utils/lab-clock';
+import { opdDueByVisit, opdVisitFlowRow, opdVisitMatches, opdVisitOpen } from './opd-visits';
+import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, overdueDotLabel, sideSwitchLabel, sideSwitchOn, sideTabOptions, sideTitleOf, stepOfRow, toggleSideView, whoItemOf } from './who-is-where/who-is-where';
+import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -181,7 +210,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent],
+  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfDateComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent, WorkListComponent, FlowNextCellComponent, SortChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -250,16 +279,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { value: 'custom', label: this.apptCustomRangeLabel(), clearable: !!this.apptCustomStart() },
   ]);
 
-  readonly leftTabSegmentOptions = computed<SegmentedOption<'appt' | 'home'>[]>(() => {
-    const opts: SegmentedOption<'appt' | 'home'>[] = [];
-    if (this.showAppt()) {
-      opts.push({ value: 'appt', label: 'Appointments', count: this.visibleAppointments().length });
-    }
-    if (this.showHome()) {
-      opts.push({ value: 'home', label: 'Home collection', count: this.homeCollections().length });
-    }
-    return opts;
-  });
+  /** The side card's tabs (who-is-where.ts `sideTabOptions`): 2+ services (new design, ≥1024px) lead with
+   *  "Who is where" and keep short labels so all three fit 340px; Appointments carries a rose dot when overdue. */
+  readonly leftTabSegmentOptions = computed<SegmentedOption<LeftTab>[]>(() => sideTabOptions({
+    who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome(),
+    apptN: this.visibleAppointments().length, overdue: this.overdueAppointments(), homeN: this.homeCollections().length,
+  }));
 
   readonly workDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
     { value: 'yesterday', label: 'Yesterday' },
@@ -269,13 +294,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   readonly workStatusSegmentOptions = computed<SegmentedOption<WorkStatus>[]>(() => {
     const opts: SegmentedOption<WorkStatus>[] = [
-      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length, tone: 'active' },
-      { value: 'done', label: 'Completed', count: this.completedOrders().length, tone: 'ok' },
+      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length + this.opdCount().ip, tone: 'active', dot: 'var(--violet-text)' },
+      { value: 'done', label: 'Completed', count: this.completedOrders().length + this.opdCount().done, tone: 'ok', dot: 'var(--green-text)' },
     ];
+    // Neutral pill + a coloured dot per status (owner): violet in flight, green done, rose dues, sky partner lab.
     if (this.showPaymentsDue()) {
-      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueAll().length, tone: 'warning' });
+      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueAll().length + this.opdCount().billing, tone: 'warning', dot: 'var(--red-text)' });
     }
-    opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced });
+    opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced, dot: 'var(--sky-text, var(--blue-text))' });
     return opts;
   });
 
@@ -392,8 +418,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Active tabs inside the Left and Right panes — persisted so the user lands
   // on the same tabs next session.
   private static readonly LEFT_TAB_KEY = 'pf.lms.frontdesk.leftTab';
-  private readonly _leftTab = signal<'appt' | 'home'>(this.loadLeftTab());
-  readonly leftTab = this._leftTab.asReadonly();
+  private readonly _leftTab = signal<LeftTab>(this.loadLeftTab());
+  /** The tab on show: "Who is where" only exists for 2+ services in the new design at ≥1024px — otherwise the
+   *  remembered 'who' reads as Appointments (or Home when appointments are off), exactly today's side card. */
+  readonly leftTab = computed<LeftTab>(() =>
+    effectiveSideTab(this._leftTab(), { who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome(), proc: this.procOn() }));
   // Workflow-as-source-of-truth: each action is a placeable component. When the
   // admin switches an action OFF in the process workflow, its component vanishes
   // from this screen (no nav/route change — the real Frontdesk stays put).
@@ -414,7 +443,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The left pane only exists if at least one of its tabs (Appointments /
    *  Home collection) is enabled — otherwise it's hidden and the work pane
    *  fills the row. */
-  readonly showLeftPane = computed(() => this.showAppt() || this.showHome());
+  readonly showLeftPane = computed(() => this.showAppt() || this.showHome() || this.whoTabOn());
   readonly showOrder = computed(() => this.process.isEnabled('walk_in_order'));
   readonly showRegister = computed(() => this.process.isEnabled('patient_registration'));
   // If the currently-selected left tab gets disabled, fall back to the other one.
@@ -425,15 +454,56 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Neither left tab exists: the phone list must not sit on a hidden pane.
     else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
-  setLeftTab(t: 'appt' | 'home') {
+  setLeftTab(t: LeftTab) {
+    const changed = t !== this.leftTab();
     this._leftTab.set(t);
-    try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t);
+      if (t !== 'who') localStorage.setItem(FrontdeskLandingComponent.BOOKINGS_TAB_KEY, t);
+    } catch { /* ignore */ }
+    if (changed) this.slideSideIn();
   }
-  private loadLeftTab(): 'appt' | 'home' {
+
+  // ── VISITS card-head icon switch (owner 2026-11-21, refined): TWO states — Who is where ↔ Bookings; inside Bookings
+  //    the pill toggle "Appointments n | Home collection n". The view stays `leftTab()` / `setLeftTab()` ('who' | 'appt' |
+  //    'home', remembered under LEFT_TAB_KEY) — the names other code binds to; the icon = 'who' vs the last bookings pill. ──
+  private static readonly BOOKINGS_TAB_KEY = 'pf.lms.frontdesk.bookingsTab';
+  /** The icon is a switch only where the chart AND a bookings list both exist (lab-only: a static icon). */
+  readonly sideSwitchOn = computed(() => sideSwitchOn({ who: this.whoTabOn(), appt: this.showAppt() || this.procOn(), home: this.showHome() }));
+  readonly sideTitle = computed(() => sideTitleOf(this.leftTab()));
+  /** "3 appointments overdue · show bookings" — the rose dot on the icon while on Who is where. */
+  readonly sideOverdueDot = computed(() => this.sideSwitchOn() ? overdueDotLabel(this.leftTab(), this.overdueAppointments()) : null);
+  readonly sideSwitchAria = computed(() => this.sideOverdueDot() ?? sideSwitchLabel(this.leftTab()));
+  readonly sideTint = computed(() => this.leftTab() === 'who' ? null : 'sky');
+  /** The bookings pills (Appointments n · rose dot when overdue | Home collection n) — only with both lists on. */
+  readonly bookingPillOptions = computed<SegmentedOption<LeftTab>[]>(() => sideTabOptions({
+    who: false, appt: this.showAppt(), home: this.showHome(),
+    apptN: this.visibleAppointments().length, overdue: this.overdueAppointments(), homeN: this.homeCollections().length,
+    procN: this.procOn() ? this.procsToBook().length : null,
+  }));
+  toggleSideView(ev?: Event): void {
+    ev?.stopPropagation();
+    let last: SideTab | null = null;
+    try { last = localStorage.getItem(FrontdeskLandingComponent.BOOKINGS_TAB_KEY) as SideTab | null; } catch { /* not remembered */ }
+    this.setLeftTab(toggleSideView(this.leftTab(), last, { appt: this.showAppt(), home: this.showHome(), proc: this.procOn() }));
+  }
+  /** Owner motion style: the side card's body slides / fades in (260ms; nothing under reduced motion). */
+  private slideSideIn(): void {
+    if (typeof requestAnimationFrame === 'undefined' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    requestAnimationFrame(() => {
+      const pane = document.querySelector('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+      for (const el of Array.from(pane?.children ?? []) as HTMLElement[]) {
+        if (el.tagName === 'HEADER' || el.classList.contains('pf-appt-split__hdr')) continue;
+        el.animate?.([{ opacity: 0, transform: 'translateX(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      }
+    });
+  }
+  /** Nothing remembered: 'who' (it falls back to Appointments wherever the chart doesn't exist). */
+  private loadLeftTab(): LeftTab {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.LEFT_TAB_KEY);
-      return raw === 'home' ? 'home' : 'appt';
-    } catch { return 'appt'; }
+      return raw === 'home' ? 'home' : raw === 'appt' ? 'appt' : 'who';
+    } catch { return 'who'; }
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
@@ -573,7 +643,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // is untouched.
   readonly mobileListOpen = signal(false);
   readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out' | 'all'>(() =>
-    this.expandedPane() === 'appt' ? this.leftTab() : (this.rightTab() ?? 'all'));
+    // Phones never show "Who is where" (≥1024px only), so the left pane here is Appointments or Home.
+    this.expandedPane() === 'appt' ? (this.leftTab() === 'home' ? 'home' : 'appt') : (this.rightTab() ?? 'all'));
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
@@ -704,6 +775,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly ordersSkel = this.ordersHold.active;
   
   readonly homeCollections = computed(() => {
+    // Home collection is Lab work: the bottom bar's Services shelf filters it out for another service.
+    if (!this.svcOn('lab')) return [];
     return this._homeCollections().filter(a => this.inApptRange(a.appointmentDate));
   });
 
@@ -795,7 +868,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly weekDays = computed<Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }>>(() => {
     const base = new Date(); base.setHours(0, 0, 0, 0);
     const mondayOffset = (base.getDay() + 6) % 7;   // 0 = Monday
-    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset);
+    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset + 7 * this.apptWeekOffset());
     const b = this.apptBounds();
     const singleDay = (b.end - b.start) === 86_400_000;
     const out: Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }> = [];
@@ -815,6 +888,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
 
   /** Scope the Appointments pane to a single day picked from the weekday strip. */
+  /** The week strip's week (0 = this week; ‹ › move it). */
+  readonly apptWeekOffset = signal(0);
+  shiftApptWeek(by: number): void { this.apptWeekOffset.update(w => w + by); }
   selectApptDay(iso: string) {
     this._apptCustomStart.set(iso);
     this._apptCustomEnd.set(iso);
@@ -855,7 +931,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Terminal states (completed / cancelled / no-show) drop off (they remain on
   // the calendar route), as do home collections.
   readonly visibleAppointments = computed(() =>
-    this._appointments().filter(a =>
+    // The front desk's appointments are Lab bookings (OPD books its own visits): the Services shelf filters them.
+    !this.svcOn('lab') ? [] : this._appointments().filter(a =>
       this.inApptRange(a.appointmentDate)
       && a.status !== 'cancelled'
       && a.status !== 'completed'
@@ -866,7 +943,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** "In progress" — actively-moving orders. Excludes terminal /
    *  ready-to-deliver states; those land in completedOrders below so
    *  the FD board has two clear panes. */
-  readonly visibleOrders = computed(() =>
+  readonly visibleOrders = computed(() => this._ipAll().filter(o => this.svcPass(o)));
+  /** In progress for every service (the Services shelf's counts read this, before its own filter). */
+  private readonly _ipAll = computed(() =>
     this._orders().filter(o => {
       const active = o.status !== 'completed'
         && o.status !== 'validated'
@@ -904,7 +983,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  business-day → #N ledger order as every other tab of this list (owner,
    *  2026-10-02 — `sortByDailySerial`, work-merge.ts), not a bare creation-
    *  time compare. */
-  readonly completedOrders = computed(() => {
+  readonly completedOrders = computed(() => this._doneAll().filter(o => this.svcPass(o)));
+  /** Completed for every service (the Services shelf's counts). */
+  private readonly _doneAll = computed(() => {
     const unpaid = this._unpaidOrderIds();
     const bounds = this.workBounds();
     const filtered = this._orders().filter(o => {
@@ -949,7 +1030,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** EVERY order with an outstanding balance, whatever the timeline filter — what the
    *  "Payments due" tab lists and counts (OPS-132: an old due must not hide there). */
-  readonly paymentsDueAll = computed(() => {
+  readonly paymentsDueAll = computed(() => this._dueAll().filter(o => this.svcPass(o)));
+  /** Every due for every service (the Services shelf's counts). */
+  private readonly _dueAll = computed(() => {
     // Same business-day → #N ledger order as every other tab (owner,
     // 2026-10-02 — sortByDailySerial, work-merge.ts).
     return sortByDailySerial(dueOrders(this._bills(), this._orders(), this._billingOrdersMap()));
@@ -987,17 +1070,458 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The active list, narrowed by the work card's header search. */
   readonly shownDrafts = computed(() => {
     const q = this.workQuery();
-    return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q));
+    if (!this.svcOn('lab')) return [];                    // parked carts are Lab orders
+    const f = this.workFilters();
+    if (f.doctor || f.branch || f.onlyDues) return [];    // a draft has no doctor / branch row / bill yet
+    const now = this.nowTick();
+    return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q)
+      && (!f.onlyLate || now - d.savedAt >= 30 * 60000));
   });
   /** Same business-day → #N ledger order as every other tab of this list
    *  (owner, 2026-10-02 — `sortByDailySerial`, work-merge.ts): `visibleOrders`
    *  itself carries no particular order (whatever the feed returned). */
   readonly shownInProgress = computed(() =>
-    sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery())));
-  readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
-  readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+    sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()).filter(o => this.morePass(o))));
+  readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()).filter(o => this.morePass(o)));
+  readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()).filter(o => this.morePass(o)));
   /** The Payments due TAB's rows: all outstanding dues, narrowed by the header search only. */
-  readonly shownPaymentsDueTab = computed(() => filterOrdersByWorkQuery(this.paymentsDueAll(), this.workQuery()));
+  readonly shownPaymentsDueTab = computed(() => filterOrdersByWorkQuery(this.paymentsDueAll(), this.workQuery()).filter(o => this.morePass(o)));
+
+  // ── Frontdesk redesign (owner-approved 2026-11-19): services, More filters, flow grid, splitter ──
+  /** Bottom-bar Services shelf (Frontdesk area, 2+ services): its pick filters BOTH panels. A lab-only user
+   *  always reads 'all', so every list below is exactly today's. */
+  private readonly serviceShelf = inject(ServiceShelfService);
+  /** Does `s` pass the Services shelf's pick? */
+  svcOn(s: ServiceId): boolean { return inService(this.serviceShelf.selected(), s); }
+  /** An order passes when its owning module (Order.module; lab when unset) is the picked service. */
+  private svcPass(o: Order): boolean { return this.svcOn(serviceOfModule(o.module)); }
+
+  // ── OPD visits in the common Frontdesk (owner 2026-11-20): ONLY while the user has OPD (the Services shelf's own
+  //    rule — OPD gate + desk permission). The OPD desk's existing feeds; nothing is fetched otherwise. ──
+  private readonly opdApi = inject(OpdDeskApi);
+  readonly opdOn = computed(() => this.serviceShelf.services().some(s => s.id === 'opd'));
+  private readonly _opdVisits = signal<OpdVisitRow[]>([]);
+  private readonly _opdDues = signal<PaymentDue[]>([]);
+  /** The OPD workflow takes vitals (desk config); unknown = yes. */
+  private readonly _opdVitals = signal(true);
+  private opdCfgLoaded = false;
+  private readonly _opdFirstLoad = effect(() => { if (this.opdOn()) untracked(() => this.loadOpd()); });
+  /** Today's (or the chosen day's) OPD visits + open visit bills. */
+  loadOpd(): void {
+    if (!this.opdOn()) return;
+    const b = this.workBounds();
+    const date = this.toIsoDay(new Date(b.start));
+    this.opdApi.visits({ date }).subscribe({ next: l => this._opdVisits.set(l ?? []), error: () => this._opdVisits.set([]) });
+    this.opdApi.paymentsDue().subscribe({ next: l => this._opdDues.set(l ?? []), error: () => this._opdDues.set([]) });
+    // The OPD desk's doctors board (Clinic view's OPD block) and "Procedures to book" (the Bookings pill) — the two
+    // things the Frontdesk had left on /opd/desk/classic (owner 2026-11-21).
+    this.opdApi.board().subscribe({ next: l => this._opdBoard.set(l ?? []), error: () => this._opdBoard.set([]) });
+    this.opdApi.proceduresToBook().subscribe({ next: l => this._toBook.set(l), error: () => { /* keep the last list */ } });
+    if (!this.opdCfgLoaded) {
+      this.opdCfgLoaded = true;
+      this.opdApi.desk().subscribe({ next: d => this._opdVitals.set(d?.config?.workflow?.vitals !== 'off'), error: () => { /* keep vitals */ } });
+    }
+  }
+  /** The OPD doctors board (GET /api/opd/queue/board): every OPD doctor with waiting / at vitals / now serving. */
+  readonly _opdBoard = signal<QueueDoctor[]>([]);
+  readonly opdBoard = computed<QueueDoctor[]>(() => this.opdOn() ? this._opdBoard() : []);
+  /** Procedures the doctor ordered for later; null = OPD off or the server has no such list (no pill). */
+  private readonly _toBook = signal<ProcedureToBook[] | null>(null);
+  readonly procOn = computed(() => this.opdOn() && this._toBook() !== null);
+  readonly procsToBook = computed<ProcedureToBook[]>(() => this.procOn() ? this._toBook() ?? [] : []);
+  readonly toBookPriceText = toBookPriceText;
+  readonly procToday = labToday();
+  readonly procMaxDate = addDays(labToday(), 90);
+  readonly procBookDate = signal<Record<string, string | null>>({});
+  readonly procBooking = signal<string | null>(null);
+  setProcDate(id: string, v: string | null): void { this.procBookDate.update(m => ({ ...m, [id]: v })); }
+  procDay(iso: string): string { return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+  /** Book a later procedure on the picked date (today … 90 days) — the classic desk's own call, toasts and errors. */
+  bookProcedure(r: ProcedureToBook): void {
+    const date = this.procBookDate()[r.id];
+    if (!date || this.procBooking()) return;
+    this.procBooking.set(r.id);
+    this.opdApi.bookProcedure(r.id, date, r.doctorId).subscribe({
+      next: res => {
+        this.procBooking.set(null);
+        this._toBook.update(l => (l ?? []).filter(x => x.id !== r.id));
+        this.toasts.success(`${r.procedureName} booked for ${r.patientName} on ${this.procDay(res?.date || date)}`);
+        this.loadOpd();
+      },
+      error: e => {
+        this.procBooking.set(null);
+        const err = ApiError.from(e);
+        this.toasts.error(err.code === 'already_booked' ? 'This procedure is already booked.'
+          : err.code === 'date_out_of_range' ? 'Pick a date from today up to 90 days ahead.' : err.message);
+        if (err.code === 'already_booked') this.loadOpd();
+      },
+    });
+  }
+  /** A doctor in the Clinic view's OPD block: show that doctor's patients in the list (the board's "tap a doctor"). */
+  showDoctor(name: string): void {
+    this.setWorkFilters({ ...this.workFilters(), doctor: name });
+    this.setWorkView('list');
+  }
+
+  /** Every OPD visit row (every status), before the service filter — the shelf / chart counts read this. */
+  private readonly _opdAll = computed<FlowRow[]>(() => {
+    if (!this.opdOn()) return [];
+    const now = this.nowTick();
+    const due = opdDueByVisit(this._opdDues());
+    const vitals = this._opdVitals();
+    return this._opdVisits().map(v => opdVisitFlowRow(v, now, { due: due.get(v.id) ?? 0, vitals }));
+  });
+  /** The visits the work list shows: OPD picked (or All), the head search and More filters. */
+  private readonly _opdShown = computed<FlowRow[]>(() => {
+    if (!this.svcOn('opd')) return [];
+    const q = this.workQuery();
+    const f = this.workFilters();
+    if (f.branch) return [];                                   // a visit row carries no branch
+    return this._opdAll().filter(r => {
+      const v = r.visit!;
+      if (!opdVisitMatches(v, q)) return false;
+      if (f.doctor && v.doctorName.trim() !== f.doctor) return false;
+      if (f.onlyLate && !r.late) return false;
+      if (f.onlyDues && !(r.due > 0)) return false;
+      return true;
+    });
+  });
+  readonly opdCount = computed(() => {
+    const rows = this._opdShown();
+    return {
+      ip: rows.filter(r => r.status === 'ip').length,
+      done: rows.filter(r => r.status === 'done').length,
+      billing: rows.filter(r => r.status === 'billing').length,
+    };
+  });
+  private opdRowsFor(tab: WorkStatusFilter): FlowRow[] {
+    const rows = this._opdShown();
+    return tab === null ? rows : tab === 'out' ? [] : rows.filter(r => r.status === tab);
+  }
+  /** `/frontdesk?service=opd` (the retired OPD desk's redirect): pre-select that service in the ONE filter once the
+   *  user's services are known (entitlements may still be loading). */
+  private readonly _pendingService = signal<string | null>(this.route.snapshot?.queryParamMap?.get('service') ?? null);
+  /** OPD visits move on the OPD desk's own work event (the one the OPD desk listened to); loadOpd is a no-op with OPD off. */
+  private readonly _opdLive = this.work.on('consults').pipe(takeUntilDestroyed()).subscribe(() => this.loadOpd());
+  private readonly _applyPendingService = effect(() => {
+    const want = this._pendingService();
+    if (!want || !this.serviceShelf.services().some(s => s.id === want)) return;
+    untracked(() => { this.serviceShelf.select(want as ServiceId); this._pendingService.set(null); });
+  });
+  /** Open the existing OPD visit screen (status moves, billing, consult). */
+  openOpdVisit(v: OpdVisitRow): void { void this.router.navigate(['/opd/visit', v.id]); }
+
+  // ── Side card "Who is where" (owner-approved 2026-11-20): the chart, its chips and the Services shelf are ONE
+  //    filter (ServiceShelfService.selected + step); the appointments / home lists and the work grid all read it. ──
+  /** The chart's tab: 2+ services, new design, side-by-side cards (≥1024px). Lab-only users never see it. */
+  readonly whoTabOn = computed(() => this.theme.isNewDesign() && this.wide() && this.serviceShelf.multi());
+  readonly shelfServices = computed(() => this.serviceShelf.services());
+  readonly svcSelected = computed<ServiceFilter>(() => this.serviceShelf.selected());
+  /** The step filter — only where the chart can set it (the flow grid); phones / tablet portrait ignore it. */
+  readonly svcStep = computed<string | null>(() => this.flowMode() ? this.serviceShelf.step() : null);
+  /** "Lab" while a service filter is on (the removable chip in the Appointments / Home header). */
+  readonly svcFilterLabel = computed<string | null>(() => {
+    const id = this.svcSelected();
+    if (id === 'all' || !this.serviceShelf.multi()) return null;
+    return this.shelfServices().find(s => s.id === id)?.label ?? null;
+  });
+  /** What the chart counts: today's ACTIVE work (in progress + parked drafts) for every service, before the
+   *  service filter, the search and More filters — the same rows the flow grid maps (its "Where now" = the step). */
+  readonly whoItems = computed<WhoItem[]>(() => {
+    if (!this.whoTabOn()) return [];
+    const now = this.nowTick();
+    const p = this.flowPredicates;
+    return [
+      ...this.draftOrders().map(d => whoItemOf(draftFlowRow(d, now))),
+      ...this._ipAll().map(o => whoItemOf(orderFlowRow(o, p, now, { primary: 'ip' }))),
+      ...this._opdAll().filter(r => r.visit && opdVisitOpen(r.visit)).map(whoItemOf),
+    ];
+  });
+  /** A pick from the chart / its chips / the centre. */
+  pickService(p: WhoPick): void {
+    this.workSel.clear();
+    this.serviceShelf.pick(p.service, p.step);
+  }
+  clearServiceFilter(): void {
+    this.workSel.clear();
+    this.serviceShelf.select('all');
+  }
+  /** Minutes a booked appointment is past its slot (null = not overdue). */
+  apptLateMin(a: Appointment): number | null { return apptOverdueMin(a, this.nowTick()); }
+  /** The side-list rows' meta: "34/F · AA0022" (age/sex · MRN). */
+  visitMeta(p: Patient | null | undefined): string {
+    return [drawerAgeSex(p ?? null), p?.mrn ?? ''].filter(Boolean).join(' · ');
+  }
+  /** The overdue appointment's soft-rose status line: "Not arrived · 18m late". */
+  apptLateLabel(a: Appointment): string | null {
+    const m = this.apptLateMin(a);
+    return m === null ? null : `Not arrived · ${fmtMin(m)} late`;
+  }
+  readonly overdueAppointments = computed(() => {
+    const now = this.nowTick();
+    return this.visibleAppointments().filter(a => apptOverdueMin(a, now) !== null).length;
+  });
+  /** "today" / "tomorrow" / "yesterday" / "in range" — the side card's "Booked today" line. */
+  readonly apptRangeWords = computed(() => {
+    const r = this.apptDateRange();
+    return r === 'custom' ? 'in range' : (this.apptDateOptions.find(o => o.id === r)?.label ?? 'Today').toLowerCase();
+  });
+
+  /** A one-minute clock for the Waiting column / the late rule. */
+  readonly nowTick = signal(Date.now());
+
+  /** More filters (doctor · branch · only late · only with dues · sort) — the card head's filter icon. */
+  readonly workFilters = signal<WorkFilters>({ ...NO_WORK_FILTERS });
+  readonly workFilterCount = computed(() => activeWorkFilterCount(this.workFilters()));
+  /** Phones / tablet portrait: the More filters popover from the search field's icon. */
+  readonly phoneFiltersOpen = signal(false);
+  /** Does an order pass the More filters (the same rule on the grid and the phone lists)? */
+  private morePass(o: Order): boolean {
+    const f = this.workFilters();
+    if (f.doctor && (o.refDoctorName ?? '').trim() !== f.doctor) return false;
+    if (f.branch && o.branchId !== f.branch) return false;
+    if (f.onlyLate && !orderIsLate(o, this.nowTick())) return false;
+    if (f.onlyDues && !(this.getBillBalance(o.id) > 0)) return false;
+    return true;
+  }
+  setWorkFilters(f: WorkFilters): void {
+    this.workSel.clear();
+    this.workFilters.set(f);
+  }
+  /** Clear in the More filters: every filter AND the date back to Today. */
+  clearMoreFilters(): void {
+    this.setWorkFilters({ ...NO_WORK_FILTERS });
+    if (this._workDateRange() !== 'today') this.setWorkDateRange('today');
+  }
+  /** Rows the More filters' Doctor / Branch choices come from: today's loaded work, before those filters. */
+  private readonly _filterSource = computed(() =>
+    [...this.visibleOrders(), ...this.completedOrders(), ...this.paymentsDueAll()].map(order => ({ order })));
+  readonly doctorChoices = computed(() => doctorChoices(this._filterSource()));
+  readonly branchChoices = computed(() => {
+    const ids = branchChoices(this._filterSource());
+    const names = new Map((this.auth.user()?.branches ?? []).map((b: { id: string; name?: string }) => [b.id, b.name ?? b.id] as const));
+    return ids.map(id => ({ id, name: names.get(id) ?? id }));
+  });
+
+  /** ≥1024px: the two cards sit side by side (the flow grid + the splitter live there). */
+  readonly wide = mediaSignal('(min-width: 1024px)', inject(DestroyRef));
+  /** The new design's work card body is the FLOW GRID at ≥1024px; phones / tablet portrait keep their list. */
+  readonly flowMode = computed(() => this.theme.isNewDesign() && this.wide());
+  /** New design below 1024px: the same rows through the shared work list (`pf-work-list`). */
+  readonly listMode = computed(() => this.theme.isNewDesign() && !this.wide());
+  /** The flow rows as work-list items (flow-grid/flow-list.ts). */
+  /** The list's Sort chip: the grid headers' sorts (Token, Patient, Waiting, Payment), both directions. */
+  readonly listSortOptions = columnSortOptions([{ id: 'token', label: 'Token' }, { id: 'patient', label: 'Patient' }, { id: 'wait', label: 'Waiting', first: 'desc' }, { id: 'due', label: 'Payment due', first: 'desc' }]);
+  readonly listSort = signal<string | null>(null);
+  readonly listItems = computed(() => this.listMode() ? flowListItems(sortItems(this.flowRows(), this.listSort(), {
+    token: r => r.dailyNo, patient: r => r.name, wait: r => r.waitMin, due: r => r.due || null,
+  })) : []);
+  /** Per-user key for the side card width (shared pf-pane-splitter). */
+  readonly sideWidthKey = computed(() => `pf-lms.frontdesk.side-w.${this.auth.user()?.id ?? 'anon'}`);
+
+  /** The landing's own row rules, handed to the flow grid's pure mapping (flow-row.ts). */
+  private readonly flowPredicates: FlowPredicates = {
+    showCreateBillOn: o => this.showCreateBillOn(o),
+    showRecollectOn: o => this.showRecollectOn(o),
+    showCollectOn: o => this.showCollectOn(o),
+    showDispatchOn: o => this.showDispatchOn(o),
+    showDispatchDrawn: o => this.showDispatchDrawn(o),
+    showBillInsteadOfDispatch: o => this.showBillInsteadOfDispatch(o),
+    sampleStatus: o => this.sampleStatus(o),
+    isSeriesOrder: o => this.isSeriesOrder(o),
+    shareAvailable: o => this.shareAvailable(o),
+    effectiveStatusLabel: o => this.effectiveStatusLabel(o),
+    balance: id => this.getBillBalance(id),
+  };
+
+  /** The flow grid's rows: the SAME lists the old rows rendered (drafts + In progress / Completed / Payments due /
+   *  the merged no-chip list), mapped to the grid's columns, then sorted by the More filters' Sort. */
+  readonly flowRows = computed<FlowRow[]>(() => {
+    if (!this.flowMode() && !this.listMode()) return [];
+    const now = this.nowTick();
+    const p = this.flowPredicates;
+    const tab = this._rightTab();
+    let rows: FlowRow[] = [];
+    if (tab === null) {
+      rows = [
+        ...this.shownDrafts().map(d => draftFlowRow(d, now)),
+        ...this.mergedWork().map(m => orderFlowRow(m.order, p, now, { primary: m.primary, merged: m, tubes: this.outsourcedTubesFor(m) })),
+      ];
+    } else if (tab === 'ip') {
+      rows = [
+        ...this.shownDrafts().map(d => draftFlowRow(d, now)),
+        ...this.shownInProgress().map(o => orderFlowRow(o, p, now, { primary: 'ip' })),
+      ];
+    } else if (tab === 'done') {
+      rows = this.shownCompleted().map(o => orderFlowRow(o, p, now, { primary: 'done' }));
+    } else if (tab === 'billing') {
+      rows = this.shownPaymentsDueOnly().map(o => orderFlowRow(o, p, now, { primary: 'billing' }));
+    }
+    // Fresh objects each time (AG-Grid refreshes a row's cells — e.g. the ring's service label — only when its data changes).
+    rows = [...rows, ...this.opdRowsFor(tab).map(r => ({ ...r }))];
+    // The chart's step (outer ring) narrows the grid inside the picked service — same "Where now" word it counts.
+    const step = this.svcStep();
+    if (step) rows = rows.filter(r => stepOfRow(r) === step);
+    const busy = this.flowBusyId();
+    const sel = new Set(this.workSel.ids());
+    rows = rows.map(r => {
+      const b = busy?.orderId === r.id ? busy.action : null;
+      const selected = r.kind === 'order' && sel.has(r.id);
+      return b || selected ? { ...r, busy: b, selected } : r;
+    });
+    return sortFlowRows(rows, this.workFilters().sort);
+  });
+  /** The row action in flight (its Next button shows the busy label). */
+  private readonly flowBusyId = computed<{ orderId: string; action: FlowActionId } | null>(() => {
+    const d = this.dispatchingId(); if (d) return { orderId: d, action: 'dispatch' };
+    const r = this.recollecting(); if (r) return { orderId: r, action: 'recollect' };
+    const dl = this.downloadingReport(); if (dl) return { orderId: dl, action: 'download' };
+    const rp = this.reprintLoading() ? this.reprintOrderId() : null; if (rp) return { orderId: rp, action: 'reprint' };
+    return null;
+  });
+  readonly flowEmpty = computed<{ title: string; body: string }>(() => {
+    if (this.workQuery()) return { title: `No matches for “${this.workQuery()}”`, body: 'Try another name, phone, order or sample ID.' };
+    if (this.workFilterCount() > 0) return { title: 'Nothing matches these filters', body: 'Clear More filters to see every row.' };
+    switch (this._rightTab()) {
+      case 'ip': return { title: 'All caught up', body: 'No orders in progress for this range.' };
+      case 'done': return { title: 'Nothing to deliver yet', body: 'Reports show up here the moment validation is complete.' };
+      case 'billing': return { title: 'No pending payments', body: 'All registered orders have been fully paid.' };
+      default: return { title: 'No orders for these dates', body: 'Pick another day or range in More filters.' };
+    }
+  });
+
+  /** What the flow grid calls back into (its cells run the landing's existing handlers). */
+  readonly flowCtx: FlowGridContext = {
+    act: (row, id, anchor) => this.flowAct(row, id, anchor),
+    open: row => this.openFlowRow(row),
+    busy: (row, id) => row.busy === id || (id === 'dispatch-drawn' && row.busy === 'dispatch'),
+    selectable: row => row.kind === 'order' && this.workSelectable() && this.workSel.isSelectable(row.id),
+    selected: row => !!row.selected,
+    toggle: (row, ev) => this.onWorkCheck(ev as MouseEvent, row.id),
+    // The ring's "LAB / OPD" adds nothing for a single-service tenant or while one service is picked.
+    ringLabels: () => this.serviceShelf.multi() && this.serviceShelf.selected() === 'all',
+  };
+
+  // ── WORK body views (owner mocks fd-sections/ColsGrouped + fd-morph-clinic, 2026-11-21) ──
+  /** "All" with 2+ services: one section per service (each with its own columns, in the user's order). */
+  readonly workSplit = computed(() => this.flowMode() && this.serviceShelf.multi() && this.serviceShelf.selected() === 'all');
+  readonly shelfServiceIds = computed<ServiceId[]>(() => this.serviceShelf.services().map(s => s.id));
+  readonly sectionOrderKey = computed(() => { const u = this.auth.user(); return sectionOrderKey(u?.tenantId, u?.id); });
+  /** List | Clinic: 2+ services, the flow grid's lists (Outsourced keeps its own list). */
+  readonly clinicOn = computed(() => this.flowMode() && this.serviceShelf.multi() && this._rightTab() !== 'out');
+  private readonly workViewKey = computed(() => `pf-lms.frontdesk.view.${this.auth.user()?.id ?? 'anon'}`);
+  private readonly _workView = signal<WorkViewMode | null>(null);
+  readonly workView = computed<WorkViewMode>(() => {
+    if (!this.clinicOn()) return 'list';
+    const v = this._workView();
+    if (v) return v;
+    try { return localStorage.getItem(this.workViewKey()) === 'clinic' ? 'clinic' : 'list'; } catch { return 'list'; }
+  });
+  readonly workViewOptions: SegmentedOption<WorkViewMode>[] = [
+    { value: 'list', label: 'List', iconPath: ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'] },
+    { value: 'clinic', label: 'Clinic', iconPath: ['M3 3h8v8H3z', 'M13 3h8v5h-8z', 'M13 10h8v11h-8z', 'M3 13h8v8H3z'] },
+  ];
+  private readonly workViewRef = viewChild(WorkViewComponent);
+  setWorkView(v: WorkViewMode): void {
+    if (v === this.workView()) return;
+    this.workViewRef()?.beforeSwitch(v);
+    this._workView.set(v);
+    try { localStorage.setItem(this.workViewKey(), v); } catch { /* private mode: not remembered */ }
+  }
+  /** "+N more" in a clinic room: that service's list. */
+  clinicMore(s: ServiceId): void {
+    this.setWorkView('list');
+    this.workSel.clear();
+    this.serviceShelf.select(s);
+  }
+
+  /** Tapping a row opens it — exactly what the old row did for that list. */
+  openFlowRow(row: FlowRow): void {
+    if (row.kind === 'visit') { if (row.visit) this.openOpdVisit(row.visit); return; }
+    if (row.kind === 'draft' && row.draft) { this.resumeDraft(row.draft as DraftOrder); return; }
+    if (row.merged) { this.openMergedRow(row.merged); return; }
+    if (!row.order) return;
+    if (row.status === 'ip') this.onWorkRowClick(row.order);
+    else this.openOrder(row.order);
+  }
+
+  /** A grid action → the landing's existing handler for it. */
+  flowAct(row: FlowRow, id: FlowActionId, anchor: HTMLElement | null): void {
+    if (row.kind === 'visit') { if (row.visit) this.openOpdVisit(row.visit); return; }
+    if (row.kind === 'draft' && row.draft) {
+      if (id === 'resume') this.resumeDraft(row.draft as DraftOrder);
+      else if (id === 'discard') this.discardDraft(row.draft as DraftOrder);
+      return;
+    }
+    const o = row.order;
+    if (!o) return;
+    switch (id) {
+      case 'bill': this.goToBilling(o); break;
+      case 'recollect': void this.recollectOrder(o); break;
+      case 'collect': this.collectSample(o); break;
+      case 'dispatch': case 'dispatch-drawn': this.markDispatched(o); break;
+      case 'reprint': this.reprintLabels(o); break;
+      case 'series': this.openSeriesSheet(o); break;
+      case 'download': void this.downloadReport(o); break;
+      case 'pay': this.openPaymentDrawer(o); break;
+      case 'share': this.openFlowShare(o, anchor); break;
+      case 'open': this.openFlowRow(row); break;
+      case 'profile': this.openPatientProfile(o); break;
+    }
+  }
+
+  /** The grid's Share menu: the work list's share rows, floated over the pressed control. */
+  private flowShareAt = 0;
+  readonly flowShare = signal<{ order: Order; rect: { top: number; left: number; width: number; height: number } } | null>(null);
+  readonly flowShareOpen = computed(() => {
+    const f = this.flowShare();
+    return f && this.activeShareMenuOrderId() === f.order.id ? f : null;
+  });
+  openFlowShare(o: Order, anchor: HTMLElement | null): void {
+    if (this.activeShareMenuOrderId() === o.id) { this.closeFlowShare(); return; }
+    const r = anchor?.getBoundingClientRect();
+    this.flowShareAt = Date.now();
+    this.flowShare.set({ order: o, rect: r ? { top: r.top, left: r.left, width: r.width, height: r.height } : { top: 200, left: window.innerWidth - 220, width: 120, height: 40 } });
+    this.activeShareMenuOrderId.set(o.id);
+    // Re-read the box once the press has settled (the grid may have scrolled the cell into view).
+    if (anchor && typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
+      const cur = this.flowShare();
+      if (!cur || cur.order.id !== o.id) return;
+      const b = anchor.getBoundingClientRect();
+      this.flowShare.set({ ...cur, rect: { top: b.top, left: b.left, width: b.width, height: b.height } });
+    });
+  }
+  closeFlowShare(): void {
+    this.activeShareMenuOrderId.set(null);
+    this.flowShare.set(null);
+  }
+  /** The landing's share rules + senders, for the floating menu. */
+  readonly flowShareApi: FlowShareApi = {
+    waShareMode: () => this.waShareMode(),
+    waDoctorPhone: o => this.waDoctorPhone(o),
+    emailFor: o => this.emailFor(o),
+    smsFor: o => this.smsFor(o),
+    emailBusy: () => this.emailBusy(),
+    shareReportWhatsapp: (o, to) => this.shareReportWhatsapp(o, to),
+    emailReport: (o, to) => this.emailReport(o, to),
+    smsReport: (o, to) => this.smsReport(o, to),
+  };
+
+  /** The Services shelf's counts: every work row of the chosen dates (all statuses, every service), once each. */
+  private readonly _publishServices = effect(() => {
+    const now = this.nowTick();
+    const seen = new Set<string>();
+    const items: Array<{ service: ServiceId; late: boolean }> = [];
+    for (const o of [...this._ipAll(), ...this._doneAll(), ...dueInWindow(this._dueAll(), this.workBounds())]) {
+      if (seen.has(o.id)) continue;
+      seen.add(o.id);
+      items.push({ service: serviceOfModule(o.module), late: orderIsLate(o, now) });
+    }
+    for (const d of this.draftOrders()) items.push({ service: 'lab', late: now - d.savedAt >= 30 * 60000 });
+    for (const r of this._opdAll()) items.push({ service: 'opd', late: r.late });
+    const tally = tallyServices(items, i => i.service, i => i.late);
+    untracked(() => this.serviceShelf.publish(tally));
+  });
 
   // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
   // With every status chip off, the four feeds used to render as four
@@ -1030,7 +1554,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  as the secondary badge) — exactly what the merged list is FOR. */
   readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
     if (this._rightTab() !== null) return [];
-    const tubes = filterOutsourced(this.outsourcing.windowed(), { query: this.workQuery() });
+    // Outsourced tubes are Lab work; the More filters' doctor / branch / dues rules have no tube field, so they drop them.
+    const f = this.workFilters();
+    const tubes = !this.svcOn('lab') || f.doctor || f.branch || f.onlyDues || f.onlyLate ? []
+      : filterOutsourced(this.outsourcing.windowed(), { query: this.workQuery() });
     return buildFrontdeskMergedWork(this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDue(), tubes);
   });
   /** The merged row's status text for everything but Payments due (the
@@ -1372,6 +1899,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
   constructor() {
+    // Screen view state (owner 2026-11-21): dates, custom ranges, week strip, search and More filters come back exactly
+    // as left after in-app navigation; fresh on reload / sign-out / branch switch. (Side / status tabs and List | Clinic
+    // already persist in localStorage — they stay there.)
+    inject(ViewStateService).bind('frontdesk', {
+      apptRange: this._apptDateRange, apptStart: this._apptCustomStart, apptEnd: this._apptCustomEnd,
+      workRange: this._workDateRange, workStart: this._workCustomStart, workEnd: this._workCustomEnd,
+      workQuery: this.workQuery, apptWeek: this.apptWeekOffset, workFilters: this.workFilters,
+    });
     // Restore saved 3-pane split positions (Appointments | In Progress | Completed).
     // Done in the constructor so the first render uses the persisted ratio
     // and we don't flicker from defaults to user values.
@@ -1395,8 +1930,23 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       const el = this.apptSplitEl()?.nativeElement;
       if (!el) return;
       const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
-      if (firstPane) firstPane.style.flexBasis = v + '%';
+      // New design: the shared pf-pane-splitter owns the width (--pf-side-w); this % split is the classic look's.
+      if (firstPane) firstPane.style.flexBasis = this.theme.isNewDesign() ? '' : v + '%';
     });
+
+    // Waiting column / late rule: a one-minute clock (cleared in ngOnDestroy).
+    this.nowClock = setInterval(() => this.nowTick.set(Date.now()), 60_000);
+    // The grid's floating Share menu is laid over its button: any scroll (the grid body, the page) closes it.
+    const closeShareOnScroll = (e: Event) => {
+      if (!this.flowShare()) return;
+      // The press itself may scroll its cell into view (AG-Grid): only a later scroll closes the menu.
+      if (Date.now() - this.flowShareAt < 500) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('.pf-share-menu')) return;
+      this.closeFlowShare();
+    };
+    document.addEventListener('scroll', closeShareOnScroll, true);
+    this.destroyRef.onDestroy(() => document.removeEventListener('scroll', closeShareOnScroll, true));
 
     // Refresh the queue immediately when a new appointment is booked
     // (e.g. via the calendar's quick-book modal). Without this, a fresh
@@ -1465,7 +2015,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.hydrateApsFromUrl());
   }
+  private nowClock: ReturnType<typeof setInterval> | null = null;
   ngOnDestroy() {
+    if (this.nowClock) { clearInterval(this.nowClock); this.nowClock = null; }
     if (this.pollHandle) clearInterval(this.pollHandle);
     if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
     this.cancelPress();
@@ -1473,6 +2025,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
+    // OPD visits (only while the user has OPD — loadOpd fetches nothing otherwise).
+    this.loadOpd();
     // Fetch Appointments based on apptBounds
     const apptB = this.apptBounds();
     if (apptB.isToday) {
@@ -1734,7 +2288,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   @HostListener('window:resize')
   onResize() {
     const el = this.apptSplitEl()?.nativeElement;
-    if (!el) return;
+    if (!el || this.theme.isNewDesign()) return;
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0) return;
     const minPx = 260;

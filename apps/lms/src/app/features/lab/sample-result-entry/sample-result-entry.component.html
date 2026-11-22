@@ -482,7 +482,7 @@
                               <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                               @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                             </td>
-                            <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                            <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p, t)">{{ refLabelFor(p, t) || "—" }}</td>
                             <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
                             <td class="pf-sre__gc-method"><span class="pf-sre__method-t">{{ methodologyOf(p, t.test) }}</span></td>
                             <td class="pf-sre__gc-note">
@@ -951,7 +951,7 @@
                             <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                             @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                           </td>
-                          <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                          <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p, t)">{{ refLabelFor(p, t) || "—" }}</td>
                           <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
                           <td class="pf-sre__gc-method">
                             <span class="pf-sre__method">

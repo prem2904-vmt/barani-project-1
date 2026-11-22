@@ -30,7 +30,7 @@ export interface Report {
    *  read THIS, never the snapshot: a profile correction must reach the
    *  message even though the stored PDF is immutable (2026-09-30). */
   patient?: { displayName?: string; firstName?: string; fathersName?: string; phone?: string | null; guardianPhone?: string | null } | null;
-  order?: { id: string; createdAt?: string; orderNumber?: string | null; invoiceNumber?: string | null; dailyNo?: number | null; dailyNoDay?: string | null; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null; dateOfBirth?: string | null; ageDisplay?: string | null } | null };
+  order?: { id: string; createdAt?: string; orderNumber?: string | null; refDoctorName?: string | null; invoiceNumber?: string | null; dailyNo?: number | null; dailyNoDay?: string | null; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null; dateOfBirth?: string | null; ageDisplay?: string | null } | null };
 }
 
 /** One sign-off block in the report footer. Up to three may be present

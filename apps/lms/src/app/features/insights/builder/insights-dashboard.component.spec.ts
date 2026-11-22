@@ -1,3 +1,4 @@
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { Component, input, output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Observable, firstValueFrom, of, throwError } from 'rxjs';
@@ -174,6 +175,10 @@ describe('My dashboards — view', () => {
     for (const id of ['l', 'h', 'd', 'g', 's']) expect(p.card(id).querySelector('pf-ins-chart'), id).toBeTruthy();
     // Table: AG-Grid, like the rest of Insights.
     expect(p.card('t').querySelector('ag-grid-angular')).toBeTruthy();
+    // Every generated table column sorts and filters on its real value.
+    const tv = p.cmp.widgets().find((v) => v.w.id === 't')!.table!;
+    expect(tv.colDefs.length).toBeGreaterThan(0);
+    for (const c of tv.colDefs) expect(sortsAndFilters(c as never), String(c.field)).toBe(true);
     // View mode: no edit controls, no assistant.
     expect(p.el.querySelector('.pf-insd-w__ctrls')).toBeNull();
     expect(p.el.querySelector('pf-assistant-panel')).toBeNull();

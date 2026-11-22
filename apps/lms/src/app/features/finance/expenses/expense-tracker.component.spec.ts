@@ -1,5 +1,6 @@
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
@@ -13,6 +14,7 @@ import { ExpenseBook, ExpenseEntry, ExpenseFilter } from '../../../shared/models
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { ND_GRID_PARAMS } from '../../../shared/utils/pf-grid-theme';
 
 /**
@@ -47,6 +49,7 @@ const bookOf = (over: Partial<ExpenseBook> = {}): ExpenseBook => ({
 describe('ExpenseTrackerComponent', () => {
   let svc: Record<string, ReturnType<typeof vi.fn>>;
   let dialogs: { prompt: ReturnType<typeof vi.fn>; confirm: ReturnType<typeof vi.fn> };
+  let router: { navigate: ReturnType<typeof vi.fn> };
 
   function render(opts: { perms?: string[]; book?: ExpenseBook; narrow?: boolean; classic?: boolean } = {}) {
     (window as any).matchMedia = (q: string) => ({ matches: q.includes('900px') ? !!opts.narrow : false, addEventListener() {}, removeEventListener() {} });
@@ -62,11 +65,13 @@ describe('ExpenseTrackerComponent', () => {
       updateCategory: vi.fn((id: string, p: { isActive?: boolean }) => of({ id, name: 'Stationery', isDefault: true, isActive: !!p.isActive, sortOrder: 1 })),
     };
     dialogs = { prompt: vi.fn(async () => 'Tallied'), confirm: vi.fn(async () => true) };
+    router = { navigate: vi.fn(async () => true) };
     TestBed.configureTestingModule({
       imports: [ExpenseTrackerComponent],
       providers: [
         { provide: ExpenseService, useValue: svc },
         { provide: DialogService, useValue: dialogs },
+        { provide: Router, useValue: router },
         { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => !opts.classic } },
         { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
         { provide: AuthService, useValue: {
@@ -196,20 +201,23 @@ describe('ExpenseTrackerComponent', () => {
     expect(html(closed)).not.toContain('data-act="opening"');
 
     const btn = (act: string) => { const b = document.createElement('button'); b.dataset['act'] = act; return b; };
+    // Close / Reopen open THE day-close (owner 2026-11-21: one day-close) — the same screen and record as
+    // Finance → Daily statement — on that day; the expense-book-only close is never called.
     c.onDayClicked({ data: closed, event: { target: btn('reopen') } });
     f.detectChanges();
-    expect(c.tab()).toBe('closing');
+    expect(router.navigate).toHaveBeenLastCalledWith(['/finance/daily'], { queryParams: { date: closed.date } });
+    expect(c.tab()).toBe('all');
     expect(c.closingDate()).toBe(closed.date);
-    expect(el.querySelector('pf-day-closing')).not.toBeNull();
-    // Day closing: no entry-only band actions and no Add bar.
-    expect(el.querySelector('.pf-xt__export')).toBeNull();
-    expect(el.querySelector('.pf-bottombar')).toBeNull();
-    expect(el.querySelector('.pf-hb-btn--primary')).toBeNull();   // Close day is the tab's one primary
+    expect(el.querySelector('pf-day-closing')).toBeNull();
     expect(svc['closeDay']).not.toHaveBeenCalled();
-    c.setTab('all');
     c.onDayClicked({ data: today, event: { target: btn('close') } });
-    expect(c.tab()).toBe('closing');
+    expect(router.navigate).toHaveBeenLastCalledWith(['/finance/daily'], { queryParams: { date: today.date } });
     expect(c.closingDate()).toBe(today.date);
+    // The Day closing tab opens it too, and a restored 'closing' tab never strands the screen on an empty body.
+    c.setTab('closing');
+    expect(router.navigate).toHaveBeenCalledTimes(3);
+    c['tabPick'].set('closing');
+    expect(c.tab()).toBe('mine');
     dialogs.prompt.mockResolvedValueOnce('2500.50');
     await c.setOpening(today);
     expect(svc['setOpening']).toHaveBeenCalledWith(today.date, 2500.5);
@@ -280,5 +288,21 @@ describe('ExpenseTrackerComponent', () => {
   it('labels IST days', () => {
     expect(dayLabel('2026-09-29')).toBe('Tue, 29 Sep');
     expect(dayLabel('2026-09-29', false)).toBe('29 Sep');
+  });
+
+  it('every data column of the entries and day grids sorts and filters on its real value', () => {
+    const { c } = render();
+    const check = (cols: any[]) => {
+      expect(cols.length).toBeGreaterThan(2);
+      for (const col of cols) {
+        if (col.colId === 'actions') { expect(col.sortable).toBe(false); continue; }
+        expect(sortsAndFilters(col), col.colId).toBe(true);
+      }
+    };
+    check(c.entryCols());
+    check(c.dayCols());
+    const amount = c.entryCols().find((col: any) => col.colId === 'amount');
+    expect(amount.valueGetter({ data: { kind: 'expense', amount: 40 } })).toBe(-40);
+    expect(amount.valueGetter({ data: { kind: 'cash_in', amount: 40 } })).toBe(40);
   });
 });

@@ -1,3 +1,7 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -27,9 +31,16 @@ import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-c
 import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
-import { DayClosingComponent } from './day-closing.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WORK_LIST_MQ, WorkListItem, columnSortOptions, sortItems } from '../../../shared/components/work-list/work-list';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
+import { mediaSignal } from '../../../shared/utils/media-query';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { dayLabel, inr } from './expense-format';
+import { Router } from '@angular/router';
+import { dayLabel, inr, dayStatusWords } from './expense-format';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { dateCol, moneyCol, numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -61,8 +72,8 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
-    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
+  imports: [BackToTodayComponent, WorkListComponent, SortChipComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
+    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-xt pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -115,8 +126,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           <div class="pf-xt__tabrow"><ng-container *ngTemplateOutlet="tabSwitch"></ng-container></div>
         }
         @if (tab() === 'closing') {
-          <pf-day-closing [date]="closingDate()" [today]="today" [narrow]="narrow()"
-                          (dateChange)="closingDate.set($event)" (changed)="load()"></pf-day-closing>
+          <!-- Never shown: Day closing is the ONE day-close screen (/finance/daily) — setTab navigates there. -->
         } @else {
         <div class="pf-xt__panels" [class.pf-xt__panels--narrow]="narrow()">
           @if (narrow()) {
@@ -175,7 +185,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 
             <div class="pf-xt__grid-wrap">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-xt__skel" [rows]="8" [cols]="5" label="Loading expenses…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-xt__skel" [rows]="30" [columns]="5" label="Loading expenses…"></pf-skel-grid>
               } @else if (view() === 'entries' && !loading() && visibleEntries().length === 0) {
                 <div class="pf-empty pf-empty--compact">
                   <span class="pf-empty__icon" aria-hidden="true">
@@ -187,12 +197,23 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                     <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="openAdd()">Add expense</button>
                   }
                 </div>
+              } @else if (view() === 'entries' && listMode()) {
+                <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — the entry, its facts in the grid's
+                     column order, the amount on the right, Edit (or Bills) at the right edge. -->
+                <div class="pf-xt__listscroll pf-wl-scroll">
+                <div class="pf-xt__listhead pf-wl-head pf-wl-head--sticky">
+                  <pf-sort-chip [options]="entrySortOptions" [value]="entrySort()" (pick)="entrySort.set($event)" />
+                </div>
+                <pf-work-list class="pf-xt__list" data-testid="xt-list" label="Expenses" [items]="entryItems()" [loading]="loading()" emptyTitle="No expenses in this range"
+                  (open)="openEntry($any($event.data), null)" (primary)="openEntry($any($event.data), $event.primary?.id ?? null)"
+                  (action)="openEntry($any($event.item.data), $event.id)" />
+                </div>
               } @else if (view() === 'entries') {
-                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
+                <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.entries" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [rowClassRules]="entryRowRules" [animateRows]="true" [suppressCellFocus]="true"
                                  (cellClicked)="onEntryClicked($event)"></ag-grid-angular>
               } @else {
-                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
+                <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.days" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="dayRowId" [animateRows]="true" [suppressCellFocus]="true"
                                  (cellClicked)="onDayClicked($event)"></ag-grid-angular>
               }
@@ -253,6 +274,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           </span>
           <div class="pf-xt__dates" [attr.data-custom]="quick() === 'custom'">
             @if (quick() === 'custom') { <span class="pf-xt__custom">Custom range</span> }
+            <pf-back-to-today [show]="quick() === 'custom' && (to() ?? today) < today" (reset)="setQuick('today')" />
             <label class="pf-xt__dates-lbl" for="pf-xt-from">From</label>
             <pf-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-date>
             <label class="pf-xt__dates-lbl" for="pf-xt-to">To</label>
@@ -404,7 +426,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__tabrow { align-self: flex-start; flex: none; }
     .pf-xt__tabs { flex: none; }
     .pf-xt__tab { height: 26px; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
-    .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-xt__panels { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
     .pf-xt__side--sheet {
@@ -486,9 +508,6 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-amt--in { color: var(--text-secondary); }
     .pf-xt__main ::ng-deep .pf-xt-amt--neg { color: var(--red-text, #dc2626); }
     .pf-xt__main ::ng-deep .pf-xt-num { font-variant-numeric: tabular-nums; text-align: right; display: block; }
-    .pf-xt__main ::ng-deep .pf-xt-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; color: var(--text-secondary); }
-    .pf-xt__main ::ng-deep .pf-xt-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-off, #cbd5e1); flex: none; }
-    .pf-xt__main ::ng-deep .pf-xt-status[data-closed='true'] .pf-xt-status__dot { background: var(--violet-text, #7c3aed); }
     .pf-xt__main ::ng-deep .pf-xt-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
     .pf-xt__main ::ng-deep .ag-cell.pf-xt-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-xt__main ::ng-deep .pf-xt-acts .pf-rowact--icon { width: 44px; height: 44px; }
@@ -500,6 +519,12 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--pf-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
     .pf-xt-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pf-xt-modal__backdrop { position: absolute; inset: 0; background: rgba(5, 5, 15, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    /* Below 1024px: the entries list scrolls inside the card; its head (count · Sort) stays on top (owner 2026-11-21). */
+    .pf-xt__grid-wrap:has(> .pf-xt__listscroll) { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .pf-xt__listhead { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
+    .pf-xt__listhead-n { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+    /* Phones: the last rows clear the floating Add-expense bar. */
+    @media (max-width: 640px) { .pf-xt__listscroll { padding-bottom: 96px; } }
     .pf-xt-modal__card { position: relative; width: 100%; max-width: 32rem; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; overflow-y: auto;
       border-radius: var(--pf-radius-card, 18px); background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); }
     .pf-xt-modal__head { display: flex; align-items: center; gap: 12px; }
@@ -541,6 +566,7 @@ export class ExpenseTrackerComponent {
   private readonly dialogs = inject(DialogService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router, { optional: true });
   protected readonly theme = inject(ThemeService);
 
   readonly today = labToday();
@@ -557,7 +583,8 @@ export class ExpenseTrackerComponent {
   readonly tab = computed<ExpenseTab>(() => {
     const p = this.tabPick();
     const list = this.tabs();
-    return p && list.includes(p) ? p : (list[0] ?? 'all');
+    // 'closing' is never a tab of its own any more: it opens the one day-close screen (a restored view state too).
+    return p && p !== 'closing' && list.includes(p) ? p : (list.find(t => t !== 'closing') ?? 'all');
   });
   readonly expenseTabOptions = computed<SegmentedOption<ExpenseTab>[]>(() =>
     this.tabs().map(t => ({ value: t, label: this.tabLabel[t] }))
@@ -652,37 +679,39 @@ export class ExpenseTrackerComponent {
     };
     if (this.isPhone) {
       return [
-        { colId: 'date', headerName: 'Day', width: 92, minWidth: 92, flex: 0, sort: 'desc',
-          valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '', false)) },
-        { colId: 'record', headerName: 'Entry', flex: 1, minWidth: 150, valueGetter: p => p.data?.description ?? '',
+        dateCol<ExpenseEntry>({ colId: 'date', headerName: 'Day', width: 92, minWidth: 92, flex: 0, sort: 'desc',
+          cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '', false)) }, r => r.date, 'left'),
+        textCol<ExpenseEntry>({ colId: 'record', headerName: 'Entry', flex: 1, minWidth: 150,
           cellRenderer: (p: { data?: ExpenseEntry }) => {
             const e = p.data; if (!e) return '';
             return `<div class="pf-xt-cell"><span>${this.esc(e.description)}</span>` +
               `<span class="pf-xt-cell__sub">${this.esc([e.kind === 'cash_in' ? 'Cash in' : e.categoryName, expenseModeLabel(e.paymentMode), e.paidTo].filter(Boolean).join(' · '))}</span>` +
               `${this.amountHtml(e)}${this.billsHtml(e)}</div>`;
-          } },
+          } }, r => [r.description, r.kind === 'cash_in' ? 'Cash in' : r.categoryName, expenseModeLabel(r.paymentMode), r.paidTo].filter(Boolean).join(' '), 'left', r => r.description),
         ...(canAdd ? [actions] : []),
       ];
     }
     const cols: ColDef<ExpenseEntry>[] = [
-      { colId: 'date', headerName: 'Date', width: 120, minWidth: 110, flex: 0, sort: 'desc',
-        valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '')) },
-      { colId: 'item', headerName: 'Item', flex: 1.6, minWidth: 180, valueGetter: p => p.data?.description ?? '',
+      dateCol<ExpenseEntry>({ colId: 'date', headerName: 'Date', width: 120, minWidth: 110, flex: 0, sort: 'desc',
+        cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '')) }, r => r.date, 'left'),
+      textCol<ExpenseEntry>({ colId: 'item', headerName: 'Item', flex: 1.6, minWidth: 180,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.description ?? '', [p.data?.paidTo, p.data?.notes].filter(Boolean).join(' · ')) },
-      { colId: 'category', headerName: 'Category', flex: 1, minWidth: 140,
-        valueGetter: p => (p.data?.kind === 'cash_in' ? expenseKindLabel('cash_in') : p.data?.categoryName) ?? '',
+        r => [r.description, r.paidTo, r.notes].filter(Boolean).join(' '), 'left', r => r.description),
+      valuesCol<ExpenseEntry>({ colId: 'category', headerName: 'Category', flex: 1, minWidth: 140,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.kind === 'cash_in' ? 'Cash in' : p.data?.categoryName ?? '') },
-      { colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0, valueGetter: p => expenseModeLabel(p.data?.paymentMode) },
+        r => (r.kind === 'cash_in' ? expenseKindLabel('cash_in') : r.categoryName) ?? '', WorkSetFilterComponent),
+      valuesCol<ExpenseEntry>({ colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0 },
+        r => expenseModeLabel(r.paymentMode) ?? '', WorkSetFilterComponent),
       // Pinned right (beside the row action): the money never scrolls out of
       // view when the grid is narrower than its columns (iPad + side card).
-      { colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned', pinned: 'right', lockPinned: true,
-        valueGetter: p => (p.data ? (p.data.kind === 'cash_in' ? p.data.amount : -p.data.amount) : 0),
+      moneyCol<ExpenseEntry>({ colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned', pinned: 'right', lockPinned: true,
         cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.amountHtml(p.data) : '') },
-      { colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0, sortable: false,
-        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.billsHtml(p.data) : '') },
-      { colId: 'by', headerName: 'Entered by', flex: 1, minWidth: 140, valueGetter: p => p.data?.createdByName ?? '',
+        r => (r.kind === 'cash_in' ? r.amount : -r.amount), 'right'),
+      numberCol<ExpenseEntry>({ colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0,
+        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.billsHtml(p.data) : '') }, r => r.attachments?.length ?? 0, 'left'),
+      textCol<ExpenseEntry>({ colId: 'by', headerName: 'Entered by', flex: 1, minWidth: 140,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.createdByName ?? '',
-          p.data ? formatDate(p.data.createdAt, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE) : '') },
+          p.data ? formatDate(p.data.createdAt, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE) : '') }, r => r.createdByName ?? ''),
     ];
     return canAdd ? [...cols, actions] : cols;
   });
@@ -691,8 +720,8 @@ export class ExpenseTrackerComponent {
     const web = !this.isCoarse && !this.isPhone;
     const b = this.book();
     const admin = this.can().isAdmin;
-    const status = (d?: ExpenseDay) => d ? `<span class="pf-xt-status" data-closed="${d.isClosed}"><span class="pf-xt-status__dot" aria-hidden="true"></span>${d.isClosed ? 'Closed' : 'Open'}</span>` +
-      (d.isClosed && d.closedByName ? `<span class="pf-xt-cell__sub">by ${this.esc(d.closedByName)}</span>` : '') : '';
+    // Phone card line: plain words (no pill / dot); the desktop Status column uses dayStatusWords.
+    const status = (d?: ExpenseDay) => d ? `<span class="pf-xt-cell__sub">${d.isClosed ? 'Closed' : 'Open'}${d.isClosed && d.closedByName ? ` · by ${this.esc(d.closedByName)}` : ''}</span>` : '';
     const num = (v: number | null | undefined, neg = false) => `<span class="pf-xt-num${neg && (v ?? 0) < 0 ? ' pf-xt-amt--neg' : ''}">${this.esc(inr(v ?? 0))}</span>`;
     const actions: ColDef<ExpenseDay> = {
       colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
@@ -711,34 +740,40 @@ export class ExpenseTrackerComponent {
     };
     if (this.isPhone) {
       return [
-        { colId: 'date', headerName: 'Day', flex: 1, minWidth: 140, valueGetter: p => p.data?.date ?? '',
+        dateCol<ExpenseDay>({ colId: 'date', headerName: 'Day', flex: 1, minWidth: 140,
           cellRenderer: (p: { data?: ExpenseDay }) => {
             const d = p.data; if (!d) return '';
             return `<div class="pf-xt-cell"><span>${this.esc(dayLabel(d.date))}</span>` +
               `<span class="pf-xt-cell__sub">Open ${this.esc(inr(d.opening))} · In ${this.esc(inr(d.cashIn))} · Out ${this.esc(inr(d.expenses))}</span>` +
               `<span>Close ${this.esc(inr(d.closing))}</span>${status(d)}</div>`;
-          } },
+          } }, r => r.date, 'left'),
         actions,
       ];
     }
     return [
-      { colId: 'date', headerName: 'Day', width: 140, minWidth: 130, flex: 0, valueGetter: p => p.data?.date ?? '',
-        cellRenderer: (p: { data?: ExpenseDay }) => this.cell(dayLabel(p.data?.date ?? ''), p.data ? plural(p.data.entryCount, 'entry', 'entries') : '') },
-      { colId: 'opening', headerName: 'Opening', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.opening ?? 0,
+      dateCol<ExpenseDay>({ colId: 'date', headerName: 'Day', width: 140, minWidth: 130, flex: 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => this.cell(dayLabel(p.data?.date ?? ''), p.data ? plural(p.data.entryCount, 'entry', 'entries') : '') }, r => r.date, 'left'),
+      moneyCol<ExpenseDay>({ colId: 'opening', headerName: 'Opening', flex: 1, minWidth: 120, type: 'rightAligned',
         cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell pf-xt-cell--end">${num(p.data?.opening)}${p.data?.openingSet ? '<span class="pf-xt-cell__sub">set by admin</span>' : ''}</div>` },
-      { colId: 'cashIn', headerName: 'Cash in', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.cashIn ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.cashIn) },
-      { colId: 'expenses', headerName: 'Expenses', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.expenses ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) },
-      { colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.closing ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) },
-      { colId: 'status', headerName: 'Status', width: 130, minWidth: 110, flex: 0, valueGetter: p => (p.data?.isClosed ? 'closed' : 'open'),
-        cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell">${status(p.data)}</div>` },
+        r => r.opening ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'cashIn', headerName: 'Cash in', flex: 1, minWidth: 110, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.cashIn) }, r => r.cashIn ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'expenses', headerName: 'Expenses', flex: 1, minWidth: 110, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) }, r => r.expenses ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) }, r => r.closing ?? 0, 'right'),
+      statusValuesCol<ExpenseDay>({ colId: 'status', headerName: 'Status', width: 140, minWidth: 120, flex: 0 },
+        dayStatusWords, r => (r.isClosed ? 1 : 0)),
       actions,
     ];
   });
 
   constructor() {
+    // Screen view state (owner 2026-11-21): tab, Day-closing day, search and every filter come back as left.
+    inject(ViewStateService).bind('expenses', {
+      tab: this.tabPick, closingDate: this.closingDate, q: this.q, quick: this.quick, from: this.from, to: this.to,
+      kind: this.kind, categoryId: this.categoryId, mode: this.mode, view: this.view,
+    });
     effect(() => {
       this.from(); this.to(); this.kind(); this.categoryId(); this.mode();
       if (this.tab() === 'closing') return;
@@ -765,16 +800,19 @@ export class ExpenseTrackerComponent {
   dayShort(ymd: string) { return dayLabel(ymd, false); }
 
   setTab(t: ExpenseTab) {
+    if (t === 'closing') { this.openClosing(this.closingDate()); return; }
     if (t === this.tab()) return;
     this.sheetOpen.set(false);
-    if (t !== 'closing') this.book.set(null);   // never flash the other scope's rows
+    this.book.set(null);   // never flash the other scope's rows
     this.tabPick.set(t);
   }
 
-  /** Open Day closing on a given IST day (the day book's Close / Reopen). */
+  /** Open Day closing on a given IST day (the tab, and the day book's Close / Reopen): THE day-close screen —
+   *  the same one Finance → Daily statement opens, on the same record (owner 2026-11-21: one day-close). */
   openClosing(date: string) {
     this.closingDate.set(date);
-    this.setTab('closing');
+    this.sheetOpen.set(false);
+    void this.router?.navigate(['/finance/daily'], { queryParams: { date } })?.catch(() => undefined);
   }
 
   filter(): ExpenseFilter {
@@ -826,6 +864,32 @@ export class ExpenseTrackerComponent {
     if (!files.length) return;
     this.sheetOpen.set(false);
     this.dialog.set({ entry: null, kind: 'expense', date: null, files });
+  }
+
+  /** Below 1024px the entries are the shared work list (owner 2026-11-21). */
+  readonly listMode = mediaSignal(WORK_LIST_MQ);
+  /** The list's Sort chip: the grid headers' sorts (Date, Amount, Item), both directions. */
+  readonly entrySortOptions = columnSortOptions([{ id: 'date', label: 'Date', first: 'desc' }, { id: 'amount', label: 'Amount', first: 'desc' }, { id: 'item', label: 'Item' }]);
+  readonly entrySort = signal<string | null>(null);
+  readonly entryItems = computed<WorkListItem<ExpenseEntry>[]>(() => sortItems(this.visibleEntries(), this.entrySort(), {
+    date: e => e.date + (e.createdAt ?? ''), amount: e => e.amount, item: e => e.description,
+  }).map(e => {
+    const bills = e.attachments.length;
+    return {
+      id: e.id, name: e.description || '—',
+      facts: [dayLabel(e.date), e.categoryName ?? null, e.paymentMode.toUpperCase(), e.paidTo ?? null, e.createdByName],
+      status: { now: e.kind === 'cash_in' ? 'Cash in' : 'Expense', detail: bills ? plural(bills, 'bill') : null, tone: 'normal' },
+      time: { text: (e.kind === 'cash_in' ? '+' : '') + inr(e.amount) },
+      primary: e.canEdit ? { id: 'edit', label: 'Edit', aria: `Edit ${e.description}` } : bills ? { id: 'bills', label: 'Bills', aria: `Bills for ${e.description}` } : null,
+      more: e.canEdit && bills ? [{ id: 'bills', label: 'View bills' }] : [],
+      noAction: !e.canEdit && !bills, data: e,
+    };
+  }));
+  openEntry(e: ExpenseEntry | undefined, act: string | null): void {
+    if (!e) return;
+    if (act === 'bills') this.billsFor.set(e);
+    else if (act === 'edit' || (!act && e.canEdit)) this.dialog.set({ entry: e, kind: e.kind, date: e.date });
+    else if (!act && e.attachments.length) this.billsFor.set(e);
   }
 
   onEntryClicked(ev: CellClickedEvent<ExpenseEntry>) {

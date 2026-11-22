@@ -1,3 +1,4 @@
+import { GRID_SIZE, GRID_TOUCH_PART } from '../../admin/tests/tests/grid-theme';
 import { DestroyRef } from '@angular/core';
 import { colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community';
 import type { OpdDoctorPriceRow, OpdFormListRow, OpdServiceRow } from './opd-admin.api';
@@ -7,11 +8,11 @@ import type { OpdDoctorPriceRow, OpdFormListRow, OpdServiceRow } from './opd-adm
  * Grid themes: the SAME params as Test Master (features/admin/tests/tests/
  * grid-theme.ts) — Noto via inherit, 44px rows, violet accent.
  */
-export const opdGridLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#7c3aed',
+export const opdGridLight = themeQuartz.withPart(colorSchemeLight).withPart(GRID_TOUCH_PART).withParams({
+  fontFamily: 'inherit', fontSize: 13, ...GRID_SIZE, borderRadius: 12, accentColor: '#7c3aed',
 });
-export const opdGridDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#a855f7',
+export const opdGridDark = themeQuartz.withPart(colorSchemeDark).withPart(GRID_TOUCH_PART).withParams({
+  fontFamily: 'inherit', fontSize: 13, ...GRID_SIZE, borderRadius: 12, accentColor: '#a855f7',
 });
 
 /** A reactive media query (current match; `on` fires on change until destroy). */

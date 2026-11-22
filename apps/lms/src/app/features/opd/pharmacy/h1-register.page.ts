@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
@@ -11,6 +12,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
 import { PharmacyApi, type H1Row } from './pharmacy.api';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { errText } from './pharmacy-math';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
 
@@ -95,21 +97,7 @@ export class PharmacyH1RegisterPage {
   });
   // Statutory column order (GSR 588(E), Rule 65): serial, date, prescriber
   // name + reg. no. + address, patient name + address, drug, batch, qty.
-  protected readonly cols: ColDef<H1Row>[] = [
-    { field: 'serial', headerName: 'Sl. no.', width: 90, type: 'rightAligned' },
-    { field: 'at', headerName: 'Date', width: 150, valueFormatter: p => new Date(p.value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) },
-    { field: 'dispenseNumber', headerName: 'Bill no.', width: 140 },
-    { field: 'drugName', headerName: 'Drug', flex: 1.5, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'schedule', headerName: 'Sch', width: 70 },
-    { field: 'batchNo', headerName: 'Batch', width: 110 },
-    { field: 'qty', headerName: 'Qty', width: 80, type: 'rightAligned' },
-    { field: 'patientName', headerName: 'Patient', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'patientAddress', headerName: 'Patient address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'prescriberName', headerName: 'Prescriber', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'prescriberRegNo', headerName: 'Reg. no.', width: 130 },
-    { field: 'prescriberAddress', headerName: 'Prescriber address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'byName', headerName: 'Pharmacist', width: 140 },
-  ];
+  protected readonly cols: ColDef<H1Row>[] = h1Columns();
 
   constructor() { this.load(); }
   private load() {
@@ -135,4 +123,28 @@ export class PharmacyH1RegisterPage {
       error: e => { this.exporting.set(false); this.toast.error(errText(e, 'Export failed.')); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.h1', { from: this.from, to: this.to, q: this.q, reg: this.reg });
+}
+
+/** The H1 register's columns: all sort and filter on the real value (date = time, Sl. no. / Qty = numbers). */
+export function h1Columns(): ColDef<H1Row>[] {
+  const fmt = (v: unknown) => (v ? new Date(v as string).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+  return [
+    numberCol<H1Row>({ field: 'serial', headerName: 'Sl. no.', width: 90, type: 'rightAligned' }, r => r.serial ?? null, 'right'),
+    dateCol<H1Row>({ field: 'at', headerName: 'Date', width: 150, valueFormatter: p => fmt(p.data?.at) }, r => r.at, 'left'),
+    textCol<H1Row>({ field: 'dispenseNumber', headerName: 'Bill no.', width: 140 }, r => r.dispenseNumber ?? ''),
+    textCol<H1Row>({ field: 'drugName', headerName: 'Drug', flex: 1.5, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.drugName ?? ''),
+    textCol<H1Row>({ field: 'schedule', headerName: 'Sch', width: 70 }, r => r.schedule ?? ''),
+    textCol<H1Row>({ field: 'batchNo', headerName: 'Batch', width: 110 }, r => r.batchNo ?? ''),
+    numberCol<H1Row>({ field: 'qty', headerName: 'Qty', width: 80, type: 'rightAligned' }, r => r.qty ?? null, 'right'),
+    textCol<H1Row>({ field: 'patientName', headerName: 'Patient', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.patientName ?? ''),
+    textCol<H1Row>({ field: 'patientAddress', headerName: 'Patient address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.patientAddress ?? ''),
+    textCol<H1Row>({ field: 'prescriberName', headerName: 'Prescriber', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.prescriberName ?? ''),
+    textCol<H1Row>({ field: 'prescriberRegNo', headerName: 'Reg. no.', width: 130 }, r => r.prescriberRegNo ?? ''),
+    textCol<H1Row>({ field: 'prescriberAddress', headerName: 'Prescriber address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.prescriberAddress ?? ''),
+    textCol<H1Row>({ field: 'byName', headerName: 'Pharmacist', width: 140 }, r => r.byName ?? ''),
+  ];
 }

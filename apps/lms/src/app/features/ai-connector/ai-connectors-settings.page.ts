@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { SettingRowComponent } from '../../shared/components/setting-row/setting-row.component';
@@ -50,7 +51,7 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'connect';
 @Component({
   selector: 'pf-ai-connectors-settings',
   standalone: true,
-  imports: [HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent, SelectComponent, SettingRowComponent, NgTemplateOutlet],
+  imports: [SkelSettingRowsComponent, HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent, SelectComponent, SettingRowComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Test Master's frame (owner 2026-11-17): band = back + search pill; ONE main card whose head carries the categories
@@ -66,7 +67,7 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'connect';
       <div class="pf-band-body">
         <ng-template #aicBody>
           @if (skeleton()) {
-            <pf-skeleton-form [fields]="3" [cols]="1" label="Loading AI connector…"></pf-skeleton-form>
+            <pf-skel-setting-rows [rows]="3" label="Loading AI connector…"></pf-skel-setting-rows>
           } @else if (loadError()) {
             <div class="pf-aic__err" role="alert">
               <p>Couldn’t load the AI connector setting. Check your connection and try again.</p>

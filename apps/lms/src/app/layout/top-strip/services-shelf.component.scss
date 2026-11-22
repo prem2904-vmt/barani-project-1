@@ -1,0 +1,21 @@
+@use 'sass:meta';
+
+/* The Drafts shelf's ONE stylesheet (chips, head, +N, aria-current look, 44px touch hit box, hidden < 768px). */
+@include meta.load-css('shelf');
+
+/* Services shelf additions only. */
+.pf-svcshelf__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-tertiary, var(--text-muted));
+}
+.pf-draftshelf__chip[aria-current] .pf-svcshelf__n { color: inherit; }
+/* Late items in this service: a small rose dot (never amber / yellow). */
+.pf-draftshelf__dot.pf-svcshelf__late {
+  background: var(--red-text, #e11d48);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red-text, #e11d48) 16%, transparent);
+}
+:host-context(.dark) .pf-draftshelf__dot.pf-svcshelf__late {
+  background: var(--red-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red-text) 18%, transparent);
+}

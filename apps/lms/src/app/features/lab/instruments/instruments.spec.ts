@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { INSTRUMENT_BRIDGE_SOURCE } from '../../../shared/instruments/instrument-bridge.service';
 import type { ElectronInstrumentsApi, InstrumentDto, ListenEvent } from '../../../shared/instruments/instrument.models';
 import { emptyInstrumentForm, buildInstrumentConfig } from '../../../shared/instruments/instrument-config';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { InstrumentsListComponent, searchInstruments } from './instruments-list.component';
 import { InstrumentEditorComponent } from './instrument-editor.component';
 import { SETTINGS_SECTIONS } from '../../admin/settings/settings-map';
@@ -94,13 +95,14 @@ describe('Instruments list', () => {
     expect(p.cmp.statusCounts().map((s: { label: string; n: number; tone: string }) => [s.label, s.n, s.tone])).toEqual([
       ['Online', 1, 'green'], ['Waiting for analyzer', 1, 'amber'], ['Error', 1, 'red'], ['Connector running', 1, 'neutral'],
     ]);
-    const cells = Array.from(p.el.querySelectorAll('.pf-inl__main .pf-inl-status'))
-      .map((c) => Array.from(c.closest('.pf-inl-cell')!.children).map((x) => x.textContent!.trim()).join(' '));
+    // Status = two lines of words (design D): "Online" / "connected from …".
+    const cells = Array.from(p.el.querySelectorAll('.pf-inl__main pf-status-words'))
+      .map((c) => Array.from(c.children).map((x) => x.textContent!.trim()).join(' '));
     expect(cells).toContain('Online connected from 192.168.1.21 · last data 2 min ago');
     expect(cells).toContain('Waiting for analyzer listening on port 5604');
     expect(cells.find((c) => c.startsWith('Error'))).toContain('Port 5600 is used by CBCLisM51 (PID 7412)');
     // No green dot for anything that isn't really connected.
-    expect(p.el.querySelectorAll('.pf-inl__main .pf-inl-status[data-tone="green"]').length).toBe(1);
+    expect(p.el.querySelectorAll('.pf-inl__main pf-status-words[data-tone="done"]').length).toBe(1);
   });
 
   it('"Connect an analyzer" shows on the desktop app with the setup helper (a secondary — no violet primary in Settings)', async () => {
@@ -349,5 +351,18 @@ describe('Instrument editor — web vs Electron', () => {
     expect(p.el.querySelectorAll('.pf-ie-img').length).toBe(0);
     expect(p.el.querySelector('.pf-ie-imgs__empty')!.textContent).toContain('No graphs received');
     expect(p.el.querySelector('img[src*="analyzer-samples"]')).toBeNull();
+  });
+});
+
+describe('Instruments grid — every data column sorts and filters on its real value', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  it('name / connection / status / unmatched sort + filter; actions is exempt', async () => {
+    const p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []) });
+    await flush(); p.f.detectChanges();
+    const cols = p.cmp.colDefs() as any[];
+    const data = cols.filter((c) => c.colId !== 'actions');
+    expect(data.map((c) => c.colId)).toEqual(['name', 'connection', 'status', 'unmatched']);
+    for (const c of data) expect(sortsAndFilters(c), c.colId).toBe(true);
+    expect(cols.find((c) => c.colId === 'actions').sortable).toBe(false);
   });
 });

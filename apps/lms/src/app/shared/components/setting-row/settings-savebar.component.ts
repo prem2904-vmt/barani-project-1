@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output } from '@angular/core';
 import { BusyDirective } from '../../directives/busy.directive';
 import { SettingsSaveService } from '../../utils/settings-save';
+import { NO_CHANGES_TITLE } from '../../utils/save-state';
 
 /** The Save no longer sits at the bottom (band corner): floating banners need no clearance. Kept for callers. */
 export function publishSavebarClearance(): void {
@@ -28,6 +29,7 @@ export function publishSavebarClearance(): void {
           <button type="button" class="pf-btn pf-btn--tertiary pf-ssb__btn" data-testid="savebar-discard" [disabled]="saving()" (click)="discard.emit()">Discard</button>
         }
         <button type="button" class="pf-btn pf-btn--secondary pf-ssb__btn" [attr.data-testid]="saveTestId()" [disabled]="saving() || !canSave()"
+                [pfBusyInactive]="saving() || !canSave()"
                 [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save.emit()">{{ saving() ? 'Saving…' : 'Save' }}</button>
       </div>
     }
@@ -91,12 +93,16 @@ export class SettingsSavebarComponent {
         @if (svc.dirty() || svc.saving()) {
           <span class="pf-ssv__state" role="status" data-testid="unsaved-state"><span class="pf-ssv__dot" aria-hidden="true"></span>Unsaved changes</span>
           @if (svc.canDiscard()) {
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ssv__discard press" data-testid="savebar-discard" [disabled]="svc.saving()" (click)="svc.discardAll()">Discard</button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ssv__discard press" data-testid="savebar-discard" aria-label="Discard changes" title="Discard changes" [disabled]="svc.saving()" (click)="svc.discardAll()">
+              <!-- Phones keep only the icon of a band button: without one this was an empty square. -->
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              Discard</button>
           }
         }
         <!-- The band's ONE primary (owner 2026-11-17: Save is the violet primary, normal band size, every Settings page). -->
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ssv__save press" [attr.data-testid]="svc.testId()" [attr.aria-label]="svc.saveLabel()"
-                [disabled]="svc.saving() || !svc.canSave()" [pfBusy]="svc.saving()" pfBusyLabel="Saving…" (click)="svc.saveAll()">
+                [disabled]="svc.saving() || !svc.canSave()" [pfBusyInactive]="svc.saving() || !svc.canSave()"
+                [title]="svc.saving() || svc.canSave() ? svc.saveLabel() : NO_CHANGES" [pfBusy]="svc.saving()" pfBusyLabel="Saving…" (click)="svc.saveAll()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
           {{ svc.saving() ? (svc.mode() === 'approval' ? 'Sending…' : 'Saving…') : svc.saveLabel() }}
         </button>
@@ -116,4 +122,5 @@ export class SettingsSavebarComponent {
 })
 export class SettingsSaveComponent {
   protected readonly svc = inject(SettingsSaveService);
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
 }

@@ -10,6 +10,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 
 /** Culture tiles in the new design match the other My Work tiles (owner):
  *  no stripe, sample ID primary, next step as a neutral chip, quiet chevron. */
+let fixture: { detectChanges(): void } | null = null;
 function render(newDesign: boolean) {
   (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
   const cases = [{
@@ -29,21 +30,44 @@ function render(newDesign: boolean) {
   });
   const f = TestBed.createComponent(CulturePanelComponent);
   f.detectChanges();
+  fixture = f;
   return f.nativeElement as HTMLElement;
 }
 
+afterEach(() => TestBed.resetTestingModule());
+
 describe('Culture tiles — new design', () => {
-  it('have no left stripe and the sample ID as the primary line', () => {
+  it('the new design draws the culture cases on the work GRID (owner 2026-11-20) — sample ID, full name, test · department, next step, Due, Open', async () => {
     const el = render(true);
-    const tile = el.querySelector('li.pf-cc')!;
-    expect(tile.classList.contains('pf-cc--nd')).toBe(true);
-    expect(tile.querySelector('.pf-cc__cap')).toBeNull();
-    const main = tile.querySelector('.pf-cc__main')!;
-    expect(main.querySelector('.pf-cc__id')?.textContent?.trim()).toBe('MICRO26001');
-    expect(main.querySelector('.pf-cc__who')?.textContent?.trim()).toBe('Mrs. Shanthi M');
-    expect(main.querySelector('.pf-cc__sub')?.textContent).toContain('Bacterial Culture & Sensitivity');
-    expect(tile.querySelector('.pf-cc__now')?.textContent).toContain('Next: Gram / Direct smear');
-    expect(tile.querySelector('svg.pf-cc__chev')).toBeTruthy();
+    for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 40)); fixture!.detectChanges(); }
+    expect(el.querySelector('li.pf-cc')).toBeNull();
+    expect(el.querySelector('pf-data-grid[data-testid="cg-grid"]')).not.toBeNull();
+    const row = el.querySelector('.ag-row.cg-row')!;
+    expect(row.querySelector('.wg-id')?.textContent?.trim()).toBe('MICRO26001');
+    expect(row.querySelector('.wg-who__name')?.textContent?.trim()).toBe('Mrs. Shanthi M');
+    expect(row.textContent).toContain('Bacterial Culture & Sensitivity · Microbiology');
+    expect(row.querySelector('.cg-next .pf-sw__now')?.textContent?.trim()).toBe('Gram / Direct smear');
+    expect(row.querySelector('.cg-next .pf-sw__detail')?.textContent?.trim()).toBe('Not started');
+    expect(row.querySelector('.wg-pill')).toBeNull();
+    expect(row.querySelector('[data-action="bench"]')?.textContent?.trim()).toBe('Open');
+    expect(row.querySelector('pf-journey-ring')).toBeNull();   // Due instead of a journey ring (owner 2026-11-21)
+    expect(row.querySelector('.cg-due')?.textContent?.trim()).toBe('—');
+    (row.querySelector('[data-action="bench"]') as HTMLElement).click();
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/lab/culture', 'ot-1']);
+  });
+
+  it('every data column sorts AND filters on its real value (owner 2026-11-21); Open never', async () => {
+    render(true);
+    const c = (fixture as unknown as { componentInstance: CulturePanelComponent }).componentInstance;
+    const by = Object.fromEntries(c.cols().map(d => [d.colId, d]));
+    for (const k of ['sample', 'patient', 'test', 'day', 'next', 'due']) {
+      expect(by[k].sortable, k).toBe(true);
+      expect(by[k].sortingOrder, k).toEqual(['asc', 'desc', null]);
+      expect(typeof by[k].comparator, k).toBe('function');
+      expect(by[k].filter, k).toBeTruthy();
+    }
+    expect(by['acts'].sortable).toBe(false);
+    expect(by['due'].filter).toBe('agNumberColumnFilter');
   });
 
   it('classic keeps its stripe and arrow', () => {

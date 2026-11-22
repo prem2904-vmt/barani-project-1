@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
@@ -457,4 +458,8 @@ export class MyHomeCollectionsComponent implements OnInit {
     if (s === 'completed') return 'Completed';
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('home-collections', { query: this.query, status: this.statusFilter });
 }

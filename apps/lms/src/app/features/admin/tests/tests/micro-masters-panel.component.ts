@@ -1,15 +1,19 @@
+import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef, ValueGetterParams } from 'ag-grid-community';
+import { ColDef } from 'ag-grid-community';
 import { RowClickedEvent } from 'ag-grid-community';
+import { numberCol, textCol, valuesCol } from '../../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../../shared/components/work-set-filter/work-set-filter.component';
 import { ApiService } from '../../../../core/services/api.service';
 import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/select.component';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
-import { SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { TM_NARROW, TM_TWO_PANEL_STYLES, mediaSignal } from './tm-two-panel';
 
@@ -39,7 +43,64 @@ interface Breakpoint {
   urineOnly?: boolean; enabled?: boolean; organism?: string | null;
 }
 
-type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
+export type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
+
+const YES_NO = (b: boolean | null | undefined): string => (b ? 'Yes' : 'No');
+const yesNoCell = (p: { value?: unknown }) => (p.value === true || p.value === 'Yes' ? 'Yes' : '—');
+
+/** The four reference grids' columns. Every data column sorts and filters on its real value (work-grid helpers);
+ *  the yes/no flags are a Yes / No set filter, the S / R cut-offs sort as numbers. */
+export function microColumns(section: MasterKey, iWindow: (s: number, r: number) => string): ColDef[] {
+  const t = <T>(def: ColDef, get: (r: T) => string | null | undefined) => textCol<T>(def as ColDef<T>, r => get(r) ?? '') as ColDef;
+  const yn = <T>(def: ColDef, get: (r: T) => boolean | null | undefined) =>
+    valuesCol<T>({ ...(def as ColDef<T>), cellRenderer: yesNoCell }, r => YES_NO(get(r)), WorkSetFilterComponent, 'left', r => (get(r) ? 0 : 1)) as ColDef;
+  const n = <T>(def: ColDef, get: (r: T) => number | null | undefined) => numberCol<T>(def as ColDef<T>, r => get(r) ?? null, 'left') as ColDef;
+  switch (section) {
+    case 'specimens': return [
+      t<MicroSpecimen>({ headerName: 'Specimen', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true }, r => r.name),
+      t<MicroSpecimen>({ headerName: 'Category', field: 'category', minWidth: 130 }, r => r.category),
+      t<MicroSpecimen>({ headerName: 'Site', field: 'site', minWidth: 140 }, r => r.site),
+      t<MicroSpecimen>({ headerName: 'Container', field: 'container', minWidth: 160 }, r => r.container),
+      t<MicroSpecimen>({ headerName: 'Transport', field: 'transport', minWidth: 140 }, r => r.transport),
+      t<MicroSpecimen>({ headerName: 'Suitable for', field: 'suitableFor', minWidth: 220, flex: 1.6 }, r => r.suitableFor),
+    ];
+    case 'organisms': return [
+      t<MicroOrganism>({ headerName: 'Organism', field: 'name', minWidth: 210, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true }, r => r.name),
+      t<MicroOrganism>({ headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 120 }, r => r.shortName),
+      t<MicroOrganism>({ headerName: 'Group', field: 'group', minWidth: 160 }, r => r.group),
+      t<MicroOrganism>({ headerName: 'Gram', field: 'gram', minWidth: 130 }, r => r.gram),
+      t<MicroOrganism>({ headerName: 'Significance', field: 'significance', minWidth: 130 }, r => r.significance),
+      yn<MicroOrganism>({ headerName: 'AST', field: 'astApplicable', minWidth: 85, maxWidth: 100 }, r => r.astApplicable),
+    ];
+    case 'antibiotics': return [
+      t<MicroAntibiotic>({ headerName: 'Antibiotic', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true }, r => r.name),
+      t<MicroAntibiotic>({ headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 110 }, r => r.shortName),
+      t<MicroAntibiotic>({ headerName: 'Class', field: 'abxClass', minWidth: 160 }, r => r.abxClass),
+      t<MicroAntibiotic>({ headerName: 'Group', field: 'drugGroup', minWidth: 150 }, r => r.drugGroup),
+      yn<MicroAntibiotic>({ headerName: 'AST', field: 'astApplicable', minWidth: 85, maxWidth: 100 }, r => r.astApplicable),
+      yn<MicroAntibiotic>({ headerName: 'Disk', field: 'diskDiffusion', minWidth: 85, maxWidth: 100 }, r => r.diskDiffusion),
+      yn<MicroAntibiotic>({ headerName: 'MIC', field: 'micTesting', minWidth: 85, maxWidth: 100 }, r => r.micTesting),
+      t<MicroAntibiotic>({ headerName: 'Reporting', field: 'reportingCategory', minWidth: 130 }, r => r.reportingCategory),
+    ];
+    default: return [
+      t<Breakpoint>({ headerName: 'Organism group', field: 'organismGroup', minWidth: 170, flex: 1.1, sort: 'asc' }, r => r.organismGroup),
+      t<Breakpoint>({ headerName: 'Antibiotic', field: 'antibiotic', minWidth: 200, flex: 1.4, wrapText: true, autoHeight: true }, r => r.antibiotic),
+      t<Breakpoint>({ headerName: 'Short', field: 'shortLabel', minWidth: 90, maxWidth: 110 }, r => r.shortLabel),
+      t<Breakpoint>({ headerName: 'Disk', field: 'diskLabel', minWidth: 95, maxWidth: 115 }, r => r.diskLabel),
+      n<Breakpoint>({ headerName: 'S ≥ mm', field: 'susceptibleMin', minWidth: 85, maxWidth: 100,
+        cellStyle: { color: '#34d399', fontWeight: '600' } }, r => r.susceptibleMin),
+      t<Breakpoint>({ headerName: 'I mm', colId: 'zoneI', minWidth: 85, maxWidth: 105, cellStyle: { color: '#fbbf24', fontWeight: '600' } },
+        r => r.zoneI ?? (r.susceptibleMin != null && r.resistantMax != null ? iWindow(r.susceptibleMin, r.resistantMax) : '')),
+      n<Breakpoint>({ headerName: 'R ≤ mm', field: 'resistantMax', minWidth: 85, maxWidth: 100,
+        cellStyle: { color: '#f87171', fontWeight: '600' } }, r => r.resistantMax),
+      t<Breakpoint>({ headerName: 'MIC S', field: 'micS', minWidth: 85, maxWidth: 110, cellStyle: { color: '#34d399', fontWeight: '500' } }, r => r.micS),
+      t<Breakpoint>({ headerName: 'MIC I', field: 'micI', minWidth: 85, maxWidth: 110, cellStyle: { color: '#fbbf24', fontWeight: '500' } }, r => r.micI),
+      t<Breakpoint>({ headerName: 'MIC R', field: 'micR', minWidth: 85, maxWidth: 110, cellStyle: { color: '#f87171', fontWeight: '500' } }, r => r.micR),
+      yn<Breakpoint>({ headerName: 'Urine', field: 'urineOnly', minWidth: 80, maxWidth: 95 }, r => r.urineOnly),
+      valuesCol<Breakpoint>({ headerName: 'Origin', colId: 'origin', minWidth: 95, maxWidth: 115 }, r => (r.tenant ? 'Lab' : 'CLSI Ed36'), WorkSetFilterComponent) as ColDef,
+    ];
+  }
+}
 
 /** The editor's working copy — a superset of all four masters' fields. */
 interface EdModel {
@@ -65,7 +126,7 @@ interface EdModel {
 @Component({
   selector: 'pf-micro-masters-panel',
   standalone: true,
-  imports: [AgGridAngular, FormsModule, SelectComponent, BusyDirective, SkeletonTableComponent],
+  imports: [...SKELETON_FRAME, AgGridAngular, FormsModule, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-mm">
@@ -116,7 +177,7 @@ interface EdModel {
           <div class="pf-2p__body">
             @if (listSkeleton()) {
               <!-- First load of the masters: the grid's shape (PF-PATTERN "Loading feedback"). -->
-              <pf-skeleton-table class="pf-2p__skel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
+              <pf-skel-grid class="pf-2p__skel" [rows]="30" [columns]="4" label="Loading microbiology masters…"></pf-skel-grid>
             }
             <ag-grid-angular
               class="pf-2p__grid"
@@ -148,7 +209,9 @@ interface EdModel {
                   </button>
                 }
                 
-                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
+                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid() || !edChanged()"
+                        [pfBusyInactive]="saving() || deleting() || !edValid() || !edChanged()" [title]="edChanged() || saving() ? 'Save' : NO_CHANGES"
+                        [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
                   {{ saving() ? 'Saving…' : 'Save' }}
                 </button>
                 <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
@@ -434,59 +497,10 @@ export class MicroMastersPanelComponent implements OnInit {
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
 
-  readonly columnDefs = computed<ColDef[]>(() => {
-    switch (this.section()) {
-      case 'specimens': return [
-        { headerName: 'Specimen', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc' },
-        { headerName: 'Category', field: 'category', minWidth: 130 },
-        { headerName: 'Site', field: 'site', minWidth: 140 },
-        { headerName: 'Container', field: 'container', minWidth: 160 },
-        { headerName: 'Transport', field: 'transport', minWidth: 140 },
-        { headerName: 'Suitable for', field: 'suitableFor', minWidth: 220, flex: 1.6 },
-      ];
-      case 'organisms': return [
-        { headerName: 'Organism', field: 'name', minWidth: 210, flex: 1.4, sort: 'asc' },
-        { headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 120 },
-        { headerName: 'Group', field: 'group', minWidth: 160 },
-        { headerName: 'Gram', field: 'gram', minWidth: 130 },
-        { headerName: 'Significance', field: 'significance', minWidth: 130 },
-        { headerName: 'AST', field: 'astApplicable', minWidth: 85, maxWidth: 100, cellRenderer: this.yesNo },
-      ];
-      case 'antibiotics': return [
-        { headerName: 'Antibiotic', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc' },
-        { headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 110 },
-        { headerName: 'Class', field: 'abxClass', minWidth: 160 },
-        { headerName: 'Group', field: 'drugGroup', minWidth: 150 },
-        { headerName: 'AST', field: 'astApplicable', minWidth: 85, maxWidth: 100, cellRenderer: this.yesNo },
-        { headerName: 'Disk', field: 'diskDiffusion', minWidth: 85, maxWidth: 100, cellRenderer: this.yesNo },
-        { headerName: 'MIC', field: 'micTesting', minWidth: 85, maxWidth: 100, cellRenderer: this.yesNo },
-        { headerName: 'Reporting', field: 'reportingCategory', minWidth: 130 },
-      ];
-      default: return [
-        { headerName: 'Organism group', field: 'organismGroup', minWidth: 170, flex: 1.1, sort: 'asc' },
-        { headerName: 'Antibiotic', field: 'antibiotic', minWidth: 200, flex: 1.4 },
-        { headerName: 'Short', field: 'shortLabel', minWidth: 90, maxWidth: 110 },
-        { headerName: 'Disk', field: 'diskLabel', minWidth: 95, maxWidth: 115 },
-        { headerName: 'S ≥ mm', field: 'susceptibleMin', minWidth: 85, maxWidth: 100,
-          cellStyle: { color: '#34d399', fontWeight: '600' } },
-        { headerName: 'I mm', minWidth: 85, maxWidth: 105, cellStyle: { color: '#fbbf24', fontWeight: '600' },
-          valueGetter: (p: ValueGetterParams<Breakpoint>) => p.data?.zoneI
-            ?? (p.data?.susceptibleMin != null && p.data?.resistantMax != null
-                ? this.iWindow(p.data.susceptibleMin, p.data.resistantMax) : '') },
-        { headerName: 'R ≤ mm', field: 'resistantMax', minWidth: 85, maxWidth: 100,
-          cellStyle: { color: '#f87171', fontWeight: '600' } },
-        { headerName: 'MIC S', field: 'micS', minWidth: 85, maxWidth: 110, cellStyle: { color: '#34d399', fontWeight: '500' } },
-        { headerName: 'MIC I', field: 'micI', minWidth: 85, maxWidth: 110, cellStyle: { color: '#fbbf24', fontWeight: '500' } },
-        { headerName: 'MIC R', field: 'micR', minWidth: 85, maxWidth: 110, cellStyle: { color: '#f87171', fontWeight: '500' } },
-        { headerName: 'Urine', field: 'urineOnly', minWidth: 80, maxWidth: 95, cellRenderer: this.yesNo },
-        { headerName: 'Origin', minWidth: 95, maxWidth: 115,
-          valueGetter: (p: ValueGetterParams<Breakpoint>) => p.data?.tenant ? 'Lab' : 'CLSI Ed36' },
-      ];
-    }
-  });
+  readonly columnDefs = computed<ColDef[]>(() => microColumns(this.section(), (a, b) => this.iWindow(a, b)));
 
   /** "Yes"/dash — quieter than checkboxes in a read-only reference grid. */
-  private readonly yesNo = (p: { value?: unknown }) => (p.value === true ? 'Yes' : '—');
+  private readonly yesNo = (p: { value?: unknown }) => (p.value === true || p.value === 'Yes' ? 'Yes' : '—');
 
   // ── Organism detail: its AST panel mapping ────────────────────────
   readonly selOrg = signal<MicroOrganism | null>(null);
@@ -538,11 +552,17 @@ export class MicroMastersPanelComponent implements OnInit {
       ? { astApplicable: true, diskDiffusion: true, micTesting: false }
       : kind === 'organisms' ? { astApplicable: true } : {};
     this.editor.set({ kind, isNew: true, model });
+    this.edSnap.mark();
   }
   startEdit(kind: MasterKey, row: EdModel) {
     this.selOrg.set(null);
     this.editor.set({ kind, isNew: false, model: { ...row } });
+    this.edSnap.mark();
   }
+  /** Save only when the row differs from how it opened (owner 2026-11-19). */
+  private readonly edSnap = dirtySnapshot(() => this.editor()?.model ?? null);
+  readonly edChanged = this.edSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   patchEd(field: string, value: unknown) {
     const ed = this.editor();
     if (ed) this.editor.set({ ...ed, model: { ...ed.model, [field]: value } as EdModel });

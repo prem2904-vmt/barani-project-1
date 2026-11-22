@@ -12,6 +12,8 @@ import {
 import { sortByDailySerial } from '../frontdesk-landing/work-merge';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { OutsourcedActionsComponent } from './outsourced-actions.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WorkListItem } from '../../../shared/components/work-list/work-list';
 
 /**
  * Frontdesk "Outsourced" tab body. One row per outsourced tube: sample ID,
@@ -30,7 +32,7 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
 @Component({
   selector: 'pf-outsourced-list',
   standalone: true,
-  imports: [DatePipe, SegmentedComponent, SelectComponent, SkeletonRowsComponent, DailyNoComponent, OutsourcedActionsComponent],
+  imports: [DatePipe, WorkListComponent, SegmentedComponent, SelectComponent, SkeletonRowsComponent, DailyNoComponent, OutsourcedActionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showFilters()) {
@@ -49,6 +51,19 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
         <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
         <p class="pf-empty__title">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
       </div>
+    } @else if (!showFilters()) {
+      <!-- New design: the ONE shared work list (owner 2026-11-21) — divider rows, status in words, the upload /
+           view control at the right edge. No pills inside rows. -->
+      <pf-work-list class="pf-wl-scroll" data-testid="out-list" label="Outsourced tests" [items]="items()" [actionTpl]="outActs" />
+      <ng-template #outActs let-it><pf-outsourced-actions [tube]="it.data" [compact]="true" /></ng-template>
+      @if (svc.hasMore()) {
+      <div class="pf-out__more">
+        <button type="button" class="pf-btn pf-btn--secondary pf-out__more-btn press"
+                [disabled]="svc.loadingMore()" [attr.aria-busy]="svc.loadingMore()" (click)="loadMore()">
+          @if (svc.loadingMore()) { Loading… } @else { Load {{ svc.nextCount() }} more }
+        </button>
+      </div>
+      }
     } @else {
       <ul class="pf-out__list" aria-label="Outsourced tests">
         @for (r of shown(); track r.sampleId) {
@@ -58,6 +73,9 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
               <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="pf-num">{{ r.orderNumber ?? '' }}</span></p>
               <p class="pf-out__tests">{{ testNames(r) }}</p>
             </div>
+            <!-- Chips + the upload button share ONE line (owner 2026-11-20): the button sits at the
+                 right end of the chip row, never alone on a row of its own. -->
+            <div class="pf-out__line">
             <div class="pf-out__meta">
               <span class="pf-chip pf-chip--static pf-out__partner">{{ r.partnerLabName ?? 'Partner lab' }}</span>
               <span class="pf-out__date">
@@ -87,6 +105,7 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
             <div class="pf-out__acts">
               <pf-outsourced-actions [tube]="r" />
             </div>
+            </div>
           </li>
         }
       </ul>
@@ -115,16 +134,14 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
     .pf-out__sample { font-size: 16.5px; font-weight: 600; color: var(--text-primary); }
     .pf-out__who { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
     .pf-out__tests { font-size: 12px; color: var(--text-muted); }
-    .pf-out__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+    .pf-out__line { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px 12px; }
+    .pf-out__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     .pf-out__partner, .pf-out__status, .pf-out__attach { height: 26px; }
     .pf-out__attach[data-attach='problem'] { color: var(--warning-text, #b45309); }
     .pf-out__date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
     .pf-out__check { color: var(--violet-text, #6d28d9); }
     .pf-out__row[data-status='completed'] { background: var(--pf-done-tint); border-color: var(--pf-sel-border); }
-    .pf-out__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-    @media (max-width: 640px) {
-      .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }
-    }
+    .pf-out__acts { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
     .pf-out__more { display: flex; justify-content: center; padding: 12px 0 2px; }
   `],
 })
@@ -146,6 +163,24 @@ export class OutsourcedListComponent implements OnInit {
     const completed = sortByDailySerial(rows.filter(r => r.status === 'completed'));
     return [...open, ...completed];
   });
+
+  /** The rows as shared work-list items: sample ID · patient (token) · order · tests · partner, status in words. */
+  readonly items = computed<WorkListItem<OutsourcedTube>[]>(() => this.shown().map(r => {
+    const rep = rowReport(r);
+    const att = ATTACH_LABEL[attachState(r)];
+    const missing = rep ? this.uploads.isMissing(rep.url) : false;
+    const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+    return {
+      id: r.sampleId, key: missing ? 'file-missing' : r.status, name: r.patientName, daily: r, lead: r.barcode ?? null,
+      facts: [r.orderNumber ?? null, this.testNames(r), r.partnerLabName ?? 'Partner lab', att || null],
+      notes: [attachState(r) === 'problem' ? rep?.attachProblem ?? null : null, missing ? 'File no longer available — upload it again' : null].filter((n): n is string => !!n),
+      status: r.status === 'completed' ? { now: 'Completed', detail: 'partner report attached', tone: 'done' }
+        : r.dispatchedAt ? { now: 'Outsourced', detail: 'waiting for the partner report', tone: 'normal' }
+        : { now: 'Not dispatched yet', tone: 'late' },
+      time: r.dispatchedAt ? { text: when(r.dispatchedAt), title: 'Dispatched' } : null,
+      aria: `${r.barcode ?? ''} ${r.patientName}`.trim(), data: r,
+    };
+  }));
 
   readonly web = webPointerSignal();
   readonly statusLabel = STATUS_LABEL;

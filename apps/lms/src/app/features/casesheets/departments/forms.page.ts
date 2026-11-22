@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { PfIconComponent } from '@prefrontal/forms-engine';
-import { SkeletonRowsComponent } from '@prefrontal/shared';
+import { SkeletonRowsComponent, ToggleComponent, TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { casesheetLinks } from '../casesheets.routes';
@@ -16,6 +18,7 @@ import { whenText } from '../data/when';
 import { CsStylesComponent } from '../styles/cs-styles.component';
 import { CsPatientStepComponent } from './patient-step.component';
 import { CASESHEETS_DATA_PROVIDERS } from '../data/casesheets-data.providers';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 
 /** A department (the form's `specialty`) and its case sheets, pinned first. */
 export interface Department {
@@ -40,6 +43,11 @@ export function orderByDepartments(forms: readonly FormSummary[], departments: r
     })
     .sort((a, b) => a.r - b.r || a.at - b.at)
     .map((x) => x.f);
+}
+
+const TAB_KEY = 'pf.prepare.tab';
+function readTab(): 'sheets' | 'continue' {
+  try { return localStorage.getItem(TAB_KEY) === 'continue' ? 'continue' : 'sheets'; } catch { return 'sheets'; }
 }
 
 /** Forms with no specialty sit under this department. */
@@ -116,7 +124,7 @@ export function deptNavigation(name: string | null, current: string | null): {
 @Component({
   selector: 'app-forms-page',
   standalone: true,
-  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent, CsPatientStepComponent, HeroBandComponent],
+  imports: [PfIconComponent, SkeletonRowsComponent, SegmentedComponent, ToggleComponent, TwoPanelComponent, RouterLink, CsStylesComponent, CsPatientStepComponent, HeroBandComponent],
   providers: [...CASESHEETS_DATA_PROVIDERS],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './forms.page.html',
@@ -133,6 +141,12 @@ export class FormsPage {
   protected readonly links = casesheetLinks;
   /** Public site vs the lab (Prepare: /cases/:id). */
   protected readonly nav = inject(CasesheetNav);
+  private readonly navBack = inject(NavBackService);
+  /** Phone width: the Departments list first, then the department (the band's back climbs). */
+  protected readonly compact = injectTwoPanelCompact();
+  protected readonly icons = {
+    dept: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  };
 
   protected readonly query = signal('');
   protected readonly forms = signal<FormSummary[] | null>(null);
@@ -197,7 +211,71 @@ export class FormsPage {
     () => this.chosenDept() ?? (this.wide() ? (this.departments()[0] ?? null) : null),
   );
 
+  /** The shared two-panel's rows: the departments only (count on the right); saved drafts live in the main card's "Continue" tab. */
+  protected readonly groups = computed<TwoPanelGroup[]>(() => [
+    { key: 'departments', heading: '', items: this.departments().map((d) => ({ id: d.name, label: d.name, note: String(d.forms.length) })) },
+  ]);
+
+  /** The main card's tab: the department's case sheets, or the saved drafts to continue (remembered per user). */
+  protected readonly tab = signal<'sheets' | 'continue'>(readTab());
+  protected readonly draftQuery = signal('');
+  protected readonly thisDeptOnly = signal(false);
+  protected readonly tabOptions = computed<SegmentedOption[]>(() => [
+    { value: 'sheets', label: 'Case sheets' },
+    { value: 'continue', label: 'Continue', count: (this.drafts() ?? []).length },
+  ]);
+  protected setTab(v: unknown): void {
+    const t = v === 'continue' ? 'continue' : 'sheets';
+    this.tab.set(t);
+    try { localStorage.setItem(TAB_KEY, t); } catch { /* blocked */ }
+  }
+  /** Saved drafts as rows: patient, case sheet, department, saved — newest first, searched, optionally this department only. */
+  protected readonly draftRows = computed(() => {
+    const byForm = new Map((this.forms() ?? []).map((f) => [f.id, f.specialty?.trim() || NO_DEPARTMENT]));
+    const q = this.draftQuery().trim().toLowerCase();
+    const only = this.thisDeptOnly() ? this.pickedDept()?.name : null;
+    return (this.drafts() ?? [])
+      .map((d) => ({ id: d.id, patient: d.patientName || 'No name yet', sheet: d.formTitle, dept: byForm.get(d.formId) ?? '', saved: d.updatedAt }))
+      .filter((r) => (!q || r.patient.toLowerCase().includes(q) || r.sheet.toLowerCase().includes(q)) && (!only || r.dept === only))
+      .sort((a, b) => (a.saved < b.saved ? 1 : a.saved > b.saved ? -1 : 0));
+  });
+
+  /** The main card's head note: how many case sheets, then the quiet hint. */
+  protected readonly panelNote = computed(() => {
+    const d = this.pickedDept();
+    if (!d) return null;
+    if (this.tab() === 'continue') return null; // the pill carries the draft count; the head keeps room for the search
+    return d.forms.length ? `${d.forms.length} ${d.forms.length === 1 ? 'case sheet' : 'case sheets'} · Select one to begin` : 'No case sheets in this department yet';
+  });
+
+  protected onPick(id: string): void {
+    this.pick(id);
+  }
+
+  /** Phone: the band's back (and the swipe / hardware back) goes from a department to the list. */
+  private readonly backHandler = (): boolean => {
+    if (!this.compact() || !this.chosenDept()) return false;
+    this.pick(null);
+    return true;
+  };
+
   constructor() {
+    // Screen view state (owner 2026-11-21): the searches, "this department only" and the open department (lab
+    // Prepare only — a patient launch carries its own context) come back as left after in-app navigation.
+    const vs = inject(ViewStateService);
+    vs.bind('prepare', { query: this.query, draftQuery: this.draftQuery, thisDeptOnly: this.thisDeptOnly });
+    if (this.fromPrepare) {
+      const savedDept = vs.value<string | null>('prepare', 'dept');
+      if (savedDept && !this.route.snapshot?.queryParamMap?.get('dept')) {
+        void this.router.navigate([], { relativeTo: this.route, ...deptNavigation(savedDept, null), replaceUrl: true });
+      }
+      effect(() => { const d = this.deptParam(); untracked(() => vs.patch('prepare', { dept: d })); });
+    }
+    effect(() => {
+      if (this.compact() && this.chosenDept()) this.navBack.registerBackInterceptor(this.backHandler);
+      else this.navBack.clearBackInterceptor(this.backHandler);
+    });
+    inject(DestroyRef).onDestroy(() => this.navBack.clearBackInterceptor(this.backHandler));
     const mq = this.wideQuery;
     if (mq && typeof mq.addEventListener === 'function') {
       const on = () => this.wide.set(mq.matches);
@@ -220,7 +298,7 @@ export class FormsPage {
         this.api.listForms(),
         this.api.listDepartments().catch(() => []),
         this.api
-          .listCases({ state: 'draft', pageSize: 4, ...(this.patientId ? { patientId: this.patientId } : {}) })
+          .listCases({ state: 'draft', pageSize: 50, ...(this.patientId ? { patientId: this.patientId } : {}) })
           .catch(() => null),
       ]);
       this.deptList.set(departments);
@@ -239,8 +317,11 @@ export class FormsPage {
     void this.router.navigate([], { relativeTo: this.route, ...deptNavigation(name, this.deptParam()) });
   }
 
+  /** ONE search (owner 2026-11-21): the band's. It filters what the tab shows — drafts on Continue, else departments / case sheets. */
+  protected readonly bandValue = computed(() => (this.tab() === 'continue' ? this.draftQuery() : this.query()));
+  protected readonly searchPlaceholder = computed(() => (this.tab() === 'continue' ? 'Search drafts — patient, form…' : 'Search departments and case sheets'));
   protected onSearch(v: string): void {
-    this.query.set(v);
+    (this.tab() === 'continue' ? this.draftQuery : this.query).set(v);
   }
 
   /** Pin / unpin (legacy favourite star): pinned case sheets come first. Optimistic; put back if the API says no. */

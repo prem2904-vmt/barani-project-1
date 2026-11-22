@@ -12,6 +12,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { reportedAstRows } from '../../../shared/utils/report-pdf';
 import { PlateReading } from './plate-reading';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /**
  * Owner (2026-09-26): the culture case's Identification header → Measure.
  * Inside the measure the organism is picked; its CLSI panel shows live

@@ -174,14 +174,17 @@ describe('ND audit D — Vendors', () => {
     expect(p.actions()[0].classList.contains('pf-sg-act')).toBe(true);
   });
 
-  it('palette: status = neutral pill, in-credit = violet, due = warning tone, filter = Test Master segmented in the card head', () => {
+  it('palette: status = words (no pill), in-credit = violet, due = warning tone, filter = Test Master segmented in the card head', () => {
     const p = render();
     const out = p.cmp.colDefs().find((c: any) => c.colId === 'outstanding').cellRenderer;
     expect((out({ data: vendors[0] }) as HTMLElement).querySelector('.pf-sg-tone--credit')!.textContent).toContain('in credit');
     expect((out({ data: { ...vendors[0], outstanding: 3 } }) as HTMLElement).querySelector('.pf-sg-tone--warn')!.textContent).toContain('due');
     expect((out({ data: { ...vendors[0], outstanding: 0 } }) as HTMLElement).querySelector('.pf-sg-tone--muted')!.textContent).toBe('Settled');
-    const pill = p.cmp.colDefs().find((c: any) => c.colId === 'status').cellRenderer({ data: vendors[1] }) as HTMLElement;
-    expect(pill.textContent).toBe('Inactive');
+    // Status = words (design D, 2026-11-21): the shared StatusWordsCellComponent, fed by the column's own mapping.
+    const st = p.cmp.colDefs().find((c: any) => c.colId === 'status');
+    expect(st.cellRendererParams.statusWords(vendors[1])).toEqual({ now: 'Inactive', detail: null, tone: 'normal' });
+    // valueGetter is the SORT rank (Active first = 0, Inactive = 1); the words are asserted via statusWords above.
+    expect(st.valueGetter({ data: vendors[1] })).toBe(1);
     expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
     expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
   });
@@ -205,7 +208,7 @@ describe('ND audit D — Referral labs', () => {
     const btns = Array.from(acts.querySelectorAll('.pf-rowact'));
     expect(btns.map(t => t.querySelector('.pf-rowact__t')!.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
     expect(btns.every(b => b.classList.contains('pf-rowact--icon'))).toBe(true);
-    expect(cols.find((c: any) => c.colId === 'code').cellClass).toBe('pf-num');
+    expect(cols.find((c: any) => c.colId === 'code').cellClass).toContain('pf-num');
     const depts = cols.find((c: any) => c.colId === 'departments').cellRenderer({ data: labs[0] }) as HTMLElement;
     expect(depts.textContent).toContain('Microbiology');
     hygiene(p.el);

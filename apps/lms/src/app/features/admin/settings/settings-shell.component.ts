@@ -185,6 +185,8 @@ export class SettingsShellComponent implements OnDestroy {
   /** The band pill: the shown group's search (Front desk › Referring doctors), else the page's. */
   readonly pageSearch = computed(() => pickHostSearch(this.host.searches(), this.single() ? null : this.selectedId()));
   /** Actions of the shown group (or of the whole page). */
+  /** The group the main card shows alone hands its tools to this card's head (pf-setting-group reads headGroup). */
+  private readonly syncHeadGroup = effect(() => { this.host.headGroup?.set(this.single() ? null : this.selectedId()); });
   readonly paneActions = computed(() => {
     const sel = this.single() ? null : this.selectedId();
     return this.host.actions().filter((a) => !a.group || !sel || a.group === sel);

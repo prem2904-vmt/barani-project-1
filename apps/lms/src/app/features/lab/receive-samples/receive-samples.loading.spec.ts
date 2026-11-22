@@ -60,7 +60,7 @@ describe('Receive samples — loading feedback', () => {
   it('first render while the queues load = a skeleton of the rows, not a blank list', () => {
     const { el } = render({ transit$: new Subject(), dispatched$: new Subject() });
     expect(el.querySelector('pf-skeleton-rows[aria-busy="true"]')).not.toBeNull();
-    expect(el.querySelector('.pf-rs-row')).toBeNull();
+    expect(el.querySelector('.pf-wl__row')).toBeNull();
   });
 
   it('the queues land: the skeleton is held for the minimum, then the rows', async () => {
@@ -76,20 +76,20 @@ describe('Receive samples — loading feedback', () => {
     vi.advanceTimersByTime(600);
     f.detectChanges();
     expect(el.querySelector('pf-skeleton-rows')).toBeNull();
-    expect(el.querySelectorAll('.pf-rs-row').length).toBe(1);
+    expect(el.querySelectorAll('.pf-wl__row').length).toBe(1);
   });
 
   it('synchronous data (cache / double) never shows a skeleton', () => {
     const { el } = render();
     expect(el.querySelector('pf-skeleton-rows')).toBeNull();
-    expect(el.querySelectorAll('.pf-rs-row').length).toBe(2);
+    expect(el.querySelectorAll('.pf-wl__row').length).toBe(2);
   });
 
   it('Receive on a row: that row busy (disabled + aria-busy), the other just disabled; same request', () => {
     vi.useFakeTimers();
     const arrive$ = new Subject<unknown>();
     const { f, el, api } = render({ arrive$ });
-    const btns = () => [...el.querySelectorAll<HTMLButtonElement>('.pf-rs-row button[aria-label^="Receive"]')];
+    const btns = () => [...el.querySelectorAll<HTMLButtonElement>('.pf-wl__row button[aria-label^="Receive"]')];
     expect(btns().length).toBe(2);
     const first = btns().find(b => b.getAttribute('aria-label') === 'Receive B-o1')!;
     const other = btns().find(b => b !== first)!;

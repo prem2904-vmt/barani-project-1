@@ -42,7 +42,7 @@ type Tab = 'settings' | 'drugs';
         <ng-container band-actions>
           @if (tab() === 'settings') {
             @if (changed()) { <span class="pf-savestate" role="status"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
-            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="changed()" [class.pf-hb-btn--ghost]="!changed()" [disabled]="!changed() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">Save</button>
+            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="changed()" [class.pf-hb-btn--ghost]="!changed()" [disabled]="!changed() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="!changed() || saving()" [attr.title]="(!changed() && !saving()) ? 'No changes to save' : 'Save'">Save</button>
           } @else if (master()?.dirtyCount()) {
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="master()?.discard()">Discard</button>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [pfBusy]="!!master()?.saving()" pfBusyLabel="Saving…" (click)="master()?.save()">Save changes ({{ master()?.dirtyCount() }})</button>

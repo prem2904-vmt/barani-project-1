@@ -170,6 +170,46 @@ test.describe('OPD consult dock — offline', () => {
     });
   }
 
+  // Release gate 2026-11-21: the Complete consult sheet's footer sat UNDER the bottom nav (elementFromPoint at the
+  // buttons returned the nav bar), so a click never landed. The sheet now ends above the nav on every size.
+  for (const vp of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }, { width: 390, height: 844 }]) {
+    test(`Complete consult sheet: the footer buttons are the topmost element at their centre at ${vp.width}×${vp.height}`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await offlineBackend(page);
+      await seed(page);
+      await page.setViewportSize(vp);
+      await page.goto('/opd/consult/v-1');
+      const cta = page.locator('button[data-complete]').locator('visible=true').first();
+      await expect(cta).toBeVisible({ timeout: 30_000 });
+      await cta.click();
+      // A prefill question may come first (DialogService): complete anyway.
+      const anyway = page.getByRole('button', { name: 'Complete anyway' });
+      if (await anyway.isVisible({ timeout: 1500 }).catch(() => false)) await anyway.click();
+      const foot = page.locator('pf-consult-complete-sheet .cs__foot');
+      await expect(foot).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(400);   // the sheet's slide-in
+      const hits = await foot.locator('button').evaluateAll(bs => bs.map(b => {
+        const r = b.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { label: b.textContent?.trim(), ok: !!top && (top === b || b.contains(top)), hit: top ? `${top.tagName}.${top.className}` : 'none', bottom: r.bottom, vh: innerHeight };
+      }));
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/consult-complete-${vp.width}x${vp.height}.png` });
+      expect(hits.length).toBe(2);
+      for (const h of hits) expect(h.ok, `"${h.label}" is topmost at its centre (got ${h.hit})`).toBe(true);
+      // And it clears the bottom nav: the buttons end above the nav's top edge.
+      const g = await page.evaluate(() => {
+        const vh = innerHeight;
+        const navs = Array.from(document.querySelectorAll<HTMLElement>('.pf-chrome, nav.pf-bottom-nav'))
+          .filter(el => getComputedStyle(el).display !== 'none').map(el => el.getBoundingClientRect()).filter(r => r.height > 0 && r.top >= vh / 2);
+        return navs.length ? Math.min(...navs.map(r => r.top)) : vh;
+      });
+      for (const h of hits) expect(h.bottom).toBeLessThanOrEqual(g + 0.5);
+      // Keep editing really closes it (the click lands).
+      await foot.getByRole('button', { name: 'Keep editing' }).click();
+      await expect(page.locator('pf-consult-complete-sheet')).toHaveCount(0);
+    });
+  }
+
   test('My patients: tile opens the consult; glance = next, follows hover', async ({ page }) => {
     test.setTimeout(120_000);
     await offlineBackend(page);

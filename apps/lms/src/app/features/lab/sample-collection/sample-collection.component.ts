@@ -1,8 +1,10 @@
-import { DatePipe } from "@angular/common";
+import { DatePipe, NgTemplateOutlet } from "@angular/common";
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef,
+  Injector,
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
@@ -63,6 +65,12 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import { peekPlacement } from "./peek-placement";
+import { additiveWords, chipSeparable, chipText, localPourBlock, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne, undoFailureText, type MergedIn } from "./merge-flow";
+import { cloneTubeVisual } from "./tube-clone";
+import { flip, flyBack, foldAway, hoverAbove, popOut, pourIn, rectsOf, slideIn } from "./pour-animation";
+import { WfPortalDirective } from "../../../shared/workflow-editor/wf-menu.component";
+import { fastingGroups, fastingText, infoDocked, infoTier, readInfoOpen, writeInfoOpen, type InfoTier } from "./info-panel";
 import {
   isDrawn,
   isNotCollected,
@@ -77,7 +85,7 @@ import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile, spinDelay } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { dailyNoLabel, matchesDailyNo } from '../../../shared/utils/daily-no';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import {
   ManualMergeEntry,
@@ -89,6 +97,7 @@ import {
   manualMergesOf,
   mergeChipLabel,
   mergeRefusalText,
+  mergeShortReason,
   pourTargets,
   shortTubeName,
   warningLines,
@@ -413,6 +422,7 @@ interface OrderGroup {
     ZoomTargetDirective,
     FormsModule,
     DatePipe,
+    NgTemplateOutlet,
     AvatarComponent,
     HeroBandComponent,
     BarcodeScannerModalComponent,
@@ -422,6 +432,7 @@ interface OrderGroup {
     LabelCardComponent,
     ScanIconComponent,
     SelectComponent,
+    WfPortalDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./sample-collection.component.html",
@@ -433,6 +444,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly labelPrint = inject(LabelPrintService);
@@ -623,6 +635,31 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private teleportedEl: HTMLElement | null = null;
 
   constructor() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      this._wide.set(!!mq.matches);
+      const onMq = (e: MediaQueryListEvent) => this._wide.set(e.matches);
+      try {
+        mq.addEventListener?.('change', onMq);
+        this.destroyRef.onDestroy(() => mq.removeEventListener?.('change', onMq));
+      } catch { /* old engines */ }
+    }
+    // Info panel: tier follows the width; the remembered choice is re-read per tier (and once the user is known).
+    if (typeof window !== 'undefined') {
+      const onResize = () => { const t = infoTier(window.innerWidth); if (t !== this.infoTier()) this.infoTier.set(t); };
+      window.addEventListener('resize', onResize, { passive: true });
+      // Esc closes the info drawer wherever focus is (the drawer's own keydown also traps Tab).
+      const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && this.infoDrawerOpen()) { e.preventDefault(); this.setInfoOpen(false); } };
+      window.addEventListener('keydown', onEsc);
+      this.destroyRef.onDestroy(() => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', onEsc); });
+    }
+    effect(() => { this.infoTier(); this.auth.user()?.id; untracked(() => this.loadInfoOpen()); });
+    // Two-panel: the first patient (oldest first) is selected on arrival, and whenever the selection is gone.
+    effect(() => {
+      if (!this.hosted() || !this.queueLoaded() || this._openOrderId()) return;
+      const first = this.filteredGroups()[0] ?? this.groups()[0];
+      if (first) untracked(() => { this.resetSeriesOverrides(); this._openOrderId.set(first.orderId); });
+    });
     // The shell component forms a stacking context (z-index: 1) and the
     // top-strip inside it sits at z-index: 40 — as a sibling of the router
     // outlet, that top-strip paints above anything nested inside the outlet,
@@ -747,6 +784,97 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly pending = this._pending.asReadonly();
   readonly openOrderId = this._openOrderId.asReadonly();
 
+  /** Wide screens (>= 1024px) run the TWO-PANEL layout: the pending queue is the left side card and the selected
+   *  patient's collection is hosted in the main card. Phones / tablet portrait keep list -> full-screen drawer. */
+  private readonly _wide = signal(false);
+  /** New design, not embedded, not a deep link, wide -> the collection is hosted inline (no overlay). */
+  readonly hosted = computed(() => this.theme.isNewDesign() && !this.embedded && !this._deepLinkMode() && this._wide());
+  /** Two-panel: the Pending collection list can be hidden to a slim rail (remembered on this device). */
+  private static readonly QUEUE_HIDDEN_KEY = 'pf-lms.collect.queue-hidden';
+  readonly queueHidden = signal<boolean>((() => { try { return localStorage.getItem('pf-lms.collect.queue-hidden') === '1'; } catch { return false; } })());
+  setQueueHidden(hidden: boolean): void {
+    this.queueHidden.set(hidden);
+    try { localStorage.setItem(SampleCollectionComponent.QUEUE_HIDDEN_KEY, hidden ? '1' : '0'); } catch { /* private mode: in-memory only */ }
+  }
+
+  // ─── Info panel show / hide (owner 2026-11-21; rules in info-panel.ts) ───
+  /** Form-factor tier from the viewport width (desktop >= 1280 docks the panel when opened; smaller tiers use a drawer). Closed by default. */
+  readonly infoTier = signal<InfoTier>(typeof window !== 'undefined' ? infoTier(window.innerWidth) : 'desktop');
+  readonly infoDocked = computed(() => infoDocked(this.infoTier()));
+  private readonly _infoOpen = signal<boolean>(false);   // closed by default everywhere; loadInfoOpen() applies a saved choice
+  /** Panel visible: docked beside the vials (desktop) or the drawer is open (tablet / phone). */
+  readonly infoOpen = this._infoOpen.asReadonly();
+  /** The drawer (below 1280px) is open. */
+  readonly infoDrawerOpen = computed(() => !this.infoDocked() && this._infoOpen());
+  @ViewChild('infoToggle') private infoToggleRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('infoPanel') private infoPanelRef?: ElementRef<HTMLElement>;
+  private infoSwipe: { x: number; y: number } | null = null;
+
+  private loadInfoOpen(): void {
+    const store = typeof localStorage !== 'undefined' ? localStorage : null;
+    this._infoOpen.set(readInfoOpen(store, this.auth.user()?.id, this.infoTier()));
+  }
+  setInfoOpen(open: boolean, opts: { focus?: boolean } = {}): void {
+    if (this._infoOpen() === open) return;
+    this._infoOpen.set(open);
+    const store = typeof localStorage !== 'undefined' ? localStorage : null;
+    writeInfoOpen(store, this.auth.user()?.id, this.infoTier(), open);
+    if (opts.focus === false) return;
+    if (open && !this.infoDocked()) {
+      // Drawer: focus moves into it (its close button) once it renders.
+      afterNextRender(() => this.infoPanel()?.querySelector<HTMLElement>('.pf-sc-side__close')?.focus(), { injector: this.injector });
+    } else if (!open && !this.infoDocked()) {
+      // Drawer closed: focus returns to the toggle.
+      afterNextRender(() => (this.infoToggleEl?.isConnected ? this.infoToggleEl : this.infoToggleRef?.nativeElement)?.focus(), { injector: this.injector });
+    }
+  }
+  /** The toggle that was pressed (the collection template can render more than once — e.g. hosted + a closing copy —
+   *  so the drawer is found next to THIS toggle, never by the first @ViewChild match). */
+  private infoToggleEl: HTMLElement | null = null;
+  private infoPanel(): HTMLElement | null {
+    const scoped = this.infoToggleEl?.isConnected ? this.infoToggleEl.closest('.pf-sc-body')?.querySelector<HTMLElement>('.pf-sc-side') : null;
+    return scoped ?? this.infoPanelRef?.nativeElement ?? null;
+  }
+  toggleInfo(el?: EventTarget | null): void {
+    if (el instanceof HTMLElement) this.infoToggleEl = el;
+    this.setInfoOpen(!this._infoOpen());
+  }
+  /** ✕ in the side card: closes the phone actions sheet and the info drawer. */
+  closeSide(): void {
+    this.actionsOpen.set(false);
+    if (this.infoDrawerOpen()) this.setInfoOpen(false);
+  }
+  /** Drawer keyboard: Esc closes, Tab stays inside (focus trap). */
+  onInfoKeydown(e: KeyboardEvent): void {
+    if (!this.infoDrawerOpen()) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.setInfoOpen(false); return; }
+    if (e.key !== 'Tab') return;
+    const root = e.currentTarget instanceof HTMLElement ? e.currentTarget : this.infoPanel();
+    if (!root) return;
+    const items = [...root.querySelectorAll<HTMLElement>('button:not([disabled]), [href], summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(el => el.getClientRects().length > 0);
+    if (!items.length) { e.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (e.shiftKey && (active === first || !root.contains(active))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (active === last || !root.contains(active))) { e.preventDefault(); first.focus(); }
+  }
+  /** Touch: a swipe to the right on the drawer closes it. */
+  onInfoPointerDown(e: PointerEvent): void {
+    this.infoSwipe = this.infoDrawerOpen() && e.pointerType !== 'mouse' ? { x: e.clientX, y: e.clientY } : null;
+  }
+  onInfoPointerUp(e: PointerEvent): void {
+    const s = this.infoSwipe; this.infoSwipe = null;
+    if (!s || !this.infoDrawerOpen()) return;
+    const dx = e.clientX - s.x, dy = Math.abs(e.clientY - s.y);
+    if (dx > 60 && dx > dy * 1.5) this.setInfoOpen(false);
+  }
+  /** Compact head chips while the panel is hidden. */
+  remainingLeft(g: OrderGroup): number { return Math.max(0, g.totalVials - g.collected - g.notCollected); }
+  readonly fastingOpen = signal(false);
+  fastingGroupsOf(g: OrderGroup) { return fastingGroups(this.collectInfo(g).fasting); }
+  fastingTextOf(g: OrderGroup): string { return fastingText(this.collectInfo(g).fasting); }
+
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
     for (const s of this._pending()) {
@@ -810,6 +938,31 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} h ${m % 60 > 0 ? (m % 60) + ' m ' : ''}waiting`;
     return `${Math.floor(h / 24)} d waiting`;
+  }
+  /** Whole days since the order was raised (0 when unknown). */
+  protected waitingDays(g: OrderGroup): number {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 86400000) : 0;
+  }
+  /** Compact waiting time for the queue rows: "12m", "3h", "52d". */
+  protected waitingShort(g: OrderGroup): string {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'now';
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+  }
+  /** Queue row line 2: age/sex · Patient ID · order/sample no (+n) · #serial, day. */
+  protected queueSub(g: OrderGroup): string {
+    const parts: string[] = [];
+    const sub = this.patientSub(g.patientName);
+    if (sub) parts.push(sub);
+    parts.push(g.patientMeta && g.patientMeta !== '—' ? g.patientMeta : g.orderNo);
+    const label = dailyNoLabel(g.dailyNo, g.dailyNoDay);
+    if (label) parts.push('#' + label.replace(' · ', ', '));
+    return parts.join(' · ');
   }
   /** Escalating tone for the waiting badge: >30 min amber, >60 min red. */
   protected waitingTone(g: OrderGroup): 'ok' | 'warn' | 'late' {
@@ -1211,7 +1364,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the page falls into the eternal "Opening collection…" loader). close()
     // already refreshes, so nothing is lost by waiting.
     this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      if (this._openOrderId()) return;
+      if (this._openOrderId() && !this.hosted()) return;
       this.refresh();
     });
     // Per-branch label config (size + code) for direct-to-printer label print.
@@ -1342,20 +1495,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this._longPressFired = false;
     this._downX = ev.clientX;
     this._downY = ev.clientY;
-    // Float the popover beside the vial (right, or left if no room) so the
-    // holding finger never covers it.
-    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 260;
-    let x = r.right + 10;
-    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
-    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
-    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    // Float the popover beside the POINTER / finger (right of it, or left if
+    // no room; a little above so the finger never covers it), clamped to the
+    // viewport. It renders in <body> (wfPortal), so these viewport
+    // coordinates are never re-anchored by a filtered / transformed ancestor.
+    const { x, y } = peekPlacement(ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
     const tests = (s.tests ?? [])
       .map((t) => t.test?.name ?? t.name)
       .filter((n): n is string => !!n);
     this.clearPress();
     const g = this.activeGroup();
-    if (g && this.canPour(s, g)) {
+    if (g && this.canPour(s, g) && !this.mergeBusy() && !this.inlineAsk()) {
       this._pourEl = ev.currentTarget as HTMLElement;
       this.pourDrag.down(s.id, ev);
     }
@@ -1367,6 +1517,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.peekPos.set({ x, y });
       this.peekTests.set(tests);
       this.peekId.set(s.id); // popover shows while held
+      const release = () => { window.removeEventListener('pointerup', release, true); window.removeEventListener('pointercancel', release, true); this.clearPress(); };
+      window.addEventListener('pointerup', release, true);
+      window.addEventListener('pointercancel', release, true);
     }, SampleCollectionComponent.HOLD_MS);
   }
   onVialMove(ev: PointerEvent): void {
@@ -1379,6 +1532,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
   }
   onVialUp(): void {
+    this.clearPress();
+  }
+  /** Leaving the tile cancels a pending hold, but never closes an OPEN peek: the tile re-lays out as the lift ends
+   *  (pointerleave fires under a still finger on touch) — release (pointerup / cancel, anywhere) closes it. */
+  onVialLeave(): void {
+    if (this.peekId()) return;
     this.clearPress();
   }
   private clearPress(): void {
@@ -1504,10 +1663,23 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   openOrder(id: string) {
+    if (this.hosted()) { this.selectOrder(id); return; }
     this.zoom.runLocal('in', () => {
       this.resetSeriesOverrides();
       this._openOrderId.set(id);
     });
+  }
+
+  /** Two-panel: select another patient in the queue. The previous one stays out of the way (a refresh drops it if it
+   *  is fully collected); the new one's collection shows in the main card at once. */
+  private selectOrder(id: string) {
+    if (this._openOrderId() === id) return;
+    this.resetSeriesOverrides();
+    this.vialFilter.set('all');
+    this.samplesOpen.set(false);
+    this.actionsOpen.set(false);
+    this._openOrderId.set(id);
+    this.refresh();
   }
 
   /** Open a specific order's collection drawer (e.g. from a scanned order QR).
@@ -1558,6 +1730,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
   close() {
     const open = this._openOrderId();
+    if (this.hosted()) { this.closeHosted(open); return; }
     const shut = () => {
       if (this._openOrderId() !== open) return;   // another order opened meanwhile
       this.resetSeriesOverrides();
@@ -1584,9 +1757,40 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.refresh();
   }
 
+  /** Two-panel "Done for now": re-read the queue, then move to the next patient in line (else the first, else
+   *  the empty state) in one step so the main card never flashes empty. */
+  private closeHosted(open: string | null) {
+    this.resetSeriesOverrides();
+    this.vialFilter.set('all');
+    this.samplesOpen.set(false);
+    this.actionsOpen.set(false);
+    const before = this.filteredGroups().map((g) => g.orderId);
+    const at = open ? before.indexOf(open) : -1;
+    this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
+      next: (l) => {
+        this._pending.set(l ?? []);
+        const ids = this.filteredGroups().map((g) => g.orderId);
+        const wanted = before.slice(at + 1).find((id) => id !== open && ids.includes(id))
+          ?? ids.find((id) => id !== open) ?? ids[0] ?? null;
+        this._openOrderId.set(wanted);
+      },
+      error: () => this._openOrderId.set(null),
+    });
+  }
+
   refresh() {
     this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
-      next: (l) => this._pending.set(l ?? []),
+      next: (l) => {
+        const next = l ?? [];
+        const open = this._openOrderId();
+        if (this.hosted() && open) {
+          // The open order keeps its tubes as the collector sees them (the server list drops drawn vials), the rest
+          // of the queue is replaced — the live queue stays current while a patient is being collected.
+          const mine = this._pending().filter((x) => x.orderId === open);
+          if (mine.length) { this._pending.set([...next.filter((x) => x.orderId !== open), ...mine]); return; }
+        }
+        this._pending.set(next);
+      },
     });
   }
 
@@ -2085,6 +2289,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const p = this.pour();
     if (!p || !this.canConfirmPour()) return;
     const sampleIds = [p.sourceId, ...p.alsoIds.filter(id => id !== p.sourceId)];
+    // Keyboard / accessible path for ONE tube = the same inline flow as a drop (no ghost to animate):
+    // the sheet closes and the target card asks inline when the additive differs.
+    if (sampleIds.length === 1) {
+      this.pour.set(null);
+      await this.startInlinePour(p.sourceId, p.targetId);
+      return;
+    }
     this.pourBusy.set(true);
     try {
       // ONE confirmation (OPS-123): the sheet IS the confirm, and any additive
@@ -2164,9 +2375,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const src = this.dragSrc();
     if (!src || t.id === src) return null;
     this._pourCandsVer();
+    const s0 = this.sampleById(src);
     const local = this.notCollected(t)
       ? 'Not collected'
-      : isMergedTube(t) ? 'Already poured' : null;
+      : isMergedTube(t) ? 'Already poured'
+      // Same rules as the server BEFORE the drop (timed draws, left the counter, other order…).
+      : s0 ? localPourBlock(s0, t) : null;
     if (local) return pourDropState(src, [], local);
     if (!this._pourCands.has(t.id)) return { kind: 'checking' };
     return pourDropState(src, this._pourCands.get(t.id));
@@ -2194,7 +2408,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return this.dispatchSelect() === null && g.samples.some(s => this.canPour(s, g));
   }
 
+  /** Bumped on every lift, so a finishing merge motion never clears a NEWER gesture's ghost. */
+  private _gestureSeq = 0;
   private onPourLift(id: string): void {
+    this._gestureSeq++;
     if (this._exitTimer) { clearTimeout(this._exitTimer); this._exitTimer = null; }
     this.dragExit.set(null);
     this.dragSrc.set(id);
@@ -2209,6 +2426,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._pressTimer || this.holdingId()) this.clearPress();
     if (!this.dragMoving()) {
       this.dragMoving.set(true);
+      afterNextRender(() => this.mountGhostTube(), { injector: this.injector });
       if (!this.pourHintSeen()) this.markPourHintSeen();
       this.setDragCursor(true);
     }
@@ -2223,15 +2441,269 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const st = t ? this.dropState(t) : null;
     if (!src || !t || !pourDropOpensSheet(st)) {
       this.endPourDrag(true); // snap back — nothing changed
+      if (st?.kind === 'no') this.toasts.info(`Can’t pour into ${this.tubeName(t)}: ${st.reason}`);
       return;
     }
     this.haptic(ImpactStyle.Medium);
-    const seed = this._pourCands.get(t.id);
-    this.endPourDrag(false, 'in', t.id);
     this.clearPress();
-    this.pourServerWarn.set([]);
-    this.pour.set({ sourceId: src.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
-    void this.setPourTarget(t.id, seed ?? null);
+    this.stopEdgeScroll();
+    this.setDragCursor(false);
+    // The ghost stays (dragHeld) for the merge motion; the inline flow clears it.
+    this.dragHeld.set(true);
+    void this.startInlinePour(src.id, t.id);
+  }
+
+  // ─── Merge in place (owner-approved design 2026-11-21, mock tube-pour-v1 "Pour") ───
+  // No dialog, no refetch: the drop pours (or asks INLINE on the target card when the additive differs),
+  // the screen updates optimistically and rolls back when the server refuses. Rules: merge-flow.ts;
+  // motion: pour-animation.ts.
+
+  /** The inline question on a card: a different additive, or "Take … back out?". */
+  protected readonly inlineAsk = signal<
+    | { kind: 'pour'; srcId: string; targetId: string; words: string }
+    | { kind: 'separate'; keepId: string; m: MergedIn }
+    | null>(null);
+  /** The ghost outlives the gesture while the merge motion plays. */
+  protected readonly dragHeld = signal(false);
+  protected readonly glowId = signal<string | null>(null);
+  protected readonly freshChip = signal<string | null>(null);
+  protected readonly mergeBusy = signal(false);
+  /** Tubes poured away on this screen, so Undo / Separate can put the real card back. */
+  private readonly _gone = new Map<string, OrderSample>();
+
+  /** Chips on the kept tube: "+ Gold · 26310", whether it can be taken back out and why not. */
+  chipsOf(s: OrderSample): Array<{ m: MergedIn; text: string; ok: boolean; why: string | null }> {
+    return mergedInto(s).map(m => ({ m, text: chipText(m), ...chipSeparable(s as never, m) }));
+  }
+  tubesInOneOf(s: OrderSample): string | null { return tubesInOne(s); }
+  /** Cap colour of a tube type (chip dot). */
+  tubeColorOf(tubeColor: string): string { return this.container({ tubeColor } as OrderSample).color; }
+  shortName(tubeColor: string | null | undefined): string { return shortTubeName(tubeColor); }
+
+  /** Soft-rose words while a tube with another additive is dragged over this one ("Serum into Fluoride · check"). */
+  dropWarn(t: OrderSample): string | null {
+    const src = this.dragSource();
+    if (!src || src.id === t.id) return null;
+    const st = this.dropState(t);
+    if (st?.kind === 'no') return null;
+    const w = additiveWords(src, t) ?? (st?.kind === 'ok' && st.warn ? 'Different additive' : null);
+    return w ? `${w} · check` : null;
+  }
+
+  /** The ghost shows the picked-up card's OWN tube (cloned with its computed colours / fill / theme). */
+  private mountGhostTube(): void {
+    const host = this.ghostEl()?.querySelector<HTMLElement>('.pf-pour-ghost__tube');
+    const tile = this.tileEl(this.dragSrc());
+    const clone = cloneTubeVisual(tile?.querySelector('svg.pf-vial') ?? tile?.querySelector('svg') ?? null);
+    if (host && clone) host.replaceChildren(clone);
+  }
+
+  private ghostEl(): HTMLElement | null {
+    return typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('[data-testid="pour-ghost"]');
+  }
+
+  /** Drop / keyboard path: pour now, or ask inline when the additive differs. */
+  async startInlinePour(srcId: string, targetId: string): Promise<void> {
+    const src = this.sampleById(srcId), t = this.sampleById(targetId);
+    if (!src || !t || this.mergeBusy()) { this.releaseGhost(true); return; }
+    const block = localPourBlock(src, t);
+    let list = this._pourCands.get(t.id);
+    if (!block && list === undefined) {
+      // Dropped before the server's verdict arrived: ask now, never pour on a guess.
+      list = await firstValueFrom(this.api.get<MergeCandidate[]>(`/api/samples/${t.id}/merge-candidates`)).catch(() => null);
+      this._pourCands.set(t.id, list ?? null);
+    }
+    const row = list?.find(c => c.id === src.id);
+    const refusal = block ?? (list && (!row || !row.eligible) ? mergeShortReason(row?.reason ?? null) : null);
+    if (refusal) {
+      await flyBack(this.ghostEl(), this.tileEl(srcId), this.reducedMotion());
+      this.releaseGhost(false);
+      this.toasts.info(`Can’t pour into ${this.tubeName(t)}: ${refusal}`);
+      return;
+    }
+    const cand = row;
+    const words = additiveWords(src, t) ?? ((cand?.warnings ?? []).length ? 'Different additive' : null);
+    if (words) {
+      this.inlineAsk.set({ kind: 'pour', srcId, targetId, words });
+      await hoverAbove(this.ghostEl(), this.tileEl(targetId), this.reducedMotion());
+      setTimeout(() => this.tileEl(targetId)?.parentElement?.querySelector<HTMLElement>('[data-testid="inline-go"]')?.focus(), 0);
+      return;
+    }
+    await this.runPour(srcId, targetId, false);
+  }
+
+  /** Inline "Keep apart": the ghost flies home, nothing changes. */
+  async keepApart(): Promise<void> {
+    const a = this.inlineAsk();
+    this.inlineAsk.set(null);
+    if (a?.kind !== 'pour') return;
+    const seq = this._gestureSeq;
+    await flyBack(this.ghostEl(), this.tileEl(a.srcId), this.reducedMotion());
+    if (seq === this._gestureSeq) this.releaseGhost(false);
+  }
+
+  /** Inline "Pour" (different additive accepted). */
+  async confirmInlinePour(): Promise<void> {
+    const a = this.inlineAsk();
+    if (a?.kind !== 'pour') return;
+    this.inlineAsk.set(null);
+    await this.runPour(a.srcId, a.targetId, true);
+  }
+
+  private releaseGhost(back: boolean): void {
+    this.dragHeld.set(false);
+    if (back) { this.endPourDrag(true); return; }
+    this.dragExit.set(null);
+    this.dragSrc.set(null);
+    this.dragMoving.set(false);
+    this.dragPos.set(null);
+    this.dragOver.set(null);
+  }
+
+  /** The pour: motion + optimistic screen + the API in parallel; roll back if the server refuses. */
+  async runPour(srcId: string, targetId: string, confirm: boolean): Promise<void> {
+    const src = this.sampleById(srcId), t = this.sampleById(targetId);
+    if (!src || !t) { this.releaseGhost(true); return; }
+    this.mergeBusy.set(true);
+    const reduced = this.reducedMotion();
+    const motion = pourMotion(src);
+    const api = this.postMerge(targetId, [srcId], confirm)
+      .then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e: ApiError.from(e) }));
+    const target = this.tileEl(targetId);
+    const seq = this._gestureSeq;
+    if (motion === 'slide') await slideIn(this.ghostEl(), target, reduced);
+    else await pourIn(this.ghostEl(), target, this.container(src).fill ?? '#b91c1c', reduced);
+    if (seq === this._gestureSeq) this.releaseGhost(false);
+    await foldAway(this.tileEl(srcId)?.closest<HTMLElement>('.pf-tube-wrap') ?? null, reduced);
+    const grid = target?.closest('.pf-sc-grid') ?? null;
+    const before = rectsOf(grid);
+    const opt = optimisticMerge(this._pending(), targetId, srcId, new Date().toISOString());
+    if (opt.gone) this._gone.set(opt.gone.id, opt.gone);
+    this._pending.set(opt.list);
+    afterNextRender(() => flip(grid, before, reduced), { injector: this.injector });
+    this.flash(targetId, src.barcode ?? '');
+    // Undo is offered at once. While the merge call is still running (or failed) it is undone HERE, never by
+    // calling another endpoint; only a merge the server confirmed is undone through Separate.
+    const flow = { done: false, ok: false, undone: false };
+    const verb = motion === 'pour' ? 'Poured' : 'Merged';
+    const name = (x: OrderSample) => `${shortTubeName(x.tubeColor)} ${x.barcode ?? ''}`.trim();
+    const toastId = this.toasts.withAction(`${verb} ${name(src)} into ${name(t)}`, { label: 'Undo', run: () => {
+      if (!flow.done) { flow.undone = true; this._pending.set(this.withoutMerge(opt.snapshot, targetId, srcId)); return; }
+      if (flow.ok) void this.undoPour(targetId, src);
+    } });
+    const res = await api;
+    flow.done = true;
+    this.mergeBusy.set(false);
+    if (!res.ok) {
+      this.toasts.dismiss(toastId);
+      if (flow.undone) return;                 // already back as it was
+      this._pending.set(opt.snapshot);
+      if (res.e.code === 'merge_needs_confirm') {
+        this.inlineAsk.set({ kind: 'pour', srcId, targetId, words: warningLines(this.warningsFrom(res.e.data) ?? [])[0] ?? 'Different additive' });
+        return;
+      }
+      this.toasts.error(mergeRefusalText(res.e.code ?? null, res.e.message));
+      return;
+    }
+    flow.ok = true;
+    const upd = res.r?.sample;
+    if (flow.undone) {
+      // Undone while the server was still merging: the server DID merge, so take it back out now.
+      this.toasts.dismiss(toastId);
+      try {
+        await firstValueFrom(this.api.post(`/api/samples/${targetId}/separate`, { sampleId: srcId }));
+      } catch (e) {
+        const err = ApiError.from(e);
+        // Couldn't take it back out: show the truth (merged), in plain words.
+        this._pending.set(opt.list.map(x => x.id === targetId && upd ? { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests } : x));
+        this.toasts.error(undoFailureText(err.code ?? null, err.message, err.status));
+      }
+      return;
+    }
+    // The kept tube takes the server's state (tests, status, metadata with the restore block).
+    if (upd) this._pending.update(list => list.map(x => x.id === targetId ? { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests } : x));
+    this.sampleCollected.emit();
+  }
+
+  /** The snapshot, but keeping any OTHER change made meanwhile (only the two tubes go back). */
+  private withoutMerge(snapshot: OrderSample[], keepId: string, goneId: string): OrderSample[] {
+    const cur = this._pending();
+    const back = new Map(snapshot.filter(x => x.id === keepId || x.id === goneId).map(x => [x.id, x]));
+    const out: OrderSample[] = [];
+    for (const x of snapshot) {
+      if (back.has(x.id)) out.push(back.get(x.id)!);
+      else { const c = cur.find(y => y.id === x.id); if (c) out.push(c); }
+    }
+    for (const c of cur) if (!out.some(y => y.id === c.id)) out.push(c);
+    return out;
+  }
+
+  /** Glow the kept tube once and pop its newest chip. */
+  private flash(keepId: string, chipBarcode: string): void {
+    this.glowId.set(keepId);
+    this.freshChip.set(chipBarcode);
+    setTimeout(() => { if (this.glowId() === keepId) this.glowId.set(null); }, 900);
+    setTimeout(() => { if (this.freshChip() === chipBarcode) this.freshChip.set(null); }, 600);
+  }
+
+  /** Undo in the toast = Separate right away. */
+  async undoPour(keepId: string, gone: OrderSample): Promise<void> {
+    await this.runSeparate(keepId, { barcode: gone.barcode ?? '', tubeColor: gone.tubeColor ?? null, sampleId: gone.id, drawn: pourMotion(gone) === 'pour' }, true);
+  }
+
+  /** Tap a chip: ask inline "Take … back out?". */
+  askSeparate(keep: OrderSample, chip: { m: MergedIn; ok: boolean }, ev?: Event): void {
+    ev?.stopPropagation();
+    if (!chip.ok || this.mergeBusy()) return;
+    this.inlineAsk.set({ kind: 'separate', keepId: keep.id, m: chip.m });
+    setTimeout(() => this.tileEl(keep.id)?.parentElement?.querySelector<HTMLElement>('[data-testid="inline-go"]')?.focus(), 0);
+  }
+  keepTogether(): void { this.inlineAsk.set(null); }
+  async confirmSeparate(): Promise<void> {
+    const a = this.inlineAsk();
+    if (a?.kind !== 'separate') return;
+    this.inlineAsk.set(null);
+    await this.runSeparate(a.keepId, a.m, false);
+  }
+
+  /** Separate: the tube pops back out with its own Sample ID (optimistic), the server confirms or we roll back. */
+  async runSeparate(keepId: string, m: MergedIn, viaUndo: boolean): Promise<void> {
+    const keep = this.sampleById(keepId);
+    if (!keep || !m.sampleId) return;
+    this.mergeBusy.set(true);
+    const reduced = this.reducedMotion();
+    const restoredLocal = this._gone.get(m.sampleId) ?? placeholderTube(keep, m);
+    const keepEl = this.tileEl(keepId);
+    keepEl?.classList.add('pf-tube--filling');
+    const grid = keepEl?.closest('.pf-sc-grid') ?? null;
+    const before = rectsOf(grid);
+    const opt = optimisticSeparate(this._pending(), keepId, restoredLocal);
+    this._pending.set(opt.list);
+    afterNextRender(() => {
+      flip(grid, before, reduced);
+      popOut(this.tileEl(m.sampleId!), this.tileEl(keepId), reduced);
+      setTimeout(() => this.tileEl(keepId)?.classList.remove('pf-tube--filling'), 620);
+    }, { injector: this.injector });
+    try {
+      const r = await firstValueFrom(this.api.post<{ sample: OrderSample; restored: OrderSample }>(`/api/samples/${keepId}/separate`, { sampleId: m.sampleId }));
+      this._gone.delete(m.sampleId);
+      this._pending.update(list => list.map(x =>
+        x.id === keepId && r?.sample ? { ...x, ...r.sample, order: x.order ?? r.sample.order, tests: r.sample.tests ?? x.tests }
+        : x.id === m.sampleId && r?.restored ? { ...x, ...r.restored, order: x.order ?? keep.order ?? r.restored.order, tests: r.restored.tests ?? x.tests }
+        : x));
+      const back = this.sampleById(m.sampleId);
+      const label = `${shortTubeName(m.tubeColor)} ${m.barcode}`;
+      if (back && !this.scan.manualEntry()) this.toasts.withAction(`${label} is its own tube again`, { label: 'Print label', run: () => this.reprintLabel(back) }, 'success');
+      else this.toasts.success(`${label} is its own tube again${this.scan.manualEntry() ? ' · write its Sample ID on it' : ''}`, 6000);
+      this.sampleCollected.emit();
+    } catch (e) {
+      this._pending.set(opt.snapshot);
+      const err = ApiError.from(e);
+      this.toasts.error(viaUndo ? undoFailureText(err.code ?? null, err.message, err.status)
+        : (err.status === 404 || err.status === 405) ? 'This server can’t take tubes back out yet.' : separateRefusalText(err.code ?? null, err.message));
+    } finally {
+      this.mergeBusy.set(false);
+    }
   }
 
   /** Clear the drag; `snapBack` animates the ghost home first. */

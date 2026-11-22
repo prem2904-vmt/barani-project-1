@@ -1,6 +1,10 @@
 import { applyLabSort } from '../../../shared/utils/lab-sort';
 import { LabSortService } from '../../../core/services/lab-sort.service';
 import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
+import { WorkListItem, SortChipOption } from '../../../shared/components/work-list/work-list';
+import { LAB_SORT_OPTIONS, LabSortKey } from '../../../shared/utils/lab-sort';
 import { DatePipe } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
@@ -45,6 +49,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   standalone: true,
   imports: [
     LabSortComponent,
+    WorkListComponent,
+    SortChipComponent,
     DailyNoComponent,
     PfKeysDirective,
     SamplePresetDirective,
@@ -341,7 +347,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </p>
           </div>
         }
-        <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
+        @if (theme.isNewDesign()) {
+        <!-- New design: the ONE shared work list (owner 2026-11-21) — divider rows, status in words, Receive at the
+             right edge; the sort is the Sort chip (the same choices), never a dropdown. -->
+        <div class="pf-rs-listhead pf-wl-head pf-wl-head--sticky">
+          <span class="pf-rs-listhead__n">{{ intakeItems().length }} {{ labCfg.sampleFocused() ? 'samples' : 'orders' }}</span>
+          <pf-sort-chip [options]="sortOptions" [value]="sortValue()" (pick)="pickSort($event)" />
+        </div>
+        <pf-work-list label="Lab intake" [items]="intakeItems()" (primary)="receiveItem($event)" (open)="receiveItem($event)" />
+        } @else {
+        <div class="flex justify-end mb-2 pf-rs-sort" [class.pf-rs-sort--embedded]="embedded && theme.isNewDesign()"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
           @for (g of (labCfg.sampleFocused() ? dispatchedTubes() : dispatchedOrders()); track $index) {
             @if (embedded) {
@@ -503,6 +518,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             }
           }
         </ul>
+        }
       }
 
       <!-- ─── Legacy "arrived → pickup" queue ──────────────────────────
@@ -539,7 +555,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       @if (inTransit().length > 0 && !queueSkeleton()) {
         @if (dispatchedOrders().length === 0) {
-          <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
+          <div class="flex justify-end mb-2 pf-rs-sort" [class.pf-rs-sort--embedded]="embedded && theme.isNewDesign()"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
         }
         <div class="space-y-2.5">
           @for (s of inTransitView(); track s.id) {
@@ -613,6 +629,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     }
   `,
   styles: [`
+    /* Embedded in My Work (new design): the sort lives in the Lab Intake pane head on tablet/desktop;
+       phones keep it above the list (their head has no room). */
+    @media (min-width: 641px) { .pf-rs-sort--embedded { display: none; } }
     /* ── Embedded compact list (used inside the my-work Lab Intake pane).
      * Each row is a single-line tile with avatar + name + Intake button. */
     .pf-rs-list {
@@ -624,6 +643,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       gap: 6px;
     }
     .pf-rs-list--compact { gap: 6px; }
+    .pf-rs-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 6px 12px; border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
+    .pf-rs-listhead__n { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
     .pf-rs-row {
       display: grid;
       grid-template-columns: 32px minmax(0, 1fr) auto;
@@ -1133,6 +1154,45 @@ export class ReceiveSamplesComponent implements OnInit {
   readonly dispatchedTubes = computed(() => applyLabSort(this.dispatchedTubesBase(), this.sorts.keyFor('intake'), {
     patient: r => r.patientName, sample: r => r.sampleId, at: r => r.latestAt,
   }));
+  /** The Sort chip (new design, embedded intake): the same choices the old picker had. */
+  readonly sortOptions: SortChipOption[] = LAB_SORT_OPTIONS.intake.map(o => ({ id: o.value, label: o.label }));
+  readonly sortValue = computed(() => this.sorts.keyFor('intake'));
+  pickSort(id: string): void { this.sorts.set('intake', id as LabSortKey); }
+
+  /** Lab intake rows for the shared work list: name + token, the facts, the state in words, Receive at the edge. */
+  readonly intakeItems = computed<WorkListItem<{ orderId: string; sampleDbId?: string | null }>[]>(() => {
+    const tubeMode = this.labCfg.sampleFocused();
+    const rows = tubeMode ? this.dispatchedTubes() : this.dispatchedOrders();
+    const busyKey = this.busy() ? this.busyKey() : null;
+    return rows.map(g => {
+      const tube = g as { sampleDbId?: string | null; key?: string };
+      const tests = g.testLabels.length > 2 ? `${g.testLabels.slice(0, 2).join(', ')} +${g.testLabels.length - 2}` : g.testLabels.join(', ');
+      const status = g.state === 'received' ? { now: 'Received', tone: 'done' as const }
+        : g.state === 'awaiting' ? { now: 'Not dispatched yet', detail: 'still at the front desk', tone: 'late' as const }
+        : g.state === 'partial' ? { now: 'Partly received', detail: `${g.tubeCount} to receive`, tone: 'normal' as const }
+        : { now: 'Dispatched', detail: 'waiting to be received', tone: 'normal' as const };
+      const at = g.latestAt ? new Date(g.latestAt) : null;
+      const canReceive = g.state === 'ready' || g.state === 'partial';
+      return {
+        id: tube.key ?? g.orderId,
+        name: g.patientName,
+        daily: g,
+        lead: tubeMode ? g.sampleId : null,
+        facts: [g.patientMrn, tubeMode ? null : g.sampleId, g.totalTubes > 1 ? `${g.totalTubes} tubes` : null, tests],
+        status,
+        time: at && !isNaN(at.getTime()) ? { text: at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) } : null,
+        primary: canReceive ? { id: 'receive', label: g.state === 'partial' && !tubeMode ? `Receive (${g.tubeCount})` : 'Receive', busy: busyKey === this.rowKey(g),
+          busyLabel: 'Receiving…', disabled: this.busy(), aria: 'Receive ' + (g.sampleId || g.patientName || '') } : null,
+        noAction: !canReceive,
+        data: { orderId: g.orderId, sampleDbId: tube.sampleDbId ?? null },
+      };
+    });
+  });
+  receiveItem(it: WorkListItem<{ orderId: string; sampleDbId?: string | null }>): void {
+    if (!it.primary || it.primary.disabled || !it.data) return;
+    this.markArrived(it.data.orderId, this.labCfg.sampleFocused() ? it.data.sampleDbId ?? undefined : undefined);
+  }
+
   readonly inTransitView = computed(() => applyLabSort(this._inTransit(), this.sorts.keyFor('intake'), {
     patient: s => s.order?.patient?.displayName, sample: s => s.barcode, at: s => s.pickedUpAt ?? s.dispatchedAt,
   }));

@@ -3,6 +3,12 @@ import { BarcodeScannerModalComponent } from './barcode-scanner-modal.component'
 import { HardwareScanService } from '@prefrontal/shared';
 import { stubMemoryStorage, timedKeyboard } from '../../scan/hardware-scan.spec-helpers';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /** New-design scanner (owner): BILLING header, readable expected chip,
  *  corner reticle, calm status line, secondary/tertiary footer, phone sheet,
  *  no monospace / green. Behaviour (manual mode, mismatch guard, camera

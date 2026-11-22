@@ -47,7 +47,7 @@ test('create a draft lab case sheet (ENT · Nose History) for an invented patien
   const phone = '9' + String(Date.now()).slice(-8) + String(Math.floor(Math.random() * 10));
   const p = await api<{ id: string }>(STACK.admin, 'POST', '/api/patients', { firstName: 'Meena', fathersName: 'Iyer', phone, sex: 'Female', dateOfBirth: '1988-06-21' });
   const page = await open(browser, `${LAB_URL}/casesheets/new?patientId=${p.id}&dept=ENT`, 'desktop', 'light');
-  const ent = page.locator('.dp__row', { hasText: 'ENT' }).first();
+  const ent = page.locator('.pf-tp__item', { hasText: 'ENT' }).first();
   if (await ent.isVisible().catch(() => false)) { await ent.click(); await settle(page); }
   await page.locator('.dp__tile', { hasText: 'Nose History' }).first().click();
   await expect(page).toHaveURL(/\/casesheets\/[0-9a-f-]{36}/);

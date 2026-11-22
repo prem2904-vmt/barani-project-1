@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
@@ -97,7 +98,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
 @Component({
   selector: 'pf-communication-settings',
   standalone: true,
-  imports: [SettingsSavebarComponent, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, BusyDirective, WaSettingsSectionComponent],
+  imports: [SkelSettingRowsComponent, SettingsSavebarComponent, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, BusyDirective, WaSettingsSectionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full" data-testid="comms-page">
@@ -111,7 +112,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
             @if (tab() === 'email' && canManage() && !hosted) {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="cm-email-save"
                       [disabled]="!emailDirty() || emailSaving() || loading()" [pfBusy]="emailSaving()" pfBusyLabel="Saving…"
-                      (click)="saveEmail()" aria-label="Save email settings">
+                      (click)="saveEmail()" aria-label="Save email settings" [pfBusyInactive]="!emailDirty() || emailSaving() || loading()" [attr.title]="(!emailDirty() && !emailSaving()) ? 'No changes to save' : 'Save'">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
                 {{ emailSaving() ? 'Saving…' : 'Save' }}
               </button>
@@ -133,7 +134,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
       @if (showSec('email')) {
         <h2 class="pf-cm__sec pf-classic-only">Email</h2>
         @if (loading()) {
-          <pf-skeleton-card [lines]="5" label="Loading email settings…"></pf-skeleton-card>
+          <pf-skel-setting-rows [rows]="5" label="Loading email settings…"></pf-skel-setting-rows>
         } @else {
         <section class="pf-card pf-cm__card" data-testid="cm-email">
           <div class="pf-card__head">
@@ -243,7 +244,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
             @if (!theme.isNewDesign() && canManage()) {
               <div class="pf-cm__actions">
                 <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!emailDirty() || emailSaving()"
-                        [pfBusy]="emailSaving()" (click)="saveEmail()">{{ emailSaving() ? 'Saving…' : 'Save' }}</button>
+                        [pfBusy]="emailSaving()" (click)="saveEmail()" [pfBusyInactive]="!emailDirty() || emailSaving()" [attr.title]="(!emailDirty() && !emailSaving()) ? 'No changes to save' : 'Save'">{{ emailSaving() ? 'Saving…' : 'Save' }}</button>
               </div>
             }
           </div>
@@ -288,7 +289,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
       @if (showSec('sms')) {
         <h2 class="pf-cm__sec pf-classic-only">SMS</h2>
         @if (loading()) {
-          <pf-skeleton-card [lines]="3" label="Loading SMS settings…"></pf-skeleton-card>
+          <pf-skel-setting-rows [rows]="3" label="Loading SMS settings…"></pf-skel-setting-rows>
         } @else {
         <section class="pf-card pf-cm__card" data-testid="cm-sms">
           <div class="pf-card__head">

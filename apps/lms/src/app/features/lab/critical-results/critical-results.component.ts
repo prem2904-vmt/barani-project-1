@@ -1,7 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
-import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
+import { AgGridAngular, ICellRendererAngularComp } from 'ag-grid-angular';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CriticalResultsService } from '../../../core/services/critical-results.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -9,7 +13,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import {
   CriticalRegisterFilter, CriticalResultEvent, CriticalResultStatus, criticalMethodLabel, criticalRoleLabel,
-  criticalStatusWord, criticalViaLabel, needsAckBy,
+  criticalStatusWord, needsAckBy,
 } from '../../../shared/models/critical-result.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -17,6 +21,9 @@ import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.comp
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { CriticalCommunicationDialogComponent } from '../../../shared/components/critical-communication-dialog/critical-communication-dialog.component';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { dateCol, textCol } from '../../../shared/utils/work-grid';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { criticalStatusWords } from './critical-status-words';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { plural } from '../../../shared/utils/plural';
@@ -30,6 +37,65 @@ type StatusFilter = CriticalResultStatus | 'all';
 type QuickRange = 'today' | '7d' | '30d' | 'custom';
 
 const PAGE_SIZE = 200;
+
+
+interface ActsParams extends ICellRendererParams<CriticalResultEvent> {
+  web: boolean;
+  userId: string | null | undefined;
+  onMenu: (e: CriticalResultEvent, id: 'ack' | 'comm') => void;
+}
+
+/**
+ * The row's actions: ONE next-step button (Acknowledge while this user has not acknowledged, else Communicate) and,
+ * when a second step is open, the rest in the kit's pf-actions-menu. The primary keeps `data-act` so the grid's
+ * cellClicked handler runs the existing flow unchanged.
+ */
+@Component({
+  selector: 'pf-cr-acts',
+  standalone: true,
+  imports: [ActionsMenuComponent, ActionsMenuTriggerDirective],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    @if (e) {
+      <span class="pf-cr-acts">
+        @if (primary(); as p) {
+          <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web" [attr.data-act]="p.id"
+                  [attr.aria-label]="p.label + ' — ' + e.testName" [attr.title]="p.label">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              @if (p.id === 'ack') { <path d="M20 6 9 17l-5-5"/> } @else { <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z"/> }
+            </svg>
+            <span class="pf-rowact__t">{{ p.label }}</span>
+          </button>
+        }
+        @if (menu().length) {
+          <pf-actions-menu [actions]="menu()" heading="Critical result" label="More actions" (action)="pick($event)">
+            <button pfActionsTrigger type="button" class="pf-rowact pf-rowact--icon" [attr.aria-label]="'More actions — ' + e.testName" title="More actions">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+            </button>
+          </pf-actions-menu>
+        }
+      </span>
+    }
+  `,
+})
+export class CriticalActionsCellComponent implements ICellRendererAngularComp {
+  private readonly cdr = inject(ChangeDetectorRef);
+  e: CriticalResultEvent | undefined;
+  web = true;
+  private params!: ActsParams;
+  private readonly steps = signal<Array<{ id: 'ack' | 'comm'; label: string }>>([]);
+  readonly primary = computed(() => this.steps()[0] ?? null);
+  readonly menu = computed<PfAction[]>(() => this.steps().slice(1).map(x => ({ id: x.id, label: x.label, icon: x.id === 'comm' ? 'chat' : undefined })));
+  agInit(p: ActsParams): void {
+    this.params = p; this.e = p.data; this.web = p.web;
+    const e = p.data; const steps: Array<{ id: 'ack' | 'comm'; label: string }> = [];
+    if (e && needsAckBy(e, p.userId)) steps.push({ id: 'ack', label: 'Acknowledge' });
+    if (e && e.status !== 'communicated') steps.push({ id: 'comm', label: p.web ? 'Communicate' : 'Record communication' });
+    this.steps.set(steps); this.cdr.markForCheck();
+  }
+  refresh(p: ActsParams): boolean { this.agInit(p); return true; }
+  pick(id: string) { if (this.e) this.params.onMenu(this.e, id === 'ack' ? 'ack' : 'comm'); }
+}
 
 /** ISO instant → "29 Sep, 2:45 pm" in the lab's IST day (never the device zone). */
 export function istStamp(iso?: string | null): string {
@@ -55,7 +121,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
 @Component({
   selector: 'pf-critical-results',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
+  imports: [GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cr pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -119,7 +185,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
             <div class="pf-cr__grid-wrap">
               @if (listSkeleton()) {
                 <!-- First load / empty refresh: the register's shape, never an empty grid. -->
-                <pf-skeleton-table class="pf-cr__skel" [rows]="8" [cols]="6" label="Loading critical results…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-cr__skel" [rows]="30" [columns]="6" label="Loading critical results…"></pf-skel-grid>
               } @else if (!loading() && visibleRows().length === 0) {
                 <div class="pf-empty pf-empty--compact">
                   <span class="pf-empty__icon" aria-hidden="true">
@@ -129,7 +195,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
                   <p class="pf-empty__body">{{ q().trim() ? 'Try another name, order or test.' : 'Widen the date range or switch the status filter to All.' }}</p>
                 </div>
               } @else {
-                <ag-grid-angular class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
+                <ag-grid-angular pfGridViewState="lab.critical" class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
                                  [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="getRowClass"
                                  [animateRows]="true" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)">
                 </ag-grid-angular>
@@ -162,13 +228,18 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
       <div class="pf-card__body pf-cr__filters">
         <div class="pf-field">
           <span class="pf-field__lbl" id="pf-cr-status-lbl">Status</span>
-          <span class="pf-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-status-lbl">
+          <ul class="pf-side-list pf-cr__statuses" role="radiogroup" aria-labelledby="pf-cr-status-lbl" data-testid="cr-status">
             @for (o of statusOptions(); track o.value) {
-              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
-                {{ o.label }}@if (o.count != null) { <span class="pf-num pf-cr__segn">{{ o.count }}</span> }
-              </button>
+              <li>
+                <button type="button" class="pf-side-item pf-cr__status" role="radio" [class.is-on]="status() === o.value"
+                        [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
+                  <span class="pf-cr-dot" [attr.data-tone]="o.tone" aria-hidden="true"></span>
+                  <span class="pf-cr__sname">{{ o.label }}</span>
+                  @if (o.count != null) { <span class="pf-num pf-cr__scount">{{ o.count }}</span> }
+                </button>
+              </li>
             }
-          </span>
+          </ul>
         </div>
         <div class="pf-field">
           <span class="pf-field__lbl" id="pf-cr-range-lbl">Detected (IST)</span>
@@ -203,7 +274,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__skel { display: block; }
     :host { display: block; min-height: 0; }
     .pf-cr__body { display: flex; flex-direction: column; min-height: 0; }
-    .pf-cr__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-cr__panels { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-cr__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-cr__side { min-height: 0; }
     .pf-cr__side--sheet {
@@ -212,9 +283,17 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     }
     .pf-cr__side--sheet .pf-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     .pf-cr__filters { gap: 16px; }
-    .pf-cr__seg { flex-wrap: wrap; }
-    .pf-cr__segn { margin-left: 5px; color: var(--text-tertiary); }
-    .pf-seg__item[aria-checked='true'] .pf-cr__segn { color: inherit; }
+    /* Four options share one row inside the 300px card: equal cells, tight padding, never wrapping onto the next label. */
+    .pf-cr__seg { flex-wrap: nowrap; width: 100%; }
+    .pf-cr__seg .pf-seg__item { flex: 1 1 0; min-width: 0; padding-inline: 6px; justify-content: center; white-space: nowrap; }
+    .pf-cr__statuses { padding: 0; margin-bottom: 4px; }
+    .pf-cr__sname { flex: 1 1 auto; min-width: 0; }
+    .pf-cr__scount { flex: none; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-cr-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--text-tertiary); --pf-cr-tone: var(--text-tertiary); }
+    .pf-cr-dot[data-tone='red'] { background: var(--red-text, #b91c1c); }
+    .pf-cr-dot[data-tone='amber'] { background: var(--amber-text, #b45309); }
+    .pf-cr-dot[data-tone='green'] { background: var(--green-text, #15803d); }
+    .pf-cr-dot[data-tone='none'] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); }
     .pf-cr__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
     .pf-cr__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
     .pf-cr__main { min-width: 0; min-height: 0; }
@@ -225,22 +304,28 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 300px); min-height: 320px; }
     :host-context(.design-new) .pf-cr__grid { height: auto; min-height: 280px; }
     .pf-cr__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
-    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--pf-line); }
+    /* One thin critical stripe on the row's left edge only: no pinned-column divider, no header resize dividers. */
+    .pf-cr__grid { --ag-pinned-column-border: none; }
+    .pf-cr__main ::ng-deep .ag-cell-first-right-pinned, .pf-cr__main ::ng-deep .ag-header-cell-first-right-pinned { border-left: 0; }
+    .pf-cr__main ::ng-deep .ag-header-cell-resize::after, .pf-cr__main ::ng-deep .ag-header-cell::after { display: none; }
+    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 0; }
     .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
-    /* Row cells: ONE status word (dot + colour), row actions as kit .pf-rowact. */
-    .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-cr-tone) 70%, var(--text-primary)); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='red'] { --pf-cr-tone: var(--red-text, #b91c1c); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='amber'] { --pf-cr-tone: var(--amber-text, #b45309); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='green'] { --pf-cr-tone: var(--green-text, #15803d); }
-    .pf-cr__main ::ng-deep .pf-cr-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-cr-tone); flex: none; }
-    .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
-    .pf-cr__main ::ng-deep .pf-cr-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    /* Row cells: status words (shared pf-status-words; the phone card line uses .pf-cr-word), row actions as kit .pf-rowact. */
+    .pf-cr__main ::ng-deep .pf-cr-word { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-cr__main ::ng-deep .pf-cr-word[data-tone='red'] { color: var(--pf-late-text, color-mix(in srgb, var(--red-text) 85%, var(--text-primary))); }
+    .pf-cr__main ::ng-deep .pf-cr-word[data-tone='green'] { color: var(--success-text, var(--green-text)); }
+    .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end; width: 100%; min-height: 44px; }
+    .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact { min-height: 44px; }
+    .pf-cr__main ::ng-deep .ag-header-cell[col-id='actions'] .ag-header-cell-resize,
+    .pf-cr__main ::ng-deep .ag-header-cell[col-id='actions']::after { display: none; }
+    .pf-cr__main ::ng-deep .ag-header-cell.pf-cr-acthead .ag-header-cell-label { justify-content: flex-end; }
+    .pf-cr__main ::ng-deep .pf-cr-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; min-height: 100%; padding: 8px 0; white-space: normal; overflow-wrap: break-word; }
+    .pf-cr__main ::ng-deep .pf-cr-nb { white-space: nowrap; }
     .pf-cr__main ::ng-deep .pf-cr-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; padding: 6px 0; }
-    .pf-cr__main ::ng-deep .pf-cr-cell--stack .pf-cr-status { white-space: normal; }
+    .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; }
     .pf-cr__main ::ng-deep .ag-cell.pf-cr-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact--icon { width: 44px; height: 44px; }
-    .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell:first-child { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+    .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell[col-id='detectedAt'] { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
     @media (max-width: 900px) {
       .pf-cr__grid { height: calc(100dvh - 260px); }
     }
@@ -294,11 +379,11 @@ export class CriticalResultsComponent {
     const open = this.openCount();
     return `${plural(n, 'record')}${open > 0 ? ` · ${open} not acknowledged` : ''}`;
   });
-  readonly statusOptions = computed<Array<{ value: StatusFilter; label: string; count?: number | null }>>(() => [
-    { value: 'open', label: 'Not acknowledged', count: this.openCount() },
-    { value: 'acknowledged', label: 'Acknowledged' },
-    { value: 'communicated', label: 'Communicated' },
-    { value: 'all', label: 'All' },
+  readonly statusOptions = computed<Array<{ value: StatusFilter; label: string; tone: string; count?: number | null }>>(() => [
+    { value: 'open', label: 'Not acknowledged', tone: 'red', count: this.openCount() },
+    { value: 'acknowledged', label: 'Acknowledged', tone: 'amber' },
+    { value: 'communicated', label: 'Communicated', tone: 'green' },
+    { value: 'all', label: 'All', tone: 'none' },
   ]);
 
   // ── Grid ───────────────────────────────────────────────────────────────
@@ -312,56 +397,36 @@ export class CriticalResultsComponent {
     const web = !this.isCoarse && !this.isPhone;
     const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
     const cell = (main: string, sub?: string) =>
-      `<div class="pf-cr-cell"><span>${esc(main)}</span>${sub ? `<span class="pf-cr-cell__sub">${esc(sub)}</span>` : ''}</div>`;
+      `<div class="pf-cr-cell"><span>${esc(main)}</span>${sub ? `<span class="pf-cr-cell__sub">${whole(sub)}</span>` : ''}</div>`;
+    const whole = (sub: string) => sub.split(' · ').map(x => `<span class="pf-cr-nb">${esc(x)}</span>`).join(' · ');
     const multiBranch = this.branchOptions().length > 1;
-    // Columns that can only read "—" under the current status filter stay hidden.
-    const status = this.status();
     const cols: ColDef<CriticalResultEvent>[] = [
-      { colId: 'detectedAt', headerName: 'Detected', minWidth: 150, width: 160, flex: 0, sort: 'desc',
-        valueGetter: p => p.data?.detectedAt ?? '',
+      dateCol<CriticalResultEvent>({ colId: 'detectedAt', headerName: 'Detected', minWidth: 190, width: 190, flex: 0, sort: 'desc',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(istStamp(p.data?.detectedAt), [
           p.data?.detectedByName ? 'by ' + p.data.detectedByName : '',
-          p.data?.alertedAt ? plural(p.data.alertedCount, 'person', 'people') + ' alerted' : '',
+          p.data?.alertedAt ? p.data.alertedCount + ' alerted' : '',
         ].filter(Boolean).join(' · ')) },
-      { colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 170,
-        valueGetter: p => p.data?.patientName ?? '',
+        e => e.detectedAt ?? null, 'left'),
+      textCol<CriticalResultEvent>({ colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 120,
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.patientName ?? '',
           [p.data?.patientMrn, p.data?.orderNumber, multiBranch ? p.data?.branchName : null].filter(Boolean).join(' · ')) },
-      { colId: 'test', headerName: 'Test · critical values', flex: 1.4, minWidth: 170,
-        valueGetter: p => p.data?.testName ?? '',
+        e => [e.patientName, e.patientMrn, e.orderNumber].filter(Boolean).join(' · '), 'left', e => e.patientName ?? ''),
+      textCol<CriticalResultEvent>({ colId: 'test', headerName: 'Test', flex: 1.4, minWidth: 110,
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.testName ?? '', p.data?.summary) },
-      { colId: 'status', headerName: 'Status', minWidth: 160, width: 165, flex: 0,
-        valueGetter: p => p.data?.status ?? '',
-        cellRenderer: (p: { data?: CriticalResultEvent }) => {
-          const st = criticalStatusWord(p.data?.status ?? 'open');
-          return `<span class="pf-cr-status" data-tone="${st.tone}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${st.label}</span>`;
-        } },
-      { colId: 'acknowledged', headerName: 'Acknowledged', flex: 1, minWidth: 150, hide: status === 'open',
-        valueGetter: p => p.data?.acknowledgedAt ?? '',
-        cellRenderer: (p: { data?: CriticalResultEvent }) => p.data?.acknowledgedAt
-          ? cell(p.data.acknowledgedByName ?? '', `${istStamp(p.data.acknowledgedAt)} · ${criticalViaLabel(p.data.acknowledgedVia)}`)
-          : cell('—') },
-      { colId: 'communicated', headerName: 'Communicated', flex: 1.3, minWidth: 170, hide: status === 'open' || status === 'acknowledged',
-        valueGetter: p => p.data?.communicatedAt ?? '',
-        cellRenderer: (p: { data?: CriticalResultEvent }) => p.data?.communicatedAt
-          ? cell(`${criticalMethodLabel(p.data.communicationMethod)} · ${p.data.communicatedToName ?? ''}${p.data.communicatedToRole ? ' (' + criticalRoleLabel(p.data.communicatedToRole) + ')' : ''}`,
-                 `${istStamp(p.data.communicatedAt)} · by ${p.data.communicatedByName ?? ''}${p.data.communicationNotes ? ' · ' + p.data.communicationNotes : ''}`)
-          : cell('—') },
+        e => e.testName ?? ''),
+      statusValuesCol<CriticalResultEvent>({ colId: 'status', headerName: 'Status', flex: 1.5, minWidth: this.isCoarse ? 200 : 230 }, e => {
+        const lines: string[] = [];
+        if (e.acknowledgedAt) lines.push(`${e.acknowledgedByName ?? ''}, ${istStamp(e.acknowledgedAt)}`);
+        if (e.communicatedAt) lines.push(`Told ${e.communicatedToName ?? ''}${e.communicatedToRole ? ' (' + criticalRoleLabel(e.communicatedToRole) + ')' : ''} by ${criticalMethodLabel(e.communicationMethod).toLowerCase()}, ${istStamp(e.communicatedAt)}`
+          + (e.communicationNotes ? ` · ${e.communicationNotes}` : ''));
+        return criticalStatusWords(e.status, lines);
+      }),
     ];
     if (canAct) cols.push({
-      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
-      minWidth: web ? 292 : 104, width: web ? 292 : 104, flex: 0, cellClass: 'pf-cr-actcell',
-      cellRenderer: (p: { data?: CriticalResultEvent }) => {
-        const e = p.data; if (!e) return '';
-        const btn = (act: string, label: string, path: string) =>
-          `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} — ${esc(e.testName)}" title="${esc(label)}">` +
-          `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>` +
-          `<span class="pf-rowact__t">${esc(label)}</span></button>`;
-        const acts: string[] = [];
-        if (needsAckBy(e, me)) acts.push(btn('ack', 'Acknowledge', '<path d="M20 6 9 17l-5-5"/>'));
-        if (e.status !== 'communicated') acts.push(btn('comm', web ? 'Communicate' : 'Record communication', '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z"/>'));
-        return `<span class="pf-cr-acts">${acts.join('')}</span>`;
-      },
+      colId: 'actions', headerName: 'Actions', headerClass: 'pf-cr-acthead', sortable: false, filter: false, resizable: false, pinned: 'right', lockPinned: true,
+      minWidth: web ? 196 : 116, width: web ? 196 : 116, flex: 0, cellClass: 'pf-cr-actcell',
+      cellRenderer: CriticalActionsCellComponent,
+      cellRendererParams: { web, userId: me, onMenu: (e: CriticalResultEvent, id: 'ack' | 'comm') => (id === 'ack' ? this.acknowledge(e) : this.dialogFor.set(e)) },
     });
     return this.phoneTrim(cols);
   });
@@ -391,22 +456,22 @@ export class CriticalResultsComponent {
   protected phoneTrim(cols: ColDef<CriticalResultEvent>[]): ColDef<CriticalResultEvent>[] {
     if (!this.isPhone) return cols;
     const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
-    const record: ColDef<CriticalResultEvent> = {
-      colId: 'record', headerName: 'Record', flex: 1, minWidth: 150,
-      valueGetter: p => p.data?.patientName ?? '',
+    const record: ColDef<CriticalResultEvent> = textCol<CriticalResultEvent>({
+      colId: 'record', headerName: 'Record', flex: 1, minWidth: 146,
       cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const e = p.data; if (!e) return '';
         const st = criticalStatusWord(e.status);
         return `<div class="pf-cr-cell pf-cr-cell--stack"><span>${esc(e.patientName)}</span>` +
           `<span class="pf-cr-cell__sub">${esc([e.patientMrn, e.orderNumber].filter(Boolean).join(' · '))}</span>` +
           `<span>${esc(e.testName)} <span class="pf-cr-cell__sub">${esc(e.summary)}</span></span>` +
-          `<span class="pf-cr-status" data-tone="${st.tone}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${st.label}</span></div>`;
+          `<span class="pf-cr-word" data-tone="${st.tone}" title="${st.label}">${e.status === 'open' ? "Not ack'd" : st.label}</span></div>`;
       },
-    };
+    }, e => [e.patientName, e.patientMrn, e.orderNumber, e.testName, e.status].filter(Boolean).join(' · '), 'left', e => e.patientName ?? '');
     const detected = cols.find(c => c.colId === 'detectedAt');
     const actions = cols.find(c => c.colId === 'actions');
     return [
-      { ...detected, headerName: 'When', width: 92, minWidth: 92, cellRenderer: (p: { data?: CriticalResultEvent }) => {
+      { ...detected, headerName: 'When', width: 98, minWidth: 98,   // 'When' + its sort / filter icons, never ellipsised (headers never truncate)
+        cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const [d, t] = istStamp(p.data?.detectedAt).split(', ');
         return `<div class="pf-cr-cell"><span>${esc(d)}</span><span class="pf-cr-cell__sub">${esc(t ?? '')}</span></div>`;
       } },
@@ -493,4 +558,8 @@ export class CriticalResultsComponent {
       error: err => { this.exporting.set(false); this.toasts.error(ApiError.from(err).message); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('lab.critical', { q: this.q, status: this.status, quick: this.quick, from: this.from, to: this.to, branchId: this.branchId });
 }

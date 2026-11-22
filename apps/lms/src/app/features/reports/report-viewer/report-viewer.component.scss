@@ -59,14 +59,14 @@
 
 /* ── Body: PREVIEW + REPORT ────────────────────────────────────────── */
 .pf-rv-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
+  display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 16px;
   padding-top: 4px;
   transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring);
 }
-.pf-rv-body--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+.pf-rv-body--collapsed { grid-template-columns: 52px minmax(0, 1fr); }
 @media (max-width: 1280px) {
-  .pf-rv-body { grid-template-columns: minmax(0, 1fr) 360px; }
-  .pf-rv-body--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+  .pf-rv-body { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
+  .pf-rv-body--collapsed { grid-template-columns: 52px minmax(0, 1fr); }
 }
 .pf-rv-body--narrow, .pf-rv-body--narrow.pf-rv-body--collapsed { grid-template-columns: minmax(0, 1fr); }
 
@@ -130,7 +130,7 @@
 
 /* ── REPORT side card ──────────────────────────────────────────────── */
 .pf-rv-side, .pf-rv-strip { min-height: 0; animation: pf-rv-side-in var(--pf-dur, 320ms) var(--pf-spring) both; }
-@keyframes pf-rv-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes pf-rv-side-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .pf-rv-collapse, .pf-rv-close { width: 32px !important; height: 32px; min-height: 32px; }
 .pf-rv-sidebody { gap: 14px; }
 .pf-rv-state { align-self: flex-start; height: 32px; gap: 7px; font-size: 13px; color: var(--text-primary); }

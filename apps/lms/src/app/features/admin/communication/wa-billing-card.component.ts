@@ -167,7 +167,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
                   <input class="pf-input" type="text" inputmode="decimal" autocomplete="off" data-testid="wab-lowlevel"
                          [ngModel]="lowText()" (ngModelChange)="lowText.set($event)" [disabled]="busy()" placeholder="200" />
                 </label>
-                <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-save-thresholds" [disabled]="busy() || !thresholdsDirty()" [pfBusy]="act() === 'thresholds'" pfBusyLabel="Saving…" (click)="saveThresholds()">Save alerts</button>
+                <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-save-thresholds" [disabled]="busy() || !thresholdsDirty()" [pfBusy]="act() === 'thresholds'" pfBusyLabel="Saving…" (click)="saveThresholds()" [pfBusyInactive]="busy() || !thresholdsDirty()" [attr.title]="(!thresholdsDirty()) ? 'No changes to save' : 'Save alerts'">Save alerts</button>
               </div>
               <p class="pf-wab__hint">Alerts go to lab admins: at 80 % and 100 % of the monthly limit (once a month), when the estimated balance drops below the level, and whenever Meta refuses a message for payment.</p>
             </div>

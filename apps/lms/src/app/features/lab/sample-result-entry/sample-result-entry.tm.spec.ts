@@ -37,13 +37,21 @@ describe('SampleResultEntry.inputKindFor — shared entry-kind resolver (CURRENT
 });
 
 describe('SampleResultEntry.refLabelFor (CURRENT)', () => {
-  it('ref_range text wins; else every band labelled; else normalValue', () => {
-    expect(P.refLabelFor.call({}, { name: 'a', ref_range: '< 5' })).toBe('< 5');
-    const all = P.refLabelFor.call({}, { name: 'hb', referenceRanges: [{ min: 13, max: 17, sex: 'M' }, { min: 12, max: 15, sex: 'F' }] });
+  it('ref_range text wins; else ONLY the patient\'s band; no match -> every band; else normalValue', () => {
+    const who0 = { patientSexAge: () => ({ sex: null, age: null }) };
+    const who = (sex: string | null) => ({ patientSexAge: () => ({ sex, age: sex ? 34 : null }) });
+    expect(P.refLabelFor.call(who('F'), { name: 'a', ref_range: '< 5' })).toBe('< 5');
+    const hb = { name: 'hb', unit: 'g/dL', referenceRanges: [{ min: 13, max: 17, sex: 'M' }, { min: 12, max: 15, sex: 'F' }] };
+    const f = P.refLabelFor.call(who('F'), hb);
+    expect(f).toContain('12–15');
+    expect(f).not.toContain('13–17');
+    const m = P.refLabelFor.call(who('M'), hb);
+    expect(m).toContain('13–17');
+    expect(m).not.toContain('12–15');
+    const all = P.refLabelFor.call(who(null), hb);
     expect(all).toContain('13–17');
     expect(all).toContain('12–15');
-    expect(all).toContain(' · ');
-    expect(P.refLabelFor.call({}, { name: 'a', normalValue: 'Negative' })).toBe('Negative');
-    expect(P.refLabelFor.call({}, { name: 'a' })).toBe('');
+    expect(P.refLabelFor.call(who0, { name: 'a', normalValue: 'Negative' })).toBe('Negative');
+    expect(P.refLabelFor.call(who0, { name: 'a' })).toBe('');
   });
 });

@@ -1,0 +1,160 @@
+/* Frontdesk WORK body: the one grid, the per-service sections, or the clinic. Tokens only (light + dark). */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  --wv-lab: var(--pf-svc-lab, var(--sky-text, #0284c7));
+  --wv-opd: var(--pf-svc-opd, var(--violet-text, #6d28d9));
+  --wv-ipd: var(--blue-text, #2563eb);
+  --wv-scan: var(--teal-text, #0d9488);
+  --wv-er: var(--pink-text, #db2777);
+}
+
+.fd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Both views share ONE box (the list and the clinic stack while the morph runs). */
+.fd-wv__stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+.fd-wv__view { grid-area: 1 / 1; min-width: 0; min-height: 0; transition: opacity 260ms cubic-bezier(.2, .7, .2, 1); }
+.fd-wv__list { display: flex; flex-direction: column; overflow: hidden; }
+.fd-wv__list > .pf-fd-flow { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.fd-wv__view.off { opacity: 0; pointer-events: none; }
+.fd-wv__clinic { height: 100%; }
+/* While the tiles fly, the patients in BOTH views step aside (their boxes stay: they are the tiles' slots). */
+.fd-wv--morph ::ng-deep .ag-row,
+.fd-wv--morph ::ng-deep .cv-chip[data-row] { visibility: hidden; }
+
+/* ── The morph tiles (owner mock fd-morph-clinic): one per patient, both faces, cross-fading. ── */
+.fd-tiles { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+.fd-tile {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: var(--pf-card-bg);
+  transition: transform 260ms cubic-bezier(.2, .7, .2, 1), width 260ms cubic-bezier(.2, .7, .2, 1), height 260ms cubic-bezier(.2, .7, .2, 1),
+    border-radius 260ms ease, background-color 260ms ease, border-color 260ms ease, opacity 200ms ease;
+}
+.fd-tiles--still .fd-tile, .fd-tiles--still .fd-tile * { transition: none !important; }
+.fd-tile.gone { opacity: 0; }
+.fd-tile__cells, .fd-tile__chip { position: absolute; inset: 0; display: flex; align-items: center; transition: opacity 200ms ease; transition-delay: inherit; }
+.fd-tile__cells { gap: 14px; padding: 0 12px 0 16px; font-size: 13px; color: var(--text-secondary); border-bottom: 1px solid var(--pf-line); }
+.fd-tile__tok { flex: none; min-width: 48px; font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+.fd-tile__pt { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.fd-tile__pt b { font-weight: 600; font-size: 13.5px; color: var(--text-primary); }
+.fd-tile__pt small { font-size: 12px; color: var(--text-tertiary); }
+.fd-tile__where { flex: 0 1 220px; min-width: 0; display: inline-flex; flex-direction: column; gap: 2px; line-height: 1.3; }
+.fd-tile__where b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.fd-tile__where small { font-size: 12px; color: var(--text-secondary); }
+.fd-tile__where[data-tone='late'] b { color: var(--pf-late-text, color-mix(in srgb, var(--red-text) 85%, var(--text-primary))); }
+.fd-tile__where[data-tone='done'] b { color: var(--success-text, var(--green-text)); }
+.fd-tile__wait { flex: none; width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.fd-tile__wait.late, .fd-tile.lt .fd-tile__t { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+.fd-tile__act { flex: none; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 10px; font-weight: 600;
+  color: var(--violet-text); border: 1px solid color-mix(in srgb, var(--violet-text) 35%, var(--pf-line)); }
+.fd-tile__chip { gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; opacity: 0; }
+.fd-tile__chip b { font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+.fd-tile__t { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.fd-tile.dense .fd-tile__nm { display: none; }
+/* Chip face: the room chip's look; the row face fades out, the chip face in. */
+.fd-tiles--chip .fd-tile { border-radius: 8px; border-color: var(--pf-line); background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg)); }
+.fd-tiles--chip .fd-tile.now { background: color-mix(in srgb, var(--violet-text) 10%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
+.fd-tiles--chip .fd-tile.lt { background: color-mix(in srgb, var(--red-text) 9%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--red-text) 40%, var(--pf-line)); }
+.fd-tiles--chip .fd-tile__cells { opacity: 0; }
+.fd-tiles--chip .fd-tile__chip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .fd-tile, .fd-tile *, .fd-wv__view { transition: none !important; }
+}
+
+/* Stacked sections: ONE scroll body; each section's header sticks while its rows pass under it. */
+.fd-secs {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+}
+.fd-sec { position: relative; display: flex; flex-direction: column; background: var(--pf-card-bg); }
+.fd-sec__h {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px 0 4px;
+  box-sizing: border-box;
+  background: var(--pf-sec-head-bg, color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg)));
+  border-top: 1px solid var(--pf-line);
+  border-bottom: 1px solid var(--pf-line);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  outline: none;
+}
+.fd-sec:first-child .fd-sec__h { border-top: 0; }
+.fd-sec__h:focus-visible { box-shadow: inset 0 0 0 2px var(--color-primary, #7c3aed); }
+.fd-sec__grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none;
+  border-radius: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fd-sec__grip:hover { color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+.fd-secs--dragging, .fd-secs--dragging * { cursor: grabbing !important; user-select: none; }
+.fd-sec__dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--wv-lab); }
+.fd-sec__dot[data-svc='opd'] { background: var(--wv-opd); }
+.fd-sec__dot[data-svc='ipd'] { background: var(--wv-ipd); }
+.fd-sec__dot[data-svc='scan'] { background: var(--wv-scan); }
+.fd-sec__dot[data-svc='er'] { background: var(--wv-er); }
+.fd-sec__name { text-transform: uppercase; }
+.fd-sec__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.fd-sec__late { font-size: 12px; font-weight: 600; letter-spacing: 0; color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); }
+
+/* The lifted section follows the finger / pointer; the violet line marks where it lands. */
+.fd-sec--lifted {
+  z-index: 8;
+  box-shadow: 0 14px 34px color-mix(in srgb, #000 22%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0.96;
+}
+.fd-secs__drop {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-primary, #7c3aed);
+  z-index: 9;
+  pointer-events: none;
+}
+
+
+/* Light mode: sections are part of the glass panel — never paint a solid card over it (owner 2026-11-21). */
+:host-context(.light.design-new) .fd-sec { background: transparent; }

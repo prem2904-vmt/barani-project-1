@@ -14,6 +14,12 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { DiskReadApi } from '../culture-entry/disk-read';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /**
  * Owner (2026-09-26): "Measure" lives on the ORGANISM IDENTIFICATION header,
  * left of the pencil. It opens the plate measure inside the AST editor; OK

@@ -65,6 +65,9 @@ import { formatRange, summarizeRanges } from '../../../../shared/utils/reference
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { DEFAULT_TEST_PRICE, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
+import { SkelCardHeadComponent } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../../shared/utils/save-shortcut';
 import { OriginBadgeComponent } from '../../../../shared/primitives/origin-badge.component';
 import {
   ORIGIN_ICON_PATHS, TestOrigin, canRevertToMaster, isCloneMode, originHint, originLabel, originOf, revertToMasterPath,
@@ -175,7 +178,7 @@ function makeEmptyDraft(): DraftTest {
 @Component({
   selector: 'pf-test-editor',
   standalone: true,
-  imports: [
+  imports: [SkelCardHeadComponent, 
     FamilyTreeEditorComponent,
     FormsModule,
     CurrencyInrPipe,
@@ -1175,17 +1178,35 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
     return c.done === c.total;
   });
 
-  /** Unsaved-changes hint (no autosave). Cleared on fresh hydrate. */
+  /** An edit happened since the last load / save (a cheap gate only — `changed` decides). Cleared on fresh hydrate. */
   readonly dirty = signal(false);
+  /**
+   * Owner 2026-11-19: Save only when something CHANGED. The save body (and the price) compared with what was loaded /
+   * last saved — the same baseline an update diffs against — so an edit put back to its old value disables Save again.
+   */
+  readonly changed = computed(() => {
+    if (!this.dirty()) return false;
+    const base = this._base();
+    if (!base) return true;
+    const d = this._draft();
+    if (Object.keys(changedKeys(this.buildSaveBody(d), base)).length > 0) return true;
+    const sp = this._savedPrice();
+    return Math.max(0, Number(d.price) || 0) !== sp.price || Math.max(0, Number(d.taxSlab) || 0) !== sp.taxSlab;
+  });
+  /** Save is enabled: a real change, the record on screen, nothing in flight. */
+  readonly canSaveNow = computed(() => this.changed() && !this._saving() && !this.recordSkeleton());
+  readonly NO_CHANGES = NO_CHANGES_TITLE;
   // ── Leaving with unsaved changes: the shared "Save your changes?" prompt (route guard + tab close). ──
   readonly unsavedLabel = 'this test';
-  hasUnsavedChanges(): boolean { return this.dirty() && !this.recordSkeleton(); }
+  hasUnsavedChanges(): boolean { return this.changed() && !this.recordSkeleton(); }
   /** Save from the prompt: the editor's own Save; true once it finished and nothing is left unsaved. */
   async saveChanges(): Promise<boolean> {
     this.saveTest();
     while (this._saving()) await new Promise(r => setTimeout(r, 100));
-    return !this.dirty();
+    return !this.changed();
   }
+  /** Ctrl/Cmd+S = Save, and nothing at all while there is nothing to save. */
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.canSaveNow(), save: () => this.saveTest() });
   private readonly _unloadGuard = guardUnsavedOnUnload(this);
 
   /** Debounced token so the embedded live preview re-renders after edits settle. */
@@ -2070,6 +2091,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
       if (t === 'package' || t === 'individual' || t === 'profile') {
         this.patch({ type: t });
       }
+      // A new record: the empty form is the snapshot, so Save stays disabled until the person types something.
+      this._baseline = this.buildSaveBody(this._draft());
+      this.dirty.set(false);
     }
   }
 
@@ -2129,7 +2153,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
       title: `Revert ${d.name || 'this test'} to the master?`,
       message: (branch ? 'This branch\'s' : 'Your lab\'s')
         + ' changes to this test are discarded and it reads the Admin Test Master again. Prices stay as they are.'
-        + (this.dirty() ? ' Unsaved edits here are lost too.' : ''),
+        + (this.changed() ? ' Unsaved edits here are lost too.' : ''),
       confirmLabel: 'Revert to master',
       cancelLabel: 'Keep my changes',
       tone: 'danger',
@@ -2148,8 +2172,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
     });
   }
 
-  /** The save body as loaded (see buildSaveBody) — what an update diffs against. */
-  private _baseline: Record<string, unknown> = {};
+  /** The save body as loaded (see buildSaveBody) — what an update diffs against, and what `changed` compares with. */
+  private readonly _base = signal<Record<string, unknown> | null>(null);
+  private get _baseline(): Record<string, unknown> { return this._base() ?? {}; }
+  private set _baseline(v: Record<string, unknown>) { this._base.set(v); }
   /** The test-level methodology as loaded — per-value copies equal to it are
    *  followers of the test, stripped on save (see buildSaveBody). */
   private _loadedMethodology = '';

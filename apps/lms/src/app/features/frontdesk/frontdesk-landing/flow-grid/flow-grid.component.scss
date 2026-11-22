@@ -1,0 +1,59 @@
+/* Frontdesk flow grid — the cells' own look. Row height, header, hairlines and touch sizing come from the shared
+   grid theme (pf-data-grid → grid-theme.ts) only; every colour here is a token (light + dark). */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.fd-flow { flex: 1 1 auto; min-height: 0; }
+/* A stacked SECTION grid (All split by service): grows with its rows; the sections' body scrolls, never the grid. */
+.fd-flow.fd-flow--auto { flex: none; min-height: 0 !important; }
+/* A section hugs its rows (owner 2026-11-21): AG-Grid's auto-height layout keeps a 50–150px minimum body
+   (--ag-auto-height-min-body-height on .ag-grid-scrolling-rows) — a blank "row" under a short section — and a
+   horizontal scrollbar strip; a section's columns always fit (flow-fold.ts), so neither is kept. */
+:host ::ng-deep .fd-flow--auto {
+  --ag-auto-height-min-body-height: 0px;
+  .ag-grid-scrolling-rows { min-height: 0 !important; }
+  .ag-body-horizontal-scroll { display: none !important; }
+}
+:host-context(.fd-sec) { flex: none; }
+
+:host ::ng-deep {
+  .ag-header-cell.fd-flow__h-right .ag-header-cell-label { justify-content: flex-end; }
+  .ag-cell.fd-flow__c-next { justify-content: flex-end; padding-right: 10px; }
+  .ag-cell.fd-flow__c-sel { padding-left: 8px; padding-right: 0; }
+  .ag-cell.fd-flow__c-wrap { white-space: normal; }
+
+  /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
+  .ag-row.fd-flow__row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+  /* Selected (In progress multi-select): violet ~7% over the card + a violet hairline — the kit's selected row. */
+  .ag-row.fd-flow__row:has(.fd-cell-sel[aria-checked='true']) {
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent);
+  }
+
+  .fd-flow__muted { color: var(--text-tertiary); }
+  /* Section cells (Doctor, Vitals, Consult, Samples …): whole words wrap, never a mid-word break. */
+  .fd-flow__txt { display: block; padding: 8px 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary);
+    white-space: normal; overflow-wrap: normal; word-break: normal; }
+  .fd-flow__txt--late { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+
+  /* Visit for: quiet service tags. */
+  .fd-flow__tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .fd-flow__tag {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
+    color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+  }
+  .fd-flow__tag[data-tag='ER'] { color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 30%, var(--pf-line)); }
+
+  /* Where now: ring + two lines of words (FlowWhereCellComponent + pf-status-words) — no pill, no dot. */
+
+  /* Waiting / Payment: tabular; rose when late / due (never amber). */
+  .fd-flow__wait, .fd-flow__pay { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .fd-flow__pay { font-size: 12.5px; }
+  .fd-flow__wait--late, .fd-flow__pay--due { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+}
