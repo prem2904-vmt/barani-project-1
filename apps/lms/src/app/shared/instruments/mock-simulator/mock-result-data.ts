@@ -35,7 +35,7 @@
 import { CodeMapDto, ParserType } from '../instrument.models';
 import { OrderTest } from '../../models/order.model';
 
-export type ProtocolDiscipline = 'haematology' | 'chemistry' | 'hplc' | 'poct' | 'text3part';
+export type ProtocolDiscipline = 'haematology' | 'chemistry' | 'hplc' | 'poct' | 'text3part' | 'urinalysis';
 
 export type MockScenarioKey =
   | 'random'
@@ -203,9 +203,55 @@ export const HPLC_SCENARIOS: MockScenarioMeta[] = [
 export const POCT_SCENARIOS = HPLC_SCENARIOS;
 export const TEXT_SCENARIOS = HAEMATOLOGY_SCENARIOS;
 
-/** Detects which clinical discipline applies to the tube's tests. Returns null if unmapped. */
-export function detectDiscipline(tests: readonly OrderTest[]): ProtocolDiscipline | null {
-  if (!tests || !tests.length) return null;
+// ── 5. Urinalysis (Urine Routine & Microscopy) Scenarios ───────────────────
+export const URINALYSIS_SCENARIOS: MockScenarioMeta[] = [
+  {
+    key: 'random',
+    label: 'Random (1 of 5 Urine profiles)',
+    shortLabel: 'Random',
+    badge: 'normal',
+    description: 'Picks one of the 5 realistic urinalysis profiles randomly',
+  },
+  {
+    key: 'example_1_normal',
+    label: 'Normal / Clear Urinalysis',
+    shortLabel: 'Normal',
+    badge: 'normal',
+    description: 'RBC 0-1, Pus cells 0-2, Epithelial Nil, Casts Nil, Crystals Nil, Albumin Nil, Sugar Nil',
+  },
+  {
+    key: 'example_2_abnormal',
+    label: 'Urinary Tract Infection (Active UTI)',
+    shortLabel: 'UTI (Abn)',
+    badge: 'abnormal',
+    description: 'Pus cells 25-30 /HPF, Bacteria +++, Nitrite Pos, RBC 4-6, Epithelial 2-4',
+  },
+  {
+    key: 'example_3_critical_high',
+    label: 'Acute Hematuria / Nephritic (Critical High)',
+    shortLabel: 'Hematuria',
+    badge: 'critical',
+    description: 'RBC 45-50 /HPF (Plentiful), RBC Casts 2-4, Protein ++ (100 mg/dL)',
+  },
+  {
+    key: 'example_4_critical_low',
+    label: 'Renal Tubular / Nephrotic Casts (Critical)',
+    shortLabel: 'Renal Casts',
+    badge: 'critical',
+    description: 'Hyaline Casts 4-6 /LPF, Granular Casts 3-5, Renal Tubular Cells 2-4, Protein +++',
+  },
+  {
+    key: 'example_5_atypical',
+    label: 'Non-Specific Contamination / Crystals',
+    shortLabel: 'Crystals',
+    badge: 'atypical',
+    description: 'Squamous Epithelial 15-20, Calcium Oxalate Crystals ++, Pus cells 3-5, RBC 1-2',
+  },
+];
+
+/** Detects which clinical discipline applies to the tube's tests. Defaults to chemistry if unclassified. */
+export function detectDiscipline(tests: readonly OrderTest[]): ProtocolDiscipline {
+  if (!tests || !tests.length) return 'chemistry';
 
   // 1. HbA1c HPLC
   const hasHbA1c = tests.some((t) =>
@@ -223,7 +269,15 @@ export function detectDiscipline(tests: readonly OrderTest[]): ProtocolDisciplin
   );
   if (hasCbc) return 'haematology';
 
-  // 3. Clinical Chemistry (Glucose/RBS/FBS, Renal, LFT, Lipid, etc.)
+  // 3. Urinalysis / Urine Routine & Microscopy
+  const hasUrine = tests.some((t) =>
+    /urine|urinalysis|pus cell|microscopy|casts|epithelial|crystal/i.test(
+      t.name || t.profileName || t.test?.name || ''
+    )
+  );
+  if (hasUrine) return 'urinalysis';
+
+  // 4. Clinical Chemistry (Glucose/RBS/FBS, Renal, LFT, Lipid, etc.)
   const hasChem = tests.some((t) =>
     /glucose|sugar|rbs|fbs|ppbs|grbs|urea|creatinine|cholesterol|triglyceride|bilirubin|sgot|sgpt|ast\b|alt\b|uric|lipid|liver|renal|lft|kft|rft/i.test(
       t.name || t.profileName || t.test?.name || ''
@@ -231,11 +285,13 @@ export function detectDiscipline(tests: readonly OrderTest[]): ProtocolDisciplin
   );
   if (hasChem) return 'chemistry';
 
-  return null;
+  return 'chemistry';
 }
 
 export function scenariosForDiscipline(d: ProtocolDiscipline): MockScenarioMeta[] {
   switch (d) {
+    case 'urinalysis':
+      return URINALYSIS_SCENARIOS;
     case 'chemistry':
       return CHEMISTRY_SCENARIOS;
     case 'hplc':
@@ -517,13 +573,144 @@ export const MOCK_CHEM_DATASETS: Record<string, MockChemValues> = {
   },
 };
 
+// ── 5. Urinalysis (Urine Routine & Microscopy) Datasets ────────────────────
+export interface MockUrineValues {
+  rbc: { val: string | number; flag?: string };
+  pusCells: { val: string | number; flag?: string };
+  squamousEpi: { val: string | number; flag?: string };
+  transitionalEpi: { val: string | number; flag?: string };
+  renalTubularEpi: { val: string | number; flag?: string };
+  hyalineCasts: { val: string | number; flag?: string };
+  granularCasts: { val: string | number; flag?: string };
+  rbcCasts: { val: string | number; flag?: string };
+  wbcCasts: { val: string | number; flag?: string };
+  calciumOxalate: { val: string | number; flag?: string };
+  bacteria: { val: string | number; flag?: string };
+  yeast: { val: string | number; flag?: string };
+  mucus: { val: string | number; flag?: string };
+  albumin: { val: string | number; flag?: string };
+  sugar: { val: string | number; flag?: string };
+  ketone: { val: string | number; flag?: string };
+  nitrite: { val: string | number; flag?: string };
+  spGravity: { val: string | number; flag?: string };
+  ph: { val: string | number; flag?: string };
+}
+
+export const MOCK_URINE_DATASETS: Record<string, MockUrineValues> = {
+  example_1_normal: {
+    rbc: { val: '0 - 1' },
+    pusCells: { val: '0 - 2' },
+    squamousEpi: { val: 'Nil' },
+    transitionalEpi: { val: 'Nil' },
+    renalTubularEpi: { val: 'Nil' },
+    hyalineCasts: { val: 'Nil' },
+    granularCasts: { val: 'Nil' },
+    rbcCasts: { val: 'Nil' },
+    wbcCasts: { val: 'Nil' },
+    calciumOxalate: { val: 'Nil' },
+    bacteria: { val: 'Nil' },
+    yeast: { val: 'Nil' },
+    mucus: { val: 'Nil' },
+    albumin: { val: 'Nil' },
+    sugar: { val: 'Nil' },
+    ketone: { val: 'Nil' },
+    nitrite: { val: 'Negative' },
+    spGravity: { val: '1.015' },
+    ph: { val: '6.0' },
+  },
+  example_2_abnormal: {
+    rbc: { val: '4 - 6', flag: 'H' },
+    pusCells: { val: '25 - 30', flag: 'H' },
+    squamousEpi: { val: '2 - 4' },
+    transitionalEpi: { val: '0 - 1' },
+    renalTubularEpi: { val: 'Nil' },
+    hyalineCasts: { val: 'Nil' },
+    granularCasts: { val: 'Nil' },
+    rbcCasts: { val: 'Nil' },
+    wbcCasts: { val: 'Nil' },
+    calciumOxalate: { val: 'Nil' },
+    bacteria: { val: '+++', flag: 'H' },
+    yeast: { val: 'Nil' },
+    mucus: { val: '+' },
+    albumin: { val: 'Trace', flag: 'H' },
+    sugar: { val: 'Nil' },
+    ketone: { val: 'Nil' },
+    nitrite: { val: 'Positive', flag: 'H' },
+    spGravity: { val: '1.020' },
+    ph: { val: '6.5' },
+  },
+  example_3_critical_high: {
+    rbc: { val: '45 - 50', flag: 'H' },
+    pusCells: { val: '2 - 4' },
+    squamousEpi: { val: '1 - 2' },
+    transitionalEpi: { val: 'Nil' },
+    renalTubularEpi: { val: 'Nil' },
+    hyalineCasts: { val: '1 - 2', flag: 'H' },
+    granularCasts: { val: 'Nil' },
+    rbcCasts: { val: '2 - 4', flag: 'H' },
+    wbcCasts: { val: 'Nil' },
+    calciumOxalate: { val: 'Nil' },
+    bacteria: { val: 'Nil' },
+    yeast: { val: 'Nil' },
+    mucus: { val: 'Nil' },
+    albumin: { val: '++ (100 mg/dL)', flag: 'H' },
+    sugar: { val: 'Nil' },
+    ketone: { val: 'Nil' },
+    nitrite: { val: 'Negative' },
+    spGravity: { val: '1.025' },
+    ph: { val: '5.5' },
+  },
+  example_4_critical_low: {
+    rbc: { val: '2 - 4' },
+    pusCells: { val: '1 - 2' },
+    squamousEpi: { val: 'Nil' },
+    transitionalEpi: { val: 'Nil' },
+    renalTubularEpi: { val: '2 - 4', flag: 'H' },
+    hyalineCasts: { val: '4 - 6', flag: 'H' },
+    granularCasts: { val: '3 - 5', flag: 'H' },
+    rbcCasts: { val: 'Nil' },
+    wbcCasts: { val: 'Nil' },
+    calciumOxalate: { val: 'Nil' },
+    bacteria: { val: 'Nil' },
+    yeast: { val: 'Nil' },
+    mucus: { val: 'Nil' },
+    albumin: { val: '+++ (300 mg/dL)', flag: 'H' },
+    sugar: { val: 'Nil' },
+    ketone: { val: 'Nil' },
+    nitrite: { val: 'Negative' },
+    spGravity: { val: '1.010' },
+    ph: { val: '6.0' },
+  },
+  example_5_atypical: {
+    rbc: { val: '1 - 2' },
+    pusCells: { val: '3 - 5' },
+    squamousEpi: { val: '15 - 20', flag: 'H' },
+    transitionalEpi: { val: '1 - 2' },
+    renalTubularEpi: { val: 'Nil' },
+    hyalineCasts: { val: 'Nil' },
+    granularCasts: { val: 'Nil' },
+    rbcCasts: { val: 'Nil' },
+    wbcCasts: { val: 'Nil' },
+    calciumOxalate: { val: '++', flag: 'H' },
+    bacteria: { val: 'Few' },
+    yeast: { val: 'Nil' },
+    mucus: { val: '+' },
+    albumin: { val: 'Nil' },
+    sugar: { val: 'Nil' },
+    ketone: { val: 'Nil' },
+    nitrite: { val: 'Negative' },
+    spGravity: { val: '1.018' },
+    ph: { val: '6.5' },
+  },
+};
+
 /**
  * Extracts the appropriate simulated raw value for a code map according to the chosen scenario.
  */
 export function extractMockValueFromMap(
   map: CodeMapDto,
   scenarioKey: string
-): { rawValue: number; flag?: string } {
+): { rawValue: number | string; flag?: string } {
   const key = (map.testCatalogKey || '').toUpperCase();
   const name = (map.testName || '').toLowerCase();
   const code = (map.analyzerCode || '').toUpperCase();
@@ -531,6 +718,54 @@ export function extractMockValueFromMap(
   const cbc = MOCK_CBC_DATASETS[scenarioKey] || MOCK_CBC_DATASETS['example_1_normal'];
   const chem = MOCK_CHEM_DATASETS[scenarioKey] || MOCK_CHEM_DATASETS['example_1_normal'];
   const hba1c = MOCK_HBA1C_DATASETS[scenarioKey] || MOCK_HBA1C_DATASETS['example_1_normal'];
+  const urine = MOCK_URINE_DATASETS[scenarioKey] || MOCK_URINE_DATASETS['example_1_normal'];
+
+  // Urine Routine & Microscopy parameters
+  if (/pus cell|wbc.*urine|white blood.*urine/i.test(name)) {
+    return { rawValue: urine.pusCells.val, flag: urine.pusCells.flag };
+  }
+  if (/red blood.*urine|rbc.*urine/i.test(name) || (name.includes('urine') && /red blood|rbc/i.test(name))) {
+    return { rawValue: urine.rbc.val, flag: urine.rbc.flag };
+  }
+  if (/squamous/i.test(name)) {
+    return { rawValue: urine.squamousEpi.val, flag: urine.squamousEpi.flag };
+  }
+  if (/transitional/i.test(name)) {
+    return { rawValue: urine.transitionalEpi.val, flag: urine.transitionalEpi.flag };
+  }
+  if (/renal tubular/i.test(name)) {
+    return { rawValue: urine.renalTubularEpi.val, flag: urine.renalTubularEpi.flag };
+  }
+  if (/hyaline/i.test(name)) {
+    return { rawValue: urine.hyalineCasts.val, flag: urine.hyalineCasts.flag };
+  }
+  if (/granular/i.test(name)) {
+    return { rawValue: urine.granularCasts.val, flag: urine.granularCasts.flag };
+  }
+  if (/rbc cast|red blood.*cast/i.test(name)) {
+    return { rawValue: urine.rbcCasts.val, flag: urine.rbcCasts.flag };
+  }
+  if (/wbc cast|pus cell.*cast/i.test(name)) {
+    return { rawValue: urine.wbcCasts.val, flag: urine.wbcCasts.flag };
+  }
+  if (/calcium oxalate|crystal/i.test(name)) {
+    return { rawValue: urine.calciumOxalate.val, flag: urine.calciumOxalate.flag };
+  }
+  if (/bacteria/i.test(name)) {
+    return { rawValue: urine.bacteria.val, flag: urine.bacteria.flag };
+  }
+  if (/yeast/i.test(name)) {
+    return { rawValue: urine.yeast.val, flag: urine.yeast.flag };
+  }
+  if (/mucus/i.test(name)) {
+    return { rawValue: urine.mucus.val, flag: urine.mucus.flag };
+  }
+  if (/epithelial/i.test(name)) {
+    return { rawValue: urine.squamousEpi.val, flag: urine.squamousEpi.flag };
+  }
+  if (/cast/i.test(name)) {
+    return { rawValue: urine.hyalineCasts.val, flag: urine.hyalineCasts.flag };
+  }
 
   // Hemoglobin
   if (key === 'HEM011' || code === '718-7' || /haemoglobin|hemoglobin/i.test(name)) {
@@ -659,10 +894,13 @@ export function extractMockValueFromMap(
 }
 
 /** Formats the raw numeric value with code map's factor, offset, and decimal places. */
-export function formatMockConvertedValue(raw: number, map: CodeMapDto): string {
+export function formatMockConvertedValue(raw: number | string, map: CodeMapDto): string {
+  if (typeof raw === 'string') return raw;
+  const num = Number(raw);
+  if (isNaN(num)) return String(raw);
   const factor = map.factor == null || map.factor === 0 ? 1 : Number(map.factor);
   const offset = map.offset == null ? 0 : Number(map.offset);
-  const v = raw * factor + offset;
+  const v = num * factor + offset;
   if (map.decimals != null && map.decimals >= 0) {
     return v.toFixed(map.decimals);
   }

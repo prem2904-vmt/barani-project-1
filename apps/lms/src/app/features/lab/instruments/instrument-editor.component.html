@@ -303,7 +303,13 @@
                 </div>
               } @else {
                 @if (bridge.isSimulated) {
-                  <pf-instrument-simulator [instrumentId]="id()" [maps]="maps()" [protocol]="form().protocol" />
+                  <pf-instrument-simulator
+                    [instrumentId]="id()"
+                    [maps]="maps()"
+                    [protocol]="form().protocol"
+                    (rawCaptured)="onSimRawCaptured($event)"
+                    (simulationRun)="onSimRun($event)"
+                  />
                 }
 
                 <div class="pf-ie-listen-bar">

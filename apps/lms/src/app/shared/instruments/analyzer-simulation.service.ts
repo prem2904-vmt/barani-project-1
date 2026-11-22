@@ -24,6 +24,12 @@ import {
   SimulationScenario,
   generateAnalyzerSimulation,
 } from './analyzer-sim-protocols';
+export {
+  GeneratedSimulation,
+  SimulationJob,
+  SimulationScenario,
+  generateAnalyzerSimulation,
+};
 
 export interface SimulatedPortConfig {
   path: string;
@@ -459,7 +465,7 @@ export class AnalyzerSimulationService {
    * Injects a simulated analyzer run directly into the database via /api/instruments/{id}/messages
    * so that result entry screen's "Fetch from analyzer" can attach it immediately!
    */
-  async injectToDatabase(instrumentId: string, job: SimulationJob): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+  async injectToDatabase(instrumentId: string, job: SimulationJob): Promise<{ ok: boolean; messageId?: string; error?: string; raw?: string; sim?: GeneratedSimulation }> {
     const codeMaps = job.codeMaps || await this.loadCodeMaps(instrumentId);
     const sim = generateAnalyzerSimulation({ ...job, codeMaps });
     this.lastSimulation.set(sim);
@@ -469,6 +475,24 @@ export class AnalyzerSimulationService {
       ...l.slice(-199),
       { at: new Date().toISOString(), dir: 'in', text: sim.rawText, bytes: sim.rawText.length },
     ]);
+
+    const sId = this.currentSessionId() || `sim-oneshot-${Date.now()}`;
+    this.emitListenEvent({
+      sessionId: sId,
+      kind: 'raw',
+      text: sim.rawText,
+    });
+    const detect = this.deriveDetectResult(sim);
+    this.emitListenEvent({
+      sessionId: sId,
+      kind: 'detect',
+      detect,
+    });
+    this.emitListenEvent({
+      sessionId: sId,
+      kind: 'message',
+      message: sim.message,
+    });
 
     const inst = await this.getOrEnsureInstrument();
     const targetId = inst?.id || instrumentId;
@@ -516,10 +540,10 @@ export class AnalyzerSimulationService {
       );
 
       const createdId = res?.id || res?.messageId;
-      return { ok: true, messageId: createdId };
+      return { ok: true, messageId: createdId, raw: sim.rawText, sim };
     } catch {
       // Offline / fallback mock ID
-      return { ok: true, messageId: `mock-msg-${Date.now()}` };
+      return { ok: true, messageId: `mock-msg-${Date.now()}`, raw: sim.rawText, sim };
     }
   }
 

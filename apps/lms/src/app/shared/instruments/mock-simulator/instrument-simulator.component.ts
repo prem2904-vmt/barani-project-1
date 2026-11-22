@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../core/services/toast.service';
 import { SelectComponent, PfSelectOption } from '../../primitives/select.component';
 import { InstrumentBridgeService } from '../instrument-bridge.service';
 import { CodeMapRow } from '../instrument-config';
 import { ConnectorState, ParserType } from '../instrument.models';
+import { GeneratedSimulation } from '../analyzer-simulation.service';
 import {
   MockScenarioKey,
   ProtocolDiscipline,
@@ -148,6 +149,9 @@ export class InstrumentSimulatorComponent {
   readonly maps = input<CodeMapRow[]>([]);
   readonly protocol = input<ParserType>('astm');
 
+  readonly rawCaptured = output<string>();
+  readonly simulationRun = output<GeneratedSimulation>();
+
   readonly simProtocol = signal<ParserType>('astm');
   readonly simScenario = signal<MockScenarioKey>('random');
   readonly simSampleId = signal<string>('26354');
@@ -214,6 +218,9 @@ export class InstrumentSimulatorComponent {
         codeMaps: editorMaps,
       });
 
+      this.rawCaptured.emit(sim.rawText);
+      this.simulationRun.emit(sim);
+
       this.toasts.success(`Simulated ${sim.protocol.toUpperCase()}: ${meta.label} for sample ${sim.sampleId}`);
     } catch {
       this.toasts.error('Simulation streaming failed');
@@ -247,6 +254,12 @@ export class InstrumentSimulatorComponent {
       });
 
       if (res.ok) {
+        if ((res as any).raw) {
+          this.rawCaptured.emit((res as any).raw);
+        }
+        if ((res as any).sim) {
+          this.simulationRun.emit((res as any).sim);
+        }
         this.toasts.success(`Injected ${meta.label} for sample ${this.simSampleId()} into LIS messages.`);
       } else {
         this.toasts.error(res.error || 'Failed to inject message');

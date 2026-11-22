@@ -289,6 +289,8 @@ export class InstrumentEditorComponent {
     this.id.set(raw && raw !== 'new' ? raw : null);
     if (!this.id()) this.tab.set('basics');
     void this.init();
+    // Subscribe to simulation and listen events
+    this.offListen = this.bridge.onListen((e) => this.onListenEvent(e));
     this.destroyRef.onDestroy(() => {
       this.offListen?.();
       this.offStatus?.();
@@ -756,13 +758,31 @@ export class InstrumentEditorComponent {
   }
 
   private onListenEvent(e: ListenEvent) {
-    if (!e || e.sessionId !== this.sessionId()) return;
+    if (!e) return;
+    if (this.sessionId() && e.sessionId !== this.sessionId() && !e.sessionId.startsWith('sim-')) return;
     switch (e.kind) {
       case 'raw': if (e.text) this.rawText.update((t) => (t + e.text).slice(-RAW_CAP)); break;
       case 'detect': if (e.detect) this.detect.set(e.detect); break;
       case 'message': if (e.message) this.messages.update((m) => [...m, e.message!]); break;
       case 'error': this.listenError.set(e.error ?? 'Listening failed'); break;
       case 'status': this.listenState.set(e.state ?? null); break;
+    }
+  }
+
+  onSimRawCaptured(raw: string) {
+    if (!raw) return;
+    this.rawText.set(raw.slice(-RAW_CAP));
+  }
+
+  onSimRun(sim: any) {
+    if (!sim) return;
+    if (sim.rawText) {
+      this.rawText.set(sim.rawText.slice(-RAW_CAP));
+    }
+    const d = this.bridge.sim.deriveDetectResult(sim);
+    if (d) this.detect.set(d);
+    if (sim.message) {
+      this.messages.set([sim.message]);
     }
   }
 

@@ -337,18 +337,21 @@ export class SampleResultSimulatorComponent {
     });
   }
 
-  readonly discipline = computed<ProtocolDiscipline | null>(() => {
+  readonly discipline = computed<ProtocolDiscipline>(() => {
     const s = this.sample();
-    if (!s) return null;
+    if (!s) return 'haematology';
     return detectDiscipline(s.tests ?? []);
   });
 
   readonly canSimulate = computed<boolean>(() => {
-    return this.discipline() !== null;
+    const s = this.sample();
+    return !!s && (s.tests?.length ?? 0) > 0;
   });
 
   readonly protocolTitle = computed<string>(() => {
     switch (this.discipline()) {
+      case 'urinalysis':
+        return 'Urinalysis';
       case 'chemistry':
         return 'Chemistry';
       case 'hplc':
@@ -409,6 +412,10 @@ export class SampleResultSimulatorComponent {
         case 'haematology':
           proto = 'astm';
           instName = 'Sysmex XN-550 (ASTM)';
+          break;
+        case 'urinalysis':
+          proto = 'astm';
+          instName = 'Sysmex UC-3500 / UF-5000 (Urinalysis)';
           break;
         case 'chemistry':
           proto = 'astm';
@@ -490,6 +497,42 @@ export class SampleResultSimulatorComponent {
           } else if (disc === 'hplc' || disc === 'poct') {
             if (/hba1c|glycated/i.test(tName)) {
               map = { id: 'syn-hba1c', analyzerCode: 'HBA1C', testCatalogKey: 'GLY001', testName: t.name, factor: 1, offset: 0, decimals: 1, unit: '%' };
+            }
+          } else if (disc === 'urinalysis') {
+            if (/pus cell|white blood|wbc/i.test(tName)) {
+              map = { id: 'syn-upus', analyzerCode: 'WBC', testCatalogKey: 'URI002', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '/HPF' };
+            } else if (/red blood|rbc/i.test(tName)) {
+              map = { id: 'syn-urbc', analyzerCode: 'RBC', testCatalogKey: 'URI001', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '/HPF' };
+            } else if (/squamous/i.test(tName)) {
+              map = { id: 'syn-usqe', analyzerCode: 'SQEP', testCatalogKey: 'URI003', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/transitional/i.test(tName)) {
+              map = { id: 'syn-utre', analyzerCode: 'TREP', testCatalogKey: 'URI004', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/renal tubular/i.test(tName)) {
+              map = { id: 'syn-urte', analyzerCode: 'RTEP', testCatalogKey: 'URI005', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/hyaline/i.test(tName)) {
+              map = { id: 'syn-uhyc', analyzerCode: 'HYAL', testCatalogKey: 'URI006', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/granular/i.test(tName)) {
+              map = { id: 'syn-ugrc', analyzerCode: 'GRAN', testCatalogKey: 'URI007', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/calcium oxalate|crystal/i.test(tName)) {
+              map = { id: 'syn-ucox', analyzerCode: 'CAOX', testCatalogKey: 'URI008', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/bacteria/i.test(tName)) {
+              map = { id: 'syn-ubact', analyzerCode: 'BACT', testCatalogKey: 'URI009', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/yeast/i.test(tName)) {
+              map = { id: 'syn-uyeast', analyzerCode: 'YST', testCatalogKey: 'URI010', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/specific gravity/i.test(tName)) {
+              map = { id: 'syn-usg', analyzerCode: 'SG', testCatalogKey: 'URI011', testName: tName, factor: 1, offset: 0, decimals: 3, unit: '' };
+            } else if (/\bph\b/i.test(tName)) {
+              map = { id: 'syn-uph', analyzerCode: 'PH', testCatalogKey: 'URI012', testName: tName, factor: 1, offset: 0, decimals: 1, unit: '' };
+            } else if (/albumin|protein/i.test(tName)) {
+              map = { id: 'syn-ualb', analyzerCode: 'PROT', testCatalogKey: 'URI013', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/sugar|glucose/i.test(tName)) {
+              map = { id: 'syn-usug', analyzerCode: 'GLU', testCatalogKey: 'URI014', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/nitrite/i.test(tName)) {
+              map = { id: 'syn-unit', analyzerCode: 'NIT', testCatalogKey: 'URI015', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/cast/i.test(tName)) {
+              map = { id: 'syn-ucast', analyzerCode: 'CAST', testCatalogKey: 'URI016', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
+            } else if (/epithelial/i.test(tName)) {
+              map = { id: 'syn-uepi', analyzerCode: 'EPI', testCatalogKey: 'URI017', testName: tName, factor: 1, offset: 0, decimals: 0, unit: '' };
             }
           }
         }
