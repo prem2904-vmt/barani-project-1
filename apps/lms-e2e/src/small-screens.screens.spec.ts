@@ -429,7 +429,19 @@ test.describe('small screens — one list family, grid ≥1024', () => {
       const list = page.locator('pf-work-list').locator('visible=true').first();
       const box = (await list.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, Math.min(box.y + 200, (page.viewportSize()!.height) - 160));
-      for (let i = 0; i < 10; i++) { await page.mouse.wheel(0, 200); await page.waitForTimeout(60); }
+      // Mobile WebKit has no mouse wheel (Playwright: "not supported in mobile WebKit") — there,
+      // scroll whatever element owns the list's scroll by the same 2000px, in the same 10 steps.
+      const wheel = await page.mouse.wheel(0, 200).then(() => true, () => false);
+      for (let i = wheel ? 1 : 0; i < 10; i++) {
+        if (wheel) await page.mouse.wheel(0, 200);
+        else await page.evaluate(() => {
+          const row = Array.from(document.querySelectorAll('pf-work-list .pf-wl__row')).find(r => r.getBoundingClientRect().height > 0);
+          let e = row?.parentElement ?? null;
+          while (e && !(e.scrollHeight > e.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(e).overflowY))) e = e.parentElement;
+          (e ?? document.scrollingElement ?? document.documentElement).scrollBy(0, 200);
+        });
+        await page.waitForTimeout(60);
+      }
       await page.waitForTimeout(600);
       const moved = await page.evaluate(() => {
         const l = Array.from(document.querySelectorAll('pf-work-list .pf-wl__row')).find(r => r.getBoundingClientRect().height > 0);

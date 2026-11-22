@@ -262,7 +262,9 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
     // Scroll the grid's rows under its header (a wheel over the rows).
     const r = (await vis(page, '.pf-fd-flow .ag-row').nth(1).boundingBox())!;
     await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
-    await page.mouse.wheel(0, 240);
+    // Mobile WebKit (iPad landscape) has no mouse wheel: scroll the grid's body viewport instead.
+    await page.mouse.wheel(0, 240).catch(() => page.locator('.pf-fd-flow .ag-body-viewport').first()
+      .evaluate(v => v.scrollBy(0, 240)));
     await page.waitForTimeout(400);
     // The header is its own layer: after the scroll no row paints under it, and what shows behind its labels is
     // the grid's own (theme) surface — never a see-through strip with rows behind it.
