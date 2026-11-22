@@ -452,11 +452,14 @@ test.describe('journey view — tap a ring', () => {
     // The view covers EVERYTHING (the bottom bar included), in both themes.
     for (const dark of [false, true]) {
       await theme(page, dark);
-      await page.waitForTimeout(1500);              // the theme switch runs a view transition: let it finish
-      const top = await page.evaluate(() => {
+      // The theme switch runs a view transition; while it runs, elementFromPoint hits the transition root (<html>).
+      // Under load it outlasts a fixed wait (release 2026-11-22), so wait for the real condition instead.
+      const probe = () => page.evaluate(() => {
         const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 20);
         return { inside: !!el?.closest('pf-journey-overlay'), what: el ? `${el.tagName}.${String((el as HTMLElement).className).slice(0, 40)}` : 'none' };
       });
+      await expect.poll(async () => (await probe()).inside, { timeout: 10_000 }).toBe(true).catch(() => undefined);
+      const top = await probe();
       expect(top.inside, `bottom of the screen is covered (${dark ? 'dark' : 'light'}): ${top.what}`).toBe(true);
     }
     await theme(page, false);
