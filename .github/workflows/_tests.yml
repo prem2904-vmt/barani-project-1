@@ -41,7 +41,7 @@ jobs:
       # (Electron preload stubbed in-page). Screenshots land in SHOTS_DIR/<project>/.
       - name: Screen tests (Playwright, API mocked, every form factor)
         env:
-          PW_WORKERS: '6'
+          PW_WORKERS: '12'
         run: |
           CH=$(ls -d ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | sort -V | tail -1)
           PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
@@ -54,7 +54,7 @@ jobs:
       # (tools/e2e-browsers.Dockerfile, built once on the runner and cached).
       - name: Screen tests on Safari, Firefox, Chrome and Edge (Playwright image)
         env:
-          PW_WORKERS: '6'
+          PW_WORKERS: '12'
         run: |
           PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
           node apps/lms-e2e/serve-spa.mjs dist/apps/lms/browser "$PORT" > "$RUNNER_TEMP/spa-browsers.log" 2>&1 & SPA=$!
