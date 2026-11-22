@@ -301,6 +301,9 @@ test.describe('the editor band', () => {
   }
 
   test('Share opens from the band and from a row: add a person, a role, copy the link, remove', async ({ page, context }) => {
+    // The band's Share needs no engine: a stub stands in for it, so the real sheet engine (no WebGL in the Firefox
+    // image) can't wedge the page's main thread — Firefox hung "performing click action" on Done (release gate 2026-11-22).
+    await stubEngine(page);
     await boot(page, context, { route: '/files/sheet/file-4' });
     await expect(tid(page, 'files-share-open')).toBeVisible({ timeout: 60_000 });
     await tid(page, 'files-share-open').click();

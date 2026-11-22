@@ -199,6 +199,9 @@ test('not drawn: Gold slides into Red — chip, "2 tubes in one", toast with Und
   await expect(toast).toBeVisible();
   await expect(toast.getByTestId('toast-action')).toHaveText('Undo');
   await toast.hover();   // the pointer on the toast holds it (6 s timer paused) — the screenshots below are slow on WebKit
+  // Focus holds it too, and survives what the pointer does not: on WebKit the theme flip + slow screenshots below can
+  // move layout under a resting pointer (mouseleave → 3 s grace → the toast is gone before Undo is clicked).
+  await toast.getByTestId('toast-action').focus();
   expect(requests).toContain('POST /api/samples/o1r/merge');
   await noDialogs(page);
   expect(pendingGets).toBe(gets);

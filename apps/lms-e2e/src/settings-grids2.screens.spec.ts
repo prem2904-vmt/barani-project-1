@@ -91,6 +91,19 @@ async function rowInsets(page: Page) {
   }));
 }
 
+/** rowInsets once the page has settled: a slow engine under load can still be laying the rows out (enter motion,
+ *  late-sized controls) after the fixed beat, so read again until every row keeps the 16px gutter, up to 6s. A real
+ *  gutter bug stays and fails with its numbers. */
+async function settledInsets(page: Page) {
+  await settled(page);
+  let ins = await rowInsets(page);
+  for (const t0 = Date.now(); ins.some(r => r.left < 16 || r.right < 16) && Date.now() - t0 < 6000;) {
+    await page.waitForTimeout(250);
+    ins = await rowInsets(page);
+  }
+  return ins;
+}
+
 test.describe('Settings › Front desk', () => {
   test('C: Booking slots + Priority engine rows keep a 16px inner gutter; no number spinners', async ({ page }) => {
     test.skip(isPhone(), 'phones: the card gutter is the phone gutter (14px) — desktop and tablet are asserted');
@@ -116,14 +129,13 @@ test.describe('Settings › Front desk', () => {
       await go(page, route);
       await page.waitForTimeout(1200);
       const cats = await page.locator('aside button[aria-pressed], [aria-label$="categories"] button').locator('visible=true').allTextContents();
-      const ins: Awaited<ReturnType<typeof rowInsets>> = [...await rowInsets(page)];
+      const ins: Awaited<ReturnType<typeof rowInsets>> = [...await settledInsets(page)];
       for (const c of cats.slice(1)) {
         const name = c.trim().split(/\s{2,}|\n/)[0];
         const b = page.locator('aside button[aria-pressed], [aria-label$="categories"] button').filter({ hasText: name }).locator('visible=true').first();
         if (!(await b.count())) continue;
         await b.click();
-        await settled(page);
-        ins.push(...await rowInsets(page));
+        ins.push(...await settledInsets(page));
       }
       for (const r of ins) {
         expect(r.left, `${route} › ${r.label}: label inset at ${projectName()}`).toBeGreaterThanOrEqual(16);

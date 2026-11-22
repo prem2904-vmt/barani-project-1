@@ -172,6 +172,9 @@ export async function installNegBackend(page: Page, context: BrowserContext, o: 
       if (m === 'PATCH') return route.fulfill(ok(origin, { changed: true, reportAmended: false, order: { refDoctorName: 'Dr. Rao Jr', refHospitalName: null } }));
       return route.fulfill(ok(origin, { orderId: o?.id, orderNumber: o?.orderNumber, status: 'validated', patientName: o?.patient.displayName, refDoctorName: o?.refDoctorName ?? null, sourceTypes: ['Doctor', 'Hospital', 'Walk-in'] }));
     }
+    // A LIST endpoint the order-by-id route below would otherwise answer with ONE order object (Results' partial cards
+    // iterate it: `{}` is not iterable → the whole queue rendered 0 rows on WebKit).
+    if (p === '/api/orders/partial-ready') return route.fulfill(ok(origin, []));
     const one = /^\/api\/orders\/([^/]+)$/.exec(p);
     if (one) return route.fulfill(ok(origin, ORDERS.find(x => x.id === one[1]) ?? PLAIN));
     // ── Result entry ──

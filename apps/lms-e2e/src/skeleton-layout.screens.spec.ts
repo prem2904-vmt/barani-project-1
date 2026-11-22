@@ -20,6 +20,18 @@ type Box = { x: number; y: number; width: number; height: number };
 /** The box once it has stopped moving (the page's enter motion scales the frame for ~300ms: a box read mid-motion is
  *  a few px off and says nothing about the layout). */
 async function box(page: Page, sel: string): Promise<Box | null> {
+  // An enter motion can sit in its delay / first frame (scale 0.97) longer than one sample gap on a slow engine
+  // (WebKit under load), so two equal reads are not enough: first wait until no FINITE animation runs on the element
+  // or any ancestor (the skeleton shimmer is infinite and lives inside the card, so it never counts).
+  await page.waitForFunction(s => {
+    const el = [...document.querySelectorAll(s)].find(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    if (!el) return true;
+    return !document.getAnimations().some(a => {
+      const t = (a.effect as KeyframeEffect | null)?.target as Element | null | undefined;
+      const finite = (a.effect?.getComputedTiming().iterations ?? 1) !== Infinity;
+      return finite && a.playState !== 'finished' && a.playState !== 'idle' && !!t && t.contains(el);
+    });
+  }, sel, { timeout: 5000 }).catch(() => undefined);
   let prev = await rawBox(page, sel);
   for (let i = 0; i < 20; i++) {
     await page.waitForTimeout(120);
